@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProdTrack</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#26262c;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8e6e0;--text2:#8a8880;--text3:#5a5856;
+  --accent:#c8f060;--accent-dim:rgba(200,240,96,0.12);--accent-dim2:rgba(200,240,96,0.05);
+  --red:#ff5f5f;--red-dim:rgba(255,95,95,0.12);
+  --amber:#ffb347;--amber-dim:rgba(255,179,71,0.12);
+  --blue:#60b8f0;--blue-dim:rgba(96,184,240,0.12);
+  --green:#60d08a;--green-dim:rgba(96,208,138,0.10);
+  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+/* Topbar */
+.topbar{display:flex;align-items:center;gap:12px;padding:0 22px;height:52px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.logo{font-size:15px;font-weight:700;letter-spacing:-0.02em}.logo span{color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:20px;border:1px solid var(--border2);color:var(--text2)}
+.pill.live{border-color:var(--accent);color:var(--accent)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.dot.pulse{animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;border:1px solid var(--border2);background:var(--surface2);color:var(--text2)}
+.btn:hover{background:var(--surface3);color:var(--text)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#0f0f11}
+.btn.primary:hover{background:#d4f570}
+.btn svg{width:14px;height:14px}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+
+/* Layout */
+.main{display:grid;grid-template-columns:252px 1fr;overflow:hidden}
+.sidebar{border-right:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:14px 0;display:flex;flex-direction:column}
+.sidebar-section{padding:8px 16px 3px;font-size:10px;font-family:var(--mono);letter-spacing:0.1em;color:var(--text3);text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;color:var(--text2);font-size:13px;transition:all 0.12s;border-left:2px solid transparent;user-select:none}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--accent-dim2);color:var(--accent);border-left-color:var(--accent)}
+.nav-item svg{width:14px;height:14px;flex-shrink:0;opacity:0.65}
+.nav-item.active svg{opacity:1}
+.nav-badge{margin-left:auto;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:var(--text3)}
+.nav-badge.red{background:var(--red-dim);color:var(--red)}
+.nav-badge.amber{background:var(--amber-dim);color:var(--amber)}
+.nav-badge.green{background:var(--green-dim);color:var(--green)}
+.sdiv{height:1px;background:var(--border);margin:10px 16px}
+
+.content{display:flex;flex-direction:column;overflow:hidden}
+
+/* Metrics */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
+.metric{background:var(--surface);padding:11px 16px}
+.metric-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:2px}
+.metric-val{font-size:20px;font-weight:700;letter-spacing:-0.03em}
+.metric-val.red{color:var(--red)}.metric-val.amber{color:var(--amber)}.metric-val.green{color:var(--green)}
+.metric-sub{font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:1px}
+
+/* Toolbar */
+.toolbar{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.search{flex:1;min-width:160px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 11px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color 0.15s}
+.search:focus{border-color:var(--accent)}
+.search::placeholder{color:var(--text3)}
+select.filt{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 8px;color:var(--text2);font-family:var(--sans);font-size:12px;outline:none;cursor:pointer}
+.xbtn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.12s;border:1px solid var(--border2);background:var(--surface2);color:var(--text3)}
+.xbtn:hover{color:var(--text)}.xbtn.on{background:var(--accent-dim);border-color:rgba(200,240,96,0.3);color:var(--accent)}
+
+/* Table */
+.table-wrap{flex:1;overflow-y:auto}
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border2);padding:7px 10px;text-align:left;font-size:10px;font-family:var(--mono);letter-spacing:0.06em;color:var(--text3);text-transform:uppercase;white-space:nowrap}
+
+/* SO row */
+.so-row{cursor:pointer;user-select:none}
+.so-row td{padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle;transition:background 0.1s}
+.so-row:hover td{background:var(--surface2)}
+.so-row.done td{background:rgba(96,208,138,0.04)}
+.so-row.done td:first-child{border-left:2px solid var(--green)}
+.so-row.pending td:first-child{border-left:2px solid var(--amber)}
+
+/* Traveler rows */
+.tr-row td{padding:7px 10px 7px 34px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle;background:var(--surface);transition:background 0.1s}
+.tr-row:hover td{background:var(--surface2)}
+.tr-row:last-of-type td{border-bottom:2px solid var(--border2)}
+@keyframes fi{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.tr-row{animation:fi 0.14s ease}
+
+/* Photo upload row */
+.photo-row td{padding:12px 10px 14px 34px;border-bottom:2px solid var(--border2);background:var(--surface)}
+.photo-section{display:flex;flex-direction:column;gap:10px}
+.photo-thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.photo-thumb{width:72px;height:72px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);cursor:pointer;transition:all 0.15s}
+.photo-thumb:hover{border-color:var(--accent);transform:scale(1.04)}
+.upload-zone{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px dashed var(--border2);border-radius:7px;cursor:pointer;transition:all 0.15s;position:relative;font-size:12px;color:var(--text3);width:fit-content}
+.upload-zone:hover{border-color:var(--accent);color:var(--accent)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-zone.uploading{border-color:var(--amber);color:var(--amber)}
+.photo-bar{display:flex;align-items:center;gap:8px}
+.photo-count{font-size:11px;font-family:var(--mono);color:var(--text3)}
+.photo-count.has{color:var(--green)}
+
+.chevron{display:inline-flex;transition:transform 0.18s;color:var(--text3)}
+.chevron.open{transform:rotate(90deg)}
+
+/* Tags */
+.tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:4px;font-weight:500;white-space:nowrap}
+.tr{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,95,95,0.2)}
+.ta{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.2)}
+.tg{background:var(--green-dim);color:var(--green);border:1px solid rgba(96,208,138,0.2)}
+.tb{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,184,240,0.2)}
+.td{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
+.mono{font-family:var(--mono);font-size:11px}
+
+/* Upload CSV view */
+.upload-view{flex:1;display:flex;align-items:center;justify-content:center;padding:36px;flex-direction:column;gap:18px}
+.upload-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:32px 40px;text-align:center;max-width:440px;width:100%}
+.dz{border:2px dashed var(--border2);border-radius:9px;padding:32px 18px;cursor:pointer;transition:all 0.2s;position:relative;margin-bottom:14px}
+.dz:hover,.dz.drag{border-color:var(--accent);background:var(--accent-dim2)}
+.dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.uh{display:none;width:100%;max-width:440px}
+.uh-title{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px}
+.ue{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;margin-bottom:5px}
+.ue-icon{width:24px;height:24px;border-radius:5px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* Lightbox */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.lightbox.open{display:flex}
+.lightbox img{max-width:90vw;max-height:82vh;border-radius:8px;object-fit:contain}
+.lightbox-close{position:absolute;top:18px;right:22px;font-size:22px;cursor:pointer;color:var(--text2);background:none;border:none;font-family:var(--sans)}
+.lightbox-meta{font-size:12px;font-family:var(--mono);color:var(--text3)}
+
+/* Empty */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px;color:var(--text3);text-align:center;gap:5px}
+.empty-icon{font-size:26px;opacity:0.25;margin-bottom:3px}
+.empty-title{font-size:13px;color:var(--text2)}
+.empty-sub{font-size:11px;font-family:var(--mono)}
+
+/* Spinner */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:12px 15px;font-size:13px;color:var(--text);max-width:300px;z-index:999;opacity:0;pointer-events:none;transition:all 0.22s;transform:translateY(8px)}
+.toast.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+.toast-title{font-weight:700;margin-bottom:2px}
+.toast-body{font-size:11px;font-family:var(--mono);color:var(--text2)}
+
+/* Loading overlay */
+.loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.loading-overlay.hide{display:none}
+.loading-text{font-size:13px;font-family:var(--mono);color:var(--text3)}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner" style="width:24px;height:24px;border-width:3px"></div>
+  <div class="loading-text">Connecting to database…</div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="Order photo">
+  <div class="lightbox-meta" id="lightbox-meta"></div>
+</div>
+
+<div class="app">
+  <div class="topbar">
+    <div class="logo">PROD<span>TRACK</span></div>
+    <div class="pill live"><span class="dot pulse"></span>Live</div>
+    <div class="pill" id="last-pill" style="display:none"></div>
+    <div class="pill" id="refresh-pill" style="display:none"></div>
+    <div class="topbar-right">
+      <button class="btn" onclick="refreshPhotos()" id="refresh-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+      <button class="btn primary" onclick="sv('upload')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload CSV
+      </button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="sidebar">
+      <div class="sidebar-section">Views</div>
+      <div class="nav-item active" id="nav-tomorrow" onclick="sv('tomorrow')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Tomorrow's orders<span class="nav-badge amber" id="b-tomorrow">0</span>
+      </div>
+      <div class="nav-item" id="nav-all" onclick="sv('all')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        All orders<span class="nav-badge" id="b-total">0</span>
+      </div>
+      <div class="nav-item" id="nav-pending" onclick="sv('pending')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        No photo yet<span class="nav-badge red" id="b-pending">0</span>
+      </div>
+      <div class="nav-item" id="nav-done" onclick="sv('done')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Photo uploaded<span class="nav-badge green" id="b-done">0</span>
+      </div>
+      <div class="nav-item" id="nav-upload" onclick="sv('upload')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload CSV
+      </div>
+      <div class="sdiv"></div>
+      <div class="sidebar-section">Prod lines</div>
+      <div id="line-nav"></div>
+    </div>
+
+    <div class="content" id="content">
+
+      <!-- Main dashboard view -->
+      <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Ship date</div><div class="metric-val" id="m-date" style="font-size:15px;margin-top:2px">—</div><div class="metric-sub">showing below</div></div>
+          <div class="metric"><div class="metric-label">Sales orders</div><div class="metric-val" id="m-so">—</div><div class="metric-sub">grouped</div></div>
+          <div class="metric"><div class="metric-label">Photo uploaded</div><div class="metric-val green" id="m-done">—</div><div class="metric-sub">confirmed</div></div>
+          <div class="metric"><div class="metric-label">No photo yet</div><div class="metric-val red" id="m-pending">—</div><div class="metric-sub">needs attention</div></div>
+        </div>
+        <div class="toolbar">
+          <input class="search" id="search" placeholder="Search SO, traveler, item, customer..." oninput="render()">
+          <select class="filt" id="f-via" onchange="render()">
+            <option value="">All ship methods</option>
+            <option>OUR TRUCK</option><option>PICK UP</option><option>INSTALL/REPAIR</option>
+          </select>
+          <select class="filt" id="f-date" onchange="render()">
+            <option value="">All ship dates</option>
+          </select>
+          <button class="xbtn" id="xbtn" onclick="toggleExpandAll()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            Expand all
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table id="main-table">
+            <thead><tr id="thead-row">
+              <th style="width:130px">SO #</th>
+              <th style="width:105px">Ship date</th>
+              <th style="width:86px">Ship via</th>
+              <th>Customer</th>
+              <th style="width:72px;text-align:right">Travelers</th>
+              <th style="width:120px">Photos</th>
+            </tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div class="empty" id="empty-nd">
+            <div class="empty-icon">↑</div>
+            <div class="empty-title">No report loaded yet</div>
+            <div class="empty-sub">Upload a Sage CSV to get started</div>
+          </div>
+          <div class="empty" id="empty-f" style="display:none">
+            <div class="empty-icon">◎</div>
+            <div class="empty-title">No orders match your filters</div>
+            <div class="empty-sub">Try adjusting your search</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload CSV view -->
+      <div id="view-upload" style="display:none;flex-direction:column;flex:1">
+        <div class="upload-view">
+          <div class="upload-card">
+            <div class="dz" id="dz">
+              <input type="file" accept=".csv" onchange="handleCSV(this.files[0])">
+              <div style="font-size:30px;opacity:0.35;margin-bottom:10px">⬆</div>
+              <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:5px">Drop your Sage CSV here</div>
+              <div style="font-size:12px;color:var(--text3)">or click to browse</div>
+              <div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:10px">Open Work Ticket by Due Date / Prod Ln. export</div>
+            </div>
+            <div id="csv-status" style="font-size:12px;font-family:var(--mono);color:var(--text3);text-align:center;min-height:18px"></div>
+          </div>
+          <div class="uh" id="uh">
+            <div class="uh-title">Recent uploads</div>
+            <div id="uh-list"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title" id="t-title"></div>
+  <div class="toast-body" id="t-body"></div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const SUPA_URL = 'https://hfzqxxfmaqnraxadztoc.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmenF4eGZtYXFucmF4YWR6dG9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MjY0MzcsImV4cCI6MjA5NDIwMjQzN30.MI7iVdsydhD9uX0X53SU57yx-pI5_SLcTysBAotUflA';
+const BUCKET  = 'order-photos';
+const HDR     = {'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let orders   = [];   // from supabase orders table
+let photos   = {};   // map: so -> [{url,filename,uploaded_at}]
+let expanded = new Set();
+let allExp   = false;
+let activeLine = '';
+let activeView = 'tomorrow';
+let uploads  = [];
+
+// ── Supabase helpers ──────────────────────────────────────────────────────────
+async function sbGet(table, params=''){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {headers:HDR});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbUpsert(table, rows){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
+    method:'POST',
+    headers:{...HDR,'Prefer':'resolution=merge-duplicates'},
+    body: JSON.stringify(rows)
+  });
+  if(!r.ok) throw new Error(await r.text());
+}
+async function sbDelete(table, params){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {method:'DELETE', headers:HDR});
+  if(!r.ok) throw new Error(await r.text());
+}
+async function uploadPhoto(so, file){
+  const ext  = file.name.split('.').pop();
+  const path = `${so}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const r = await fetch(`${SUPA_URL}/storage/v1/object/${BUCKET}/${path}`, {
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':file.type},
+    body: file
+  });
+  if(!r.ok) throw new Error(await r.text());
+  const url = `${SUPA_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+  // Save to photos table
+  await sbUpsert('photos', [{so, filename:file.name, url, uploaded_by:'worker'}]);
+  return url;
+}
+
+// ── Load data ─────────────────────────────────────────────────────────────────
+async function loadOrders(){
+  const rows = await sbGet('orders','select=*&order=so_ship.asc,so.asc');
+  orders = rows.map(r=>({
+    traveler: r.traveler, so: r.so, item: r.item,
+    desc: r.description, qty: r.qty, line: r.line,
+    soShip: r.so_ship ? r.so_ship.slice(5).split('-').reverse().join('/').replace(/^0/,'').replace('/0','/') : '',
+    soShipRaw: r.so_ship,
+    via: r.via, customer: r.customer
+  }));
+}
+async function loadPhotos(){
+  const rows = await sbGet('photos','select=*&order=uploaded_at.desc');
+  photos = {};
+  for(const r of rows){
+    if(!photos[r.so]) photos[r.so]=[];
+    photos[r.so].push({url:r.url, filename:r.filename, uploaded_at:r.uploaded_at, id:r.id});
+  }
+}
+async function init(){
+  try{
+    await Promise.all([loadOrders(), loadPhotos()]);
+    document.getElementById('loading-overlay').classList.add('hide');
+    updateAll();
+    sv('tomorrow');
+  } catch(e){
+    document.querySelector('.loading-text').textContent = 'Connection error: '+e.message;
+    document.querySelector('.loading-overlay .spinner').style.display='none';
+  }
+}
+
+// ── Refresh photos (for management checking) ──────────────────────────────────
+async function refreshPhotos(){
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Refreshing';
+  try{
+    await Promise.all([loadOrders(), loadPhotos()]);
+    updateAll(); render();
+    toast('Refreshed','Data is up to date.','green');
+    // Reset auto-refresh countdown
+    startAutoRefresh();
+  } catch(e){ toast('Error',e.message,'red'); }
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
+}
+
+// ── CSV parse & upload ────────────────────────────────────────────────────────
+function parseCSV(txt){
+  const out=[];
+  for(const line of txt.split('\n')){
+    if(!line.trim()) continue;
+    const c=parseRow(line);
+    if(c.length<31) continue;
+    const tr=c[19].replace(/^0+/,''), so=c[27].replace(/^0+/,'');
+    if(!tr||!so||isNaN(+tr)) continue;
+    // Parse date MM/DD/YY -> YYYY-MM-DD
+    const ds = c[25].trim();
+    let soShipISO = null;
+    if(ds){
+      const p=ds.split('/');
+      if(p.length===3) soShipISO=`20${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
+    }
+    out.push({traveler:tr, so, item:c[20].trim(), description:c[21].trim(),
+      qty:parseFloat(c[22])||0, line:c[16].trim(),
+      so_ship:soShipISO, via:c[26].trim(), customer:c[30].trim(),
+      report_date:new Date().toISOString().slice(0,10)});
+  }
+  return out;
+}
+function parseRow(line){
+  const r=[]; let cur='',inQ=false;
+  for(const ch of line){
+    if(ch==='"'){inQ=!inQ;continue;}
+    if(ch===','&&!inQ){r.push(cur);cur='';continue;}
+    cur+=ch;
+  }
+  r.push(cur); return r;
+}
+
+const dzEl=document.getElementById('dz');
+dzEl.addEventListener('dragover',e=>{e.preventDefault();dzEl.classList.add('drag');});
+dzEl.addEventListener('dragleave',()=>dzEl.classList.remove('drag'));
+dzEl.addEventListener('drop',e=>{e.preventDefault();dzEl.classList.remove('drag');handleCSV(e.dataTransfer.files[0]);});
+
+async function handleCSV(file){
+  if(!file) return;
+  const st=document.getElementById('csv-status');
+  const fr=new FileReader();
+  fr.onload=async e=>{
+    const parsed=parseCSV(e.target.result);
+    if(!parsed.length){toast('Parse error','Could not read orders. Check the file format.','red');return;}
+    st.textContent='Uploading '+parsed.length+' travelers…';
+    try{
+      // Clear existing orders and insert fresh
+      await sbDelete('orders','traveler=neq.null');
+      // Insert in chunks of 500
+      for(let i=0;i<parsed.length;i+=500){
+        await sbUpsert('orders', parsed.slice(i,i+500));
+      }
+      const ts=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      uploads.unshift({name:file.name,time:ts,count:parsed.length});
+      document.getElementById('last-pill').textContent='Last upload: '+ts;
+      document.getElementById('last-pill').style.display='inline-flex';
+      st.textContent='✓ '+parsed.length+' travelers loaded at '+ts;
+      await loadOrders();
+      updateAll();
+      toast('CSV uploaded',''+parsed.length+' travelers saved to database.','green');
+      setTimeout(()=>sv('tomorrow'),1200);
+    } catch(err){
+      st.textContent='Error: '+err.message;
+      toast('Upload failed',err.message,'red');
+    }
+  };
+  fr.readAsText(file);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const isCus = o => o.item.includes('-CUS') || o.item.endsWith('CUS');
+function groupBySO(list){
+  const map={},ord=[];
+  for(const o of list){if(!map[o.so]){map[o.so]=[];ord.push(o.so);}map[o.so].push(o);}
+  return ord.map(so=>({so,travelers:map[so]}));
+}
+function getTomorrow(){
+  const d=new Date(); d.setDate(d.getDate()+1);
+  return d.toISOString().slice(0,10);
+}
+function fmtDate(iso){
+  if(!iso) return '—';
+  const p=iso.split('-');
+  return `${parseInt(p[1])}/${parseInt(p[2])}/${p[0].slice(2)}`;
+}
+
+// ── Update UI state ───────────────────────────────────────────────────────────
+function updateAll(){
+  const sos=new Set(orders.map(o=>o.so));
+  const tomorrow=getTomorrow();
+  const tomorrowSOs=new Set(orders.filter(o=>o.soShipRaw===tomorrow).map(o=>o.so));
+  const doneSOs=new Set([...sos].filter(so=>photos[so]&&photos[so].length>0));
+  const pendingSOs=new Set([...sos].filter(so=>!photos[so]||photos[so].length===0));
+  const tomorrowPending=[...tomorrowSOs].filter(so=>pendingSOs.has(so)).length;
+
+  document.getElementById('m-so').textContent=sos.size;
+  document.getElementById('m-done').textContent=doneSOs.size;
+  document.getElementById('m-pending').textContent=pendingSOs.size;
+
+  document.getElementById('b-total').textContent=sos.size;
+  document.getElementById('b-tomorrow').textContent=tomorrowSOs.size;
+  document.getElementById('b-pending').textContent=pendingSOs.size;
+  document.getElementById('b-done').textContent=doneSOs.size;
+
+  // Date filter
+  const dates=[...new Set(orders.map(o=>o.soShipRaw).filter(Boolean))].sort();
+  const df=document.getElementById('f-date'),cur=df.value;
+  df.innerHTML='<option value="">All ship dates</option>'+dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${fmtDate(d)}</option>`).join('');
+
+  // Line nav
+  const lines=[...new Set(orders.map(o=>o.line))].sort();
+  document.getElementById('line-nav').innerHTML=lines.map(l=>
+    `<div class="nav-item${activeLine===l?' active':''}" onclick="setLine('${l}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Line ${l}<span class="nav-badge">${orders.filter(o=>o.line===l).length}</span>
+    </div>`).join('');
+
+  document.getElementById('empty-nd').style.display=orders.length?'none':'flex';
+  render();
+}
+
+function setLine(l){activeLine=activeLine===l?'':l;updateAll();sv('tomorrow');}
+
+// ── Render table ──────────────────────────────────────────────────────────────
+function render(){
+  const q=document.getElementById('search').value.toLowerCase();
+  const via=document.getElementById('f-via').value;
+  const dateF=document.getElementById('f-date').value;
+  const tomorrow=getTomorrow();
+
+  let filtered=orders.filter(o=>{
+    if(activeLine&&o.line!==activeLine) return false;
+    if(via&&o.via!==via) return false;
+    if(dateF&&o.soShipRaw!==dateF) return false;
+    if(activeView==='tomorrow'&&o.soShipRaw!==tomorrow) return false;
+    if(activeView==='pending'){
+      const ps=photos[o.so];
+      if(ps&&ps.length>0) return false;
+    }
+    if(activeView==='done'){
+      const ps=photos[o.so];
+      if(!ps||ps.length===0) return false;
+    }
+    if(q&&![o.traveler,o.so,o.item,o.desc,o.customer].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const groups=groupBySO(filtered);
+  // Sort: no-photo first, then by ship date
+  groups.sort((a,b)=>{
+    const aP=photos[a.so]&&photos[a.so].length>0;
+    const bP=photos[b.so]&&photos[b.so].length>0;
+    if(!aP&&bP) return -1; if(aP&&!bP) return 1;
+    return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
+  });
+
+  // Update metric date label
+  if(activeView==='tomorrow'){
+    document.getElementById('m-date').textContent=fmtDate(tomorrow);
+  } else {
+    document.getElementById('m-date').textContent='All dates';
+  }
+
+  const tbody=document.getElementById('tbody');
+  const emf=document.getElementById('empty-f');
+  if(!groups.length&&orders.length){tbody.innerHTML='';emf.style.display='flex';return;}
+  emf.style.display='none';
+
+  const anyOpen=allExp||expanded.size>0;
+  document.getElementById('thead-row').innerHTML=anyOpen
+    ?`<th style="width:150px">SO # / Traveler</th><th>Description</th><th style="width:100px">Item code</th><th style="width:55px;text-align:right">Qty</th><th style="width:75px">Line</th><th style="width:120px">Photos</th>`
+    :`<th style="width:130px">SO #</th><th style="width:105px">Ship date</th><th style="width:86px">Ship via</th><th>Customer</th><th style="width:72px;text-align:right">Travelers</th><th style="width:120px">Photos</th>`;
+
+  let html='';
+  for(const {so,travelers} of groups){
+    const soPhotos=photos[so]||[];
+    const hasPic=soPhotos.length>0;
+    const isOpen=allExp||expanded.has(so);
+    const via0=travelers[0].via;
+    const customer=travelers[0].customer;
+    const soShip=travelers[0].soShipRaw;
+    const viaShort=via0==='OUR TRUCK'?'Truck':via0==='PICK UP'?'Pickup':'Install';
+    const viaCls=via0==='OUR TRUCK'?'tb':via0==='PICK UP'?'td':'tg';
+
+    // Photo indicator for SO row
+    const picIndicator=hasPic
+      ?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`
+      :`<span class="tag ta">No photo</span>`;
+
+    const rowCls='so-row'+(hasPic?' done':' pending');
+    html+=`<tr class="${rowCls}" onclick="toggleSO('${so}')">
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
+      </div></td>
+      <td><span class="mono">${fmtDate(soShip)}</span></td>
+      <td><span class="tag ${viaCls}">${viaShort}</span></td>
+      <td style="color:var(--text2);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px" title="${customer}">${customer}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--text3)">${travelers.length}</td>
+      <td>${picIndicator}</td>
+    </tr>`;
+
+    if(isOpen){
+      // Traveler rows
+      for(const o of travelers){
+        const cus=isCus(o);
+        html+=`<tr class="tr-row">
+          <td style="color:var(--text3);font-size:11px;font-family:var(--mono)"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text2)">${o.traveler}</span></td>
+          <td style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px" title="${o.desc}">${o.desc}</td>
+          <td><span class="mono${cus?' style=color:var(--amber)':''}">${o.item}</span></td>
+          <td style="text-align:right;font-family:var(--mono);font-size:11px">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${o.line}</td>
+          <td></td>
+        </tr>`;
+      }
+
+      // Photo upload row
+      const thumbsHtml=soPhotos.map(p=>
+        `<img class="photo-thumb" src="${p.url}" title="${p.filename} — ${new Date(p.uploaded_at).toLocaleString()}" onclick="openLightbox('${p.url}','${p.filename}','${new Date(p.uploaded_at).toLocaleString()}')" loading="lazy">`
+      ).join('');
+
+      html+=`<tr class="photo-row" id="photo-row-${so}">
+        <td colspan="6">
+          <div class="photo-section">
+            ${soPhotos.length?`<div class="photo-thumbs">${thumbsHtml}</div>`:''}
+            <div class="photo-bar">
+              <label class="upload-zone" id="uz-${so}">
+                <input type="file" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Add photo${soPhotos.length>0?' (add more)':''}
+              </label>
+              <span class="photo-count${soPhotos.length>0?' has':''}" id="pc-${so}">
+                ${soPhotos.length===0?'No photos yet':soPhotos.length+' photo'+(soPhotos.length>1?'s':'')+' uploaded'}
+              </span>
+            </div>
+          </div>
+        </td>
+      </tr>`;
+    }
+  }
+  tbody.innerHTML=html;
+}
+
+function toggleSO(so){
+  if(expanded.has(so)) expanded.delete(so);
+  else expanded.add(so);
+  render();
+}
+
+function toggleExpandAll(){
+  allExp=!allExp;
+  const btn=document.getElementById('xbtn');
+  if(allExp){orders.forEach(o=>expanded.add(o.so));btn.textContent='▲ Collapse all';btn.classList.add('on');}
+  else{expanded.clear();btn.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg> Expand all';btn.classList.remove('on');}
+  render();
+}
+
+// ── Photo upload ───────────────────────────────────────────────────────────────
+async function handlePhotoUpload(so, input){
+  const files=[...input.files];
+  if(!files.length) return;
+  const uz=document.getElementById('uz-'+so);
+  const pc=document.getElementById('pc-'+so);
+  uz.classList.add('uploading');
+  uz.querySelector('span,svg')?.remove;
+  if(pc) pc.textContent='Uploading…';
+  try{
+    for(const file of files){
+      const url=await uploadPhoto(so, file);
+      if(!photos[so]) photos[so]=[];
+      photos[so].unshift({url, filename:file.name, uploaded_at:new Date().toISOString()});
+    }
+    updateAll();
+    render();
+    toast('Photo uploaded','SO '+so+' marked as done ✓','green');
+  } catch(err){
+    toast('Upload failed',err.message,'red');
+    if(pc) pc.textContent='Upload failed';
+  }
+  uz.classList.remove('uploading');
+  input.value='';
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function openLightbox(url, filename, ts){
+  document.getElementById('lightbox-img').src=url;
+  document.getElementById('lightbox-meta').textContent=filename+' — '+ts;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox(e){
+  if(!e||e.target===document.getElementById('lightbox')||e.target.classList.contains('lightbox-close')){
+    document.getElementById('lightbox').classList.remove('open');
+  }
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape') document.getElementById('lightbox').classList.remove('open');});
+
+// ── View switch ───────────────────────────────────────────────────────────────
+function sv(v){
+  activeView=v;
+  const isUpload=v==='upload';
+  document.getElementById('view-main').style.display=isUpload?'none':'flex';
+  document.getElementById('view-upload').style.display=isUpload?'flex':'none';
+  ['tomorrow','all','pending','done','upload'].forEach(n=>{
+    document.getElementById('nav-'+n)?.classList.remove('active');
+  });
+  document.getElementById('nav-'+v)?.classList.add('active');
+  render();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(title,body,type){
+  const t=document.getElementById('toast');
+  document.getElementById('t-title').textContent=(type==='red'?'⚠ ':type==='green'?'✓ ':'')+title;
+  document.getElementById('t-body').textContent=body;
+  t.style.borderColor=type==='red'?'var(--red)':type==='green'?'var(--green)':'var(--border2)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),4200);
+}
+
+// ── Auto-refresh ───────────────────────────────────────────────────────────────
+const AUTO_REFRESH_SEC = 60;
+let refreshCountdown = AUTO_REFRESH_SEC;
+let refreshTimer = null;
+let countdownTimer = null;
+
+function startAutoRefresh(){
+  // Clear any existing timers
+  clearInterval(refreshTimer);
+  clearInterval(countdownTimer);
+  refreshCountdown = AUTO_REFRESH_SEC;
+  updateRefreshPill();
+
+  // Countdown tick every second
+  countdownTimer = setInterval(()=>{
+    refreshCountdown--;
+    updateRefreshPill();
+    if(refreshCountdown <= 0) refreshCountdown = AUTO_REFRESH_SEC;
+  }, 1000);
+
+  // Actual refresh every 60 seconds
+  refreshTimer = setInterval(async ()=>{
+    refreshCountdown = AUTO_REFRESH_SEC;
+    try{
+      await Promise.all([loadOrders(), loadPhotos()]);
+      updateAll();
+      render();
+      // Flash the pill green briefly
+      const pill = document.getElementById('refresh-pill');
+      pill.style.borderColor = 'var(--green)';
+      pill.style.color = 'var(--green)';
+      setTimeout(()=>{
+        pill.style.borderColor = '';
+        pill.style.color = '';
+      }, 1500);
+    } catch(e){ /* silent fail — no toast on background refresh */ }
+  }, AUTO_REFRESH_SEC * 1000);
+}
+
+function updateRefreshPill(){
+  const pill = document.getElementById('refresh-pill');
+  pill.style.display = 'inline-flex';
+  pill.textContent = `Auto-refresh in ${refreshCountdown}s`;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+init().then(()=> startAutoRefresh());
+</script>
+</body>
+</html>
