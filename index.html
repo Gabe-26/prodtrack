@@ -70,19 +70,29 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .bottom-nav-dot.show{display:block}
  
 @media(max-width:700px){
-  html,body{overflow:hidden}
-  .app{grid-template-rows:auto 1fr}
-  .main{grid-template-columns:1fr;height:100%}
-  .content{height:100%;overflow:hidden}
-  .table-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px}
-  .upload-view{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px}
+  html,body{overflow:hidden;height:100%;position:fixed;width:100%}
+  .app{display:flex;flex-direction:column;height:100svh;height:100vh}
+  .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+  .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+  #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+  .metrics{flex-shrink:0}
+  .toolbar{flex-shrink:0}
+  .table-wrap{
+    flex:1;
+    overflow-y:scroll;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    padding-bottom:40px;
+    min-height:0;
+  }
+  .upload-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:40px}
+ 
   .pill:not(.live){display:none}
-  .topbar{padding:0 12px;gap:8px}
+  .topbar{padding:0 12px;gap:8px;flex-shrink:0}
   .menu-btn{display:flex}
   .topbar-right .btn:not(.primary){display:none}
   .btn.primary{padding:6px 10px;font-size:11px}
  
-  /* Sidebar becomes a slide-in drawer */
   .sidebar{
     position:fixed;top:0;left:-280px;bottom:0;width:280px;
     z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);
@@ -90,32 +100,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   }
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
  
-  /* Bottom nav fixed above keyboard/chrome */
-  .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0}
- 
-  /* Metrics: 2x2 grid on mobile */
   .metrics{grid-template-columns:repeat(2,1fr)}
- 
-  /* Toolbar */
   .toolbar{padding:8px 10px;gap:6px}
   .search{font-size:14px}
   select.filt{font-size:12px;padding:5px 6px}
   .xbtn{display:none}
  
-  /* Table: hide less important columns on mobile */
   thead th:nth-child(3),thead th:nth-child(5){display:none}
   .so-row td:nth-child(3),.so-row td:nth-child(5){display:none}
   .tr-row td:nth-child(3),.tr-row td:nth-child(5){display:none}
   .photo-row td{padding:12px 10px 14px 20px}
   .tr-row td{padding-left:20px}
- 
-  /* Bigger tap targets */
   .so-row td{padding:13px 10px}
   .photo-thumb{width:80px;height:80px}
   .upload-zone{padding:12px 14px;font-size:13px}
   .upload-card{padding:24px 20px}
- 
-  /* Refresh pill hidden on mobile */
   #refresh-pill{display:none!important}
 }
  
