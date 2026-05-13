@@ -71,8 +71,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
  
 @media(max-width:700px){
   html,body{overflow:hidden}
-  .app{grid-template-rows:auto 1fr auto}
-  .main{grid-template-columns:1fr}
+  .app{grid-template-rows:auto 1fr}
+  .main{grid-template-columns:1fr;height:100%}
+  .content{height:100%;overflow:hidden}
+  .table-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px}
+  .upload-view{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px}
   .pill:not(.live){display:none}
   .topbar{padding:0 12px;gap:8px}
   .menu-btn{display:flex}
@@ -83,23 +86,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .sidebar{
     position:fixed;top:0;left:-280px;bottom:0;width:280px;
     z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);
-    padding-top:60px;box-shadow:none
+    padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch
   }
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
-  .drawer-overlay{display:block}
-  .drawer-overlay.open{display:block}
  
-  /* Hide sidebar on mobile by default, show bottom nav */
-  .bottom-nav{display:flex}
- 
-  /* Content takes full width, leave room for bottom nav */
-  .content{padding-bottom:0}
-  .table-wrap{padding-bottom:70px}
+  /* Bottom nav fixed above keyboard/chrome */
+  .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0}
  
   /* Metrics: 2x2 grid on mobile */
   .metrics{grid-template-columns:repeat(2,1fr)}
  
-  /* Toolbar: wrap nicely */
+  /* Toolbar */
   .toolbar{padding:8px 10px;gap:6px}
   .search{font-size:14px}
   select.filt{font-size:12px;padding:5px 6px}
@@ -291,7 +288,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     <div class="content" id="content">
  
       <!-- Main dashboard view -->
-      <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
         <div class="metrics">
           <div class="metric"><div class="metric-label">Ship date</div><div class="metric-val" id="m-date" style="font-size:15px;margin-top:2px">—</div><div class="metric-sub">showing below</div></div>
           <div class="metric"><div class="metric-label">Sales orders</div><div class="metric-val" id="m-so">—</div><div class="metric-sub">grouped</div></div>
