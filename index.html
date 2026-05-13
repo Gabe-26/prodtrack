@@ -20,7 +20,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden}
 .app{display:grid;grid-template-rows:auto 1fr;height:100vh}
-
+ 
 /* Topbar */
 .topbar{display:flex;align-items:center;gap:12px;padding:0 22px;height:52px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
 .logo{font-size:15px;font-weight:700;letter-spacing:-0.02em}.logo span{color:var(--accent)}
@@ -36,7 +36,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .btn.primary:hover{background:#d4f570}
 .btn svg{width:14px;height:14px}
 .btn:disabled{opacity:0.4;cursor:not-allowed}
-
+ 
 /* Layout */
 .main{display:grid;grid-template-columns:252px 1fr;overflow:hidden}
 .sidebar{border-right:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:14px 0;display:flex;flex-direction:column}
@@ -51,9 +51,76 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .nav-badge.amber{background:var(--amber-dim);color:var(--amber)}
 .nav-badge.green{background:var(--green-dim);color:var(--green)}
 .sdiv{height:1px;background:var(--border);margin:10px 16px}
-
 .content{display:flex;flex-direction:column;overflow:hidden}
-
+ 
+/* Hamburger (hidden on desktop) */
+.menu-btn{display:none;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;flex-shrink:0}
+.menu-btn svg{width:18px;height:18px;color:var(--text2)}
+ 
+/* Drawer overlay */
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;opacity:0;transition:opacity 0.25s}
+.drawer-overlay.open{opacity:1}
+ 
+/* Mobile bottom nav bar */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:1px solid var(--border2);z-index:100;flex-direction:row;align-items:stretch}
+.bottom-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--text3);font-size:10px;font-family:var(--mono);padding:6px 4px;transition:color 0.12s;position:relative;border:none;background:none}
+.bottom-nav-item.active{color:var(--accent)}
+.bottom-nav-item svg{width:20px;height:20px}
+.bottom-nav-dot{position:absolute;top:6px;right:calc(50% - 14px);width:7px;height:7px;border-radius:50%;background:var(--red);display:none}
+.bottom-nav-dot.show{display:block}
+ 
+@media(max-width:700px){
+  html,body{overflow:hidden}
+  .app{grid-template-rows:auto 1fr auto}
+  .main{grid-template-columns:1fr}
+  .pill:not(.live){display:none}
+  .topbar{padding:0 12px;gap:8px}
+  .menu-btn{display:flex}
+  .topbar-right .btn:not(.primary){display:none}
+  .btn.primary{padding:6px 10px;font-size:11px}
+ 
+  /* Sidebar becomes a slide-in drawer */
+  .sidebar{
+    position:fixed;top:0;left:-280px;bottom:0;width:280px;
+    z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);
+    padding-top:60px;box-shadow:none
+  }
+  .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
+  .drawer-overlay{display:block}
+  .drawer-overlay.open{display:block}
+ 
+  /* Hide sidebar on mobile by default, show bottom nav */
+  .bottom-nav{display:flex}
+ 
+  /* Content takes full width, leave room for bottom nav */
+  .content{padding-bottom:60px}
+ 
+  /* Metrics: 2x2 grid on mobile */
+  .metrics{grid-template-columns:repeat(2,1fr)}
+ 
+  /* Toolbar: wrap nicely */
+  .toolbar{padding:8px 10px;gap:6px}
+  .search{font-size:14px}
+  select.filt{font-size:12px;padding:5px 6px}
+  .xbtn{display:none}
+ 
+  /* Table: hide less important columns on mobile */
+  thead th:nth-child(3),thead th:nth-child(5){display:none}
+  .so-row td:nth-child(3),.so-row td:nth-child(5){display:none}
+  .tr-row td:nth-child(3),.tr-row td:nth-child(5){display:none}
+  .photo-row td{padding:12px 10px 14px 20px}
+  .tr-row td{padding-left:20px}
+ 
+  /* Bigger tap targets */
+  .so-row td{padding:13px 10px}
+  .photo-thumb{width:80px;height:80px}
+  .upload-zone{padding:12px 14px;font-size:13px}
+  .upload-card{padding:24px 20px}
+ 
+  /* Refresh pill hidden on mobile */
+  #refresh-pill{display:none!important}
+}
+ 
 /* Metrics */
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
 .metric{background:var(--surface);padding:11px 16px}
@@ -61,7 +128,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .metric-val{font-size:20px;font-weight:700;letter-spacing:-0.03em}
 .metric-val.red{color:var(--red)}.metric-val.amber{color:var(--amber)}.metric-val.green{color:var(--green)}
 .metric-sub{font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:1px}
-
+ 
 /* Toolbar */
 .toolbar{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
 .search{flex:1;min-width:160px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 11px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color 0.15s}
@@ -70,12 +137,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 select.filt{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 8px;color:var(--text2);font-family:var(--sans);font-size:12px;outline:none;cursor:pointer}
 .xbtn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.12s;border:1px solid var(--border2);background:var(--surface2);color:var(--text3)}
 .xbtn:hover{color:var(--text)}.xbtn.on{background:var(--accent-dim);border-color:rgba(200,240,96,0.3);color:var(--accent)}
-
+ 
 /* Table */
 .table-wrap{flex:1;overflow-y:auto}
 table{width:100%;border-collapse:collapse}
 thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border2);padding:7px 10px;text-align:left;font-size:10px;font-family:var(--mono);letter-spacing:0.06em;color:var(--text3);text-transform:uppercase;white-space:nowrap}
-
+ 
 /* SO row */
 .so-row{cursor:pointer;user-select:none}
 .so-row td{padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle;transition:background 0.1s}
@@ -83,14 +150,14 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .so-row.done td{background:rgba(96,208,138,0.04)}
 .so-row.done td:first-child{border-left:2px solid var(--green)}
 .so-row.pending td:first-child{border-left:2px solid var(--amber)}
-
+ 
 /* Traveler rows */
 .tr-row td{padding:7px 10px 7px 34px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle;background:var(--surface);transition:background 0.1s}
 .tr-row:hover td{background:var(--surface2)}
 .tr-row:last-of-type td{border-bottom:2px solid var(--border2)}
 @keyframes fi{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 .tr-row{animation:fi 0.14s ease}
-
+ 
 /* Photo upload row */
 .photo-row td{padding:12px 10px 14px 34px;border-bottom:2px solid var(--border2);background:var(--surface)}
 .photo-section{display:flex;flex-direction:column;gap:10px}
@@ -104,10 +171,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .photo-bar{display:flex;align-items:center;gap:8px}
 .photo-count{font-size:11px;font-family:var(--mono);color:var(--text3)}
 .photo-count.has{color:var(--green)}
-
+ 
 .chevron{display:inline-flex;transition:transform 0.18s;color:var(--text3)}
 .chevron.open{transform:rotate(90deg)}
-
+ 
 /* Tags */
 .tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:4px;font-weight:500;white-space:nowrap}
 .tr{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,95,95,0.2)}
@@ -116,7 +183,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .tb{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,184,240,0.2)}
 .td{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
 .mono{font-family:var(--mono);font-size:11px}
-
+ 
 /* Upload CSV view */
 .upload-view{flex:1;display:flex;align-items:center;justify-content:center;padding:36px;flex-direction:column;gap:18px}
 .upload-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:32px 40px;text-align:center;max-width:440px;width:100%}
@@ -127,30 +194,30 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .uh-title{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px}
 .ue{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;margin-bottom:5px}
 .ue-icon{width:24px;height:24px;border-radius:5px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-
+ 
 /* Lightbox */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
 .lightbox.open{display:flex}
 .lightbox img{max-width:90vw;max-height:82vh;border-radius:8px;object-fit:contain}
 .lightbox-close{position:absolute;top:18px;right:22px;font-size:22px;cursor:pointer;color:var(--text2);background:none;border:none;font-family:var(--sans)}
 .lightbox-meta{font-size:12px;font-family:var(--mono);color:var(--text3)}
-
+ 
 /* Empty */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px;color:var(--text3);text-align:center;gap:5px}
 .empty-icon{font-size:26px;opacity:0.25;margin-bottom:3px}
 .empty-title{font-size:13px;color:var(--text2)}
 .empty-sub{font-size:11px;font-family:var(--mono)}
-
+ 
 /* Spinner */
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
-
+ 
 /* Toast */
 .toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:12px 15px;font-size:13px;color:var(--text);max-width:300px;z-index:999;opacity:0;pointer-events:none;transition:all 0.22s;transform:translateY(8px)}
 .toast.show{opacity:1;pointer-events:auto;transform:translateY(0)}
 .toast-title{font-weight:700;margin-bottom:2px}
 .toast-body{font-size:11px;font-family:var(--mono);color:var(--text2)}
-
+ 
 /* Loading overlay */
 .loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
 .loading-overlay.hide{display:none}
@@ -158,20 +225,23 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 </style>
 </head>
 <body>
-
+ 
 <div class="loading-overlay" id="loading-overlay">
   <div class="spinner" style="width:24px;height:24px;border-width:3px"></div>
   <div class="loading-text">Connecting to database…</div>
 </div>
-
+ 
 <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
   <button class="lightbox-close" onclick="closeLightbox()">✕</button>
   <img id="lightbox-img" src="" alt="Order photo">
   <div class="lightbox-meta" id="lightbox-meta"></div>
 </div>
-
+ 
 <div class="app">
   <div class="topbar">
+    <button class="menu-btn" onclick="toggleDrawer()" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <div class="logo">PROD<span>TRACK</span></div>
     <div class="pill live"><span class="dot pulse"></span>Live</div>
     <div class="pill" id="last-pill" style="display:none"></div>
@@ -187,8 +257,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       </button>
     </div>
   </div>
+  <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+ 
   <div class="main">
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
       <div class="sidebar-section">Views</div>
       <div class="nav-item active" id="nav-tomorrow" onclick="sv('tomorrow')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -214,9 +286,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div class="sidebar-section">Prod lines</div>
       <div id="line-nav"></div>
     </div>
-
+ 
     <div class="content" id="content">
-
+ 
       <!-- Main dashboard view -->
       <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
         <div class="metrics">
@@ -263,7 +335,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           </div>
         </div>
       </div>
-
+ 
       <!-- Upload CSV view -->
       <div id="view-upload" style="display:none;flex-direction:column;flex:1">
         <div class="upload-view">
@@ -283,23 +355,50 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           </div>
         </div>
       </div>
-
+ 
     </div>
-  </div>
-</div>
-
+  </div><!-- end main -->
+ 
+  <!-- Mobile bottom nav -->
+  <nav class="bottom-nav">
+    <button class="bottom-nav-item active" id="bnav-tomorrow" onclick="sv('tomorrow');closeDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Tomorrow
+      <span class="bottom-nav-dot" id="bdot-tomorrow"></span>
+    </button>
+    <button class="bottom-nav-item" id="bnav-all" onclick="sv('all');closeDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      All
+    </button>
+    <button class="bottom-nav-item" id="bnav-pending" onclick="sv('pending');closeDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Pending
+      <span class="bottom-nav-dot" id="bdot-pending"></span>
+    </button>
+    <button class="bottom-nav-item" id="bnav-done" onclick="sv('done');closeDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Done
+    </button>
+    <button class="bottom-nav-item" id="bnav-upload" onclick="sv('upload');closeDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload
+    </button>
+  </nav>
+ 
+</div><!-- end app -->
+ 
 <div class="toast" id="toast">
   <div class="toast-title" id="t-title"></div>
   <div class="toast-body" id="t-body"></div>
 </div>
-
+ 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
 const SUPA_URL = 'https://hfzqxxfmaqnraxadztoc.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmenF4eGZtYXFucmF4YWR6dG9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MjY0MzcsImV4cCI6MjA5NDIwMjQzN30.MI7iVdsydhD9uX0X53SU57yx-pI5_SLcTysBAotUflA';
 const BUCKET  = 'order-photos';
 const HDR     = {'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
-
+ 
 // ── State ─────────────────────────────────────────────────────────────────────
 let orders   = [];   // from supabase orders table
 let photos   = {};   // map: so -> [{url,filename,uploaded_at}]
@@ -308,7 +407,7 @@ let allExp   = false;
 let activeLine = '';
 let activeView = 'tomorrow';
 let uploads  = [];
-
+ 
 // ── Supabase helpers ──────────────────────────────────────────────────────────
 async function sbGet(table, params=''){
   const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {headers:HDR});
@@ -341,7 +440,7 @@ async function uploadPhoto(so, file){
   await sbUpsert('photos', [{so, filename:file.name, url, uploaded_by:'worker'}]);
   return url;
 }
-
+ 
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadOrders(){
   const rows = await sbGet('orders','select=*&order=so_ship.asc,so.asc');
@@ -372,7 +471,7 @@ async function init(){
     document.querySelector('.loading-overlay .spinner').style.display='none';
   }
 }
-
+ 
 // ── Refresh photos (for management checking) ──────────────────────────────────
 async function refreshPhotos(){
   const btn = document.getElementById('refresh-btn');
@@ -388,7 +487,7 @@ async function refreshPhotos(){
   btn.disabled = false;
   btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
 }
-
+ 
 // ── CSV parse & upload ────────────────────────────────────────────────────────
 function parseCSV(txt){
   const out=[];
@@ -421,12 +520,12 @@ function parseRow(line){
   }
   r.push(cur); return r;
 }
-
+ 
 const dzEl=document.getElementById('dz');
 dzEl.addEventListener('dragover',e=>{e.preventDefault();dzEl.classList.add('drag');});
 dzEl.addEventListener('dragleave',()=>dzEl.classList.remove('drag'));
 dzEl.addEventListener('drop',e=>{e.preventDefault();dzEl.classList.remove('drag');handleCSV(e.dataTransfer.files[0]);});
-
+ 
 async function handleCSV(file){
   if(!file) return;
   const st=document.getElementById('csv-status');
@@ -458,7 +557,7 @@ async function handleCSV(file){
   };
   fr.readAsText(file);
 }
-
+ 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const isCus = o => o.item.includes('-CUS') || o.item.endsWith('CUS');
 function groupBySO(list){
@@ -475,7 +574,7 @@ function fmtDate(iso){
   const p=iso.split('-');
   return `${parseInt(p[1])}/${parseInt(p[2])}/${p[0].slice(2)}`;
 }
-
+ 
 // ── Update UI state ───────────────────────────────────────────────────────────
 function updateAll(){
   const sos=new Set(orders.map(o=>o.so));
@@ -484,21 +583,25 @@ function updateAll(){
   const doneSOs=new Set([...sos].filter(so=>photos[so]&&photos[so].length>0));
   const pendingSOs=new Set([...sos].filter(so=>!photos[so]||photos[so].length===0));
   const tomorrowPending=[...tomorrowSOs].filter(so=>pendingSOs.has(so)).length;
-
+ 
   document.getElementById('m-so').textContent=sos.size;
   document.getElementById('m-done').textContent=doneSOs.size;
   document.getElementById('m-pending').textContent=pendingSOs.size;
-
+ 
   document.getElementById('b-total').textContent=sos.size;
   document.getElementById('b-tomorrow').textContent=tomorrowSOs.size;
   document.getElementById('b-pending').textContent=pendingSOs.size;
   document.getElementById('b-done').textContent=doneSOs.size;
-
+ 
+  // Bottom nav red dots
+  document.getElementById('bdot-tomorrow')?.classList.toggle('show', tomorrowPending>0);
+  document.getElementById('bdot-pending')?.classList.toggle('show', pendingSOs.size>0);
+ 
   // Date filter
   const dates=[...new Set(orders.map(o=>o.soShipRaw).filter(Boolean))].sort();
   const df=document.getElementById('f-date'),cur=df.value;
   df.innerHTML='<option value="">All ship dates</option>'+dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${fmtDate(d)}</option>`).join('');
-
+ 
   // Line nav
   const lines=[...new Set(orders.map(o=>o.line))].sort();
   document.getElementById('line-nav').innerHTML=lines.map(l=>
@@ -506,20 +609,20 @@ function updateAll(){
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       Line ${l}<span class="nav-badge">${orders.filter(o=>o.line===l).length}</span>
     </div>`).join('');
-
+ 
   document.getElementById('empty-nd').style.display=orders.length?'none':'flex';
   render();
 }
-
+ 
 function setLine(l){activeLine=activeLine===l?'':l;updateAll();sv('tomorrow');}
-
+ 
 // ── Render table ──────────────────────────────────────────────────────────────
 function render(){
   const q=document.getElementById('search').value.toLowerCase();
   const via=document.getElementById('f-via').value;
   const dateF=document.getElementById('f-date').value;
   const tomorrow=getTomorrow();
-
+ 
   let filtered=orders.filter(o=>{
     if(activeLine&&o.line!==activeLine) return false;
     if(via&&o.via!==via) return false;
@@ -536,7 +639,7 @@ function render(){
     if(q&&![o.traveler,o.so,o.item,o.desc,o.customer].join(' ').toLowerCase().includes(q)) return false;
     return true;
   });
-
+ 
   const groups=groupBySO(filtered);
   // Sort: no-photo first, then by ship date
   groups.sort((a,b)=>{
@@ -545,24 +648,24 @@ function render(){
     if(!aP&&bP) return -1; if(aP&&!bP) return 1;
     return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
   });
-
+ 
   // Update metric date label
   if(activeView==='tomorrow'){
     document.getElementById('m-date').textContent=fmtDate(tomorrow);
   } else {
     document.getElementById('m-date').textContent='All dates';
   }
-
+ 
   const tbody=document.getElementById('tbody');
   const emf=document.getElementById('empty-f');
   if(!groups.length&&orders.length){tbody.innerHTML='';emf.style.display='flex';return;}
   emf.style.display='none';
-
+ 
   const anyOpen=allExp||expanded.size>0;
   document.getElementById('thead-row').innerHTML=anyOpen
     ?`<th style="width:150px">SO # / Traveler</th><th>Description</th><th style="width:100px">Item code</th><th style="width:55px;text-align:right">Qty</th><th style="width:75px">Line</th><th style="width:120px">Photos</th>`
     :`<th style="width:130px">SO #</th><th style="width:105px">Ship date</th><th style="width:86px">Ship via</th><th>Customer</th><th style="width:72px;text-align:right">Travelers</th><th style="width:120px">Photos</th>`;
-
+ 
   let html='';
   for(const {so,travelers} of groups){
     const soPhotos=photos[so]||[];
@@ -573,12 +676,12 @@ function render(){
     const soShip=travelers[0].soShipRaw;
     const viaShort=via0==='OUR TRUCK'?'Truck':via0==='PICK UP'?'Pickup':'Install';
     const viaCls=via0==='OUR TRUCK'?'tb':via0==='PICK UP'?'td':'tg';
-
+ 
     // Photo indicator for SO row
     const picIndicator=hasPic
       ?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`
       :`<span class="tag ta">No photo</span>`;
-
+ 
     const rowCls='so-row'+(hasPic?' done':' pending');
     html+=`<tr class="${rowCls}" onclick="toggleSO('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px">
@@ -591,7 +694,7 @@ function render(){
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--text3)">${travelers.length}</td>
       <td>${picIndicator}</td>
     </tr>`;
-
+ 
     if(isOpen){
       // Traveler rows
       for(const o of travelers){
@@ -605,12 +708,12 @@ function render(){
           <td></td>
         </tr>`;
       }
-
+ 
       // Photo upload row
       const thumbsHtml=soPhotos.map(p=>
         `<img class="photo-thumb" src="${p.url}" title="${p.filename} — ${new Date(p.uploaded_at).toLocaleString()}" onclick="openLightbox('${p.url}','${p.filename}','${new Date(p.uploaded_at).toLocaleString()}')" loading="lazy">`
       ).join('');
-
+ 
       html+=`<tr class="photo-row" id="photo-row-${so}">
         <td colspan="6">
           <div class="photo-section">
@@ -632,13 +735,13 @@ function render(){
   }
   tbody.innerHTML=html;
 }
-
+ 
 function toggleSO(so){
   if(expanded.has(so)) expanded.delete(so);
   else expanded.add(so);
   render();
 }
-
+ 
 function toggleExpandAll(){
   allExp=!allExp;
   const btn=document.getElementById('xbtn');
@@ -646,7 +749,7 @@ function toggleExpandAll(){
   else{expanded.clear();btn.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg> Expand all';btn.classList.remove('on');}
   render();
 }
-
+ 
 // ── Photo upload ───────────────────────────────────────────────────────────────
 async function handlePhotoUpload(so, input){
   const files=[...input.files];
@@ -672,7 +775,7 @@ async function handlePhotoUpload(so, input){
   uz.classList.remove('uploading');
   input.value='';
 }
-
+ 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 function openLightbox(url, filename, ts){
   document.getElementById('lightbox-img').src=url;
@@ -685,7 +788,22 @@ function closeLightbox(e){
   }
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape') document.getElementById('lightbox').classList.remove('open');});
-
+ 
+// ── Drawer (mobile sidebar) ───────────────────────────────────────────────────
+function toggleDrawer(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('drawer-overlay');
+  const isOpen=sb.classList.contains('open');
+  if(isOpen){ closeDrawer(); } else {
+    sb.classList.add('open');
+    ov.classList.add('open');
+  }
+}
+function closeDrawer(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+ 
 // ── View switch ───────────────────────────────────────────────────────────────
 function sv(v){
   activeView=v;
@@ -694,11 +812,13 @@ function sv(v){
   document.getElementById('view-upload').style.display=isUpload?'flex':'none';
   ['tomorrow','all','pending','done','upload'].forEach(n=>{
     document.getElementById('nav-'+n)?.classList.remove('active');
+    document.getElementById('bnav-'+n)?.classList.remove('active');
   });
   document.getElementById('nav-'+v)?.classList.add('active');
+  document.getElementById('bnav-'+v)?.classList.add('active');
   render();
 }
-
+ 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(title,body,type){
   const t=document.getElementById('toast');
@@ -708,27 +828,27 @@ function toast(title,body,type){
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),4200);
 }
-
+ 
 // ── Auto-refresh ───────────────────────────────────────────────────────────────
 const AUTO_REFRESH_SEC = 60;
 let refreshCountdown = AUTO_REFRESH_SEC;
 let refreshTimer = null;
 let countdownTimer = null;
-
+ 
 function startAutoRefresh(){
   // Clear any existing timers
   clearInterval(refreshTimer);
   clearInterval(countdownTimer);
   refreshCountdown = AUTO_REFRESH_SEC;
   updateRefreshPill();
-
+ 
   // Countdown tick every second
   countdownTimer = setInterval(()=>{
     refreshCountdown--;
     updateRefreshPill();
     if(refreshCountdown <= 0) refreshCountdown = AUTO_REFRESH_SEC;
   }, 1000);
-
+ 
   // Actual refresh every 60 seconds
   refreshTimer = setInterval(async ()=>{
     refreshCountdown = AUTO_REFRESH_SEC;
@@ -747,13 +867,13 @@ function startAutoRefresh(){
     } catch(e){ /* silent fail — no toast on background refresh */ }
   }, AUTO_REFRESH_SEC * 1000);
 }
-
+ 
 function updateRefreshPill(){
   const pill = document.getElementById('refresh-pill');
   pill.style.display = 'inline-flex';
   pill.textContent = `Auto-refresh in ${refreshCountdown}s`;
 }
-
+ 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init().then(()=> startAutoRefresh());
 </script>
