@@ -19,7 +19,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden}
-.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+.app{display:grid;grid-template-rows:auto 1fr;height:100dvh}
  
 /* Topbar */
 .topbar{display:flex;align-items:center;gap:12px;padding:0 22px;height:52px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
@@ -71,7 +71,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
  
 @media(max-width:700px){
   html,body{overflow:hidden;height:100%;position:fixed;width:100%}
-  .app{display:flex;flex-direction:column;height:100svh;height:100vh}
+  .app{display:flex;flex-direction:column;height:100dvh}
   .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
@@ -82,10 +82,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
     overflow-y:scroll;
     -webkit-overflow-scrolling:touch;
     overscroll-behavior:contain;
-    padding-bottom:40px;
+    padding-bottom:env(safe-area-inset-bottom, 40px);
     min-height:0;
   }
-  .upload-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:40px}
+  .upload-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom, 40px)}
  
   .pill:not(.live){display:none}
   .topbar{padding:0 12px;gap:8px;flex-shrink:0}
