@@ -209,11 +209,17 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
  
+/* Date change banner */
+.dc-banner{margin:10px 16px 0;background:var(--amber-dim);border:1px solid rgba(255,179,71,0.3);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--amber);display:none;flex-shrink:0}
+.dc-banner.show{display:block}
+.dc-banner-title{font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:5px}
+.dc-line{font-family:var(--mono);font-size:11px;opacity:0.85;margin-top:2px}
+ 
 /* Toast */
 .toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:12px 15px;font-size:13px;color:var(--text);max-width:300px;z-index:999;opacity:0;pointer-events:none;transition:all 0.22s;transform:translateY(8px)}
 .toast.show{opacity:1;pointer-events:auto;transform:translateY(0)}
 .toast-title{font-weight:700;margin-bottom:2px}
-.toast-body{font-size:11px;font-family:var(--mono);color:var(--text2)}
+.toast-body{font-size:11px;font-family:var(--mono);color:var(--text2);white-space:pre-line}
  
 /* Loading overlay */
 .loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
@@ -275,6 +281,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         Photo uploaded<span class="nav-badge green" id="b-done">0</span>
       </div>
+      <div class="nav-item" id="nav-datechanges" onclick="sv('datechanges')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Date changes<span class="nav-badge amber" id="b-datechanges">0</span>
+      </div>
       <div class="nav-item" id="nav-upload" onclick="sv('upload')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Upload CSV
@@ -293,6 +303,15 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           <div class="metric"><div class="metric-label">Sales orders</div><div class="metric-val" id="m-so">—</div><div class="metric-sub">grouped</div></div>
           <div class="metric"><div class="metric-label">Photo uploaded</div><div class="metric-val green" id="m-done">—</div><div class="metric-sub">confirmed</div></div>
           <div class="metric"><div class="metric-label">No photo yet</div><div class="metric-val red" id="m-pending">—</div><div class="metric-sub">needs attention</div></div>
+        </div>
+ 
+        <!-- Date change banner -->
+        <div class="dc-banner" id="dc-banner">
+          <div class="dc-banner-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Ship dates changed since last upload — <span style="cursor:pointer;text-decoration:underline" onclick="sv('datechanges')">view all</span>
+          </div>
+          <div id="dc-banner-list"></div>
         </div>
         <div class="toolbar">
           <input class="search" id="search" placeholder="Search SO, traveler, item, customer..." oninput="render()">
@@ -329,6 +348,16 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
             <div class="empty-icon">◎</div>
             <div class="empty-title">No orders match your filters</div>
             <div class="empty-sub">Try adjusting your search</div>
+          </div>
+        </div>
+      </div>
+ 
+      <!-- Date changes view -->
+      <div id="view-datechanges" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div style="flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch">
+          <div style="font-size:10px;font-family:var(--mono);letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:12px" id="dc-view-hdr">No date changes detected</div>
+          <div id="dc-view-body">
+            <div class="empty"><div class="empty-icon">✓</div><div class="empty-title">All ship dates are the same</div><div class="empty-sub">Date changes will appear here after uploading a new CSV</div></div>
           </div>
         </div>
       </div>
@@ -399,6 +428,7 @@ const HDR     = {'Content-Type':'application/json','apikey':SUPA_KEY,'Authorizat
 // ── State ─────────────────────────────────────────────────────────────────────
 let orders   = [];   // from supabase orders table
 let photos   = {};   // map: so -> [{url,filename,uploaded_at}]
+let dateChanges = []; // SOs whose ship date changed in last upload
 let expanded = new Set();
 let allExp   = false;
 let activeLine = '';
@@ -532,21 +562,48 @@ async function handleCSV(file){
     if(!parsed.length){toast('Parse error','Could not read orders. Check the file format.','red');return;}
     st.textContent='Uploading '+parsed.length+' travelers…';
     try{
-      // Clear existing orders and insert fresh
-      await sbDelete('orders','traveler=neq.null');
-      // Insert in chunks of 500
+      // Build map of current SO ship dates BEFORE uploading
+      const prevSODates={};
+      orders.forEach(o=>{ if(o.so&&o.soShipRaw) prevSODates[o.so]=o.soShipRaw; });
+ 
+      // Upsert — add/update, never delete
       for(let i=0;i<parsed.length;i+=500){
         await sbUpsert('orders', parsed.slice(i,i+500));
       }
+ 
+      // Detect date changes: compare new CSV against what was in DB
+      const newSODates={};
+      parsed.forEach(r=>{ if(r.so&&r.so_ship) newSODates[r.so]=r.so_ship; });
+      dateChanges=[];
+      for(const so of Object.keys(newSODates)){
+        if(prevSODates[so] && prevSODates[so]!==newSODates[so]){
+          // Find customer name
+          const t=parsed.find(r=>r.so===so);
+          dateChanges.push({
+            so,
+            customer: t?.customer||'',
+            from: prevSODates[so],
+            to: newSODates[so]
+          });
+        }
+      }
+ 
       const ts=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      uploads.unshift({name:file.name,time:ts,count:parsed.length});
+      uploads.unshift({name:file.name,time:ts,count:parsed.length,changes:dateChanges.length});
       document.getElementById('last-pill').textContent='Last upload: '+ts;
       document.getElementById('last-pill').style.display='inline-flex';
       st.textContent='✓ '+parsed.length+' travelers loaded at '+ts;
       await loadOrders();
       updateAll();
-      toast('CSV uploaded',''+parsed.length+' travelers saved to database.','green');
-      setTimeout(()=>sv('tomorrow'),1200);
+ 
+      if(dateChanges.length){
+        toast(`${dateChanges.length} date change${dateChanges.length>1?'s':''} detected`,
+          dateChanges.slice(0,3).map(c=>`SO ${c.so}: ${fmtDate(c.from)} → ${fmtDate(c.to)}`).join('\n'),'amber');
+        setTimeout(()=>sv('datechanges'),1200);
+      } else {
+        toast('CSV uploaded',''+parsed.length+' travelers saved. No date changes.','green');
+        setTimeout(()=>sv('tomorrow'),1200);
+      }
     } catch(err){
       st.textContent='Error: '+err.message;
       toast('Upload failed',err.message,'red');
@@ -589,6 +646,43 @@ function updateAll(){
   document.getElementById('b-tomorrow').textContent=tomorrowSOs.size;
   document.getElementById('b-pending').textContent=pendingSOs.size;
   document.getElementById('b-done').textContent=doneSOs.size;
+  document.getElementById('b-datechanges').textContent=dateChanges.length;
+ 
+  // Date change banner
+  const dcBanner=document.getElementById('dc-banner');
+  const dcList=document.getElementById('dc-banner-list');
+  if(dateChanges.length){
+    dcBanner.classList.add('show');
+    dcList.innerHTML=dateChanges.slice(0,4).map(c=>
+      `<div class="dc-line">SO ${c.so} · ${c.customer} · ${fmtDate(c.from)} → ${fmtDate(c.to)}</div>`
+    ).join('')+(dateChanges.length>4?`<div class="dc-line" style="opacity:0.5">…and ${dateChanges.length-4} more</div>`:'');
+  } else {
+    dcBanner.classList.remove('show');
+  }
+ 
+  // Date changes view
+  const dcHdr=document.getElementById('dc-view-hdr');
+  const dcBody=document.getElementById('dc-view-body');
+  if(dateChanges.length){
+    dcHdr.textContent=`${dateChanges.length} ship date change${dateChanges.length>1?'s':''} detected in last upload`;
+    dcBody.innerHTML=dateChanges.map(c=>`
+      <div style="background:var(--surface);border:1px solid rgba(255,179,71,0.25);border-radius:8px;margin-bottom:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--border)">
+          <span class="tag ta">DATE MOVED</span>
+          <span style="font-weight:700;font-size:13px;color:var(--text)">SO ${c.so}</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--text3)">${c.customer}</span>
+        </div>
+        <div style="padding:9px 13px;font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:10px">
+          <span style="color:var(--red);text-decoration:line-through">${fmtDate(c.from)}</span>
+          <span style="color:var(--text3)">→</span>
+          <span style="color:var(--accent);font-weight:600">${fmtDate(c.to)}</span>
+          <span style="margin-left:auto;color:var(--text3)">${photos[c.so]?.length>0?'✓ '+photos[c.so].length+' photo':'No photo yet'}</span>
+        </div>
+      </div>`).join('');
+  } else {
+    dcHdr.textContent='No date changes detected';
+    dcBody.innerHTML='<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">All ship dates are the same</div><div class="empty-sub">Date changes will appear here after uploading a new CSV</div></div>';
+  }
  
   // Bottom nav red dots
   document.getElementById('bdot-tomorrow')?.classList.toggle('show', tomorrowPending>0);
@@ -809,9 +903,12 @@ function closeDrawer(){
 function sv(v){
   activeView=v;
   const isUpload=v==='upload';
-  document.getElementById('view-main').style.display=isUpload?'none':'flex';
+  const isDC=v==='datechanges';
+  const isMain=!isUpload&&!isDC;
+  document.getElementById('view-main').style.display=isMain?'flex':'none';
   document.getElementById('view-upload').style.display=isUpload?'flex':'none';
-  ['tomorrow','all','pending','done','upload'].forEach(n=>{
+  document.getElementById('view-datechanges').style.display=isDC?'flex':'none';
+  ['tomorrow','all','pending','done','datechanges','upload'].forEach(n=>{
     document.getElementById('nav-'+n)?.classList.remove('active');
     document.getElementById('bnav-'+n)?.classList.remove('active');
   });
@@ -824,11 +921,11 @@ function sv(v){
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(title,body,type){
   const t=document.getElementById('toast');
-  document.getElementById('t-title').textContent=(type==='red'?'⚠ ':type==='green'?'✓ ':'')+title;
+  document.getElementById('t-title').textContent=(type==='red'?'⚠ ':type==='green'?'✓ ':'⚡ ')+title;
   document.getElementById('t-body').textContent=body;
-  t.style.borderColor=type==='red'?'var(--red)':type==='green'?'var(--green)':'var(--border2)';
+  t.style.borderColor=type==='red'?'var(--red)':type==='green'?'var(--green)':type==='amber'?'var(--amber)':'var(--border2)';
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),4200);
+  setTimeout(()=>t.classList.remove('show'),5000);
 }
  
 // ── Auto-refresh ───────────────────────────────────────────────────────────────
