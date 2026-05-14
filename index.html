@@ -21,11 +21,27 @@
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden}
 .app{display:grid;grid-template-rows:auto 1fr;height:100dvh}
  
-/* Topbar */
+/* ── Login screen ─────────────────────────────────────────────────────────── */
+.login-screen{position:fixed;inset:0;background:var(--bg);z-index:900;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-screen.hide{display:none}
+.login-card{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:36px 40px;width:100%;max-width:380px}
+.login-logo{font-size:22px;font-weight:700;letter-spacing:-0.03em;margin-bottom:6px}
+.login-logo span{color:var(--accent)}
+.login-sub{font-size:12px;font-family:var(--mono);color:var(--text3);margin-bottom:28px}
+.login-label{font-size:11px;font-family:var(--mono);color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:5px}
+.login-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;transition:border-color 0.15s;margin-bottom:14px}
+.login-input:focus{border-color:var(--accent)}
+.login-btn{width:100%;background:var(--accent);border:none;border-radius:7px;padding:11px;color:#0f0f11;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;transition:background 0.15s;margin-top:4px}
+.login-btn:hover{background:#d4f570}
+.login-btn:disabled{opacity:0.5;cursor:not-allowed}
+.login-error{font-size:12px;font-family:var(--mono);color:var(--red);margin-top:10px;min-height:18px;text-align:center}
+ 
+/* ── Topbar ───────────────────────────────────────────────────────────────── */
 .topbar{display:flex;align-items:center;gap:12px;padding:0 22px;height:52px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
 .logo{font-size:15px;font-weight:700;letter-spacing:-0.02em}.logo span{color:var(--accent)}
 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:20px;border:1px solid var(--border2);color:var(--text2)}
 .pill.live{border-color:var(--accent);color:var(--accent)}
+.pill.manager-pill{border-color:var(--blue);color:var(--blue)}
 .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
 .dot.pulse{animation:pulse 2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
@@ -34,10 +50,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .btn:hover{background:var(--surface3);color:var(--text)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#0f0f11}
 .btn.primary:hover{background:#d4f570}
+.btn.danger{background:var(--red-dim);border-color:rgba(255,95,95,0.3);color:var(--red)}
+.btn.danger:hover{background:rgba(255,95,95,0.2)}
 .btn svg{width:14px;height:14px}
 .btn:disabled{opacity:0.4;cursor:not-allowed}
  
-/* Layout */
+/* ── Layout ───────────────────────────────────────────────────────────────── */
 .main{display:grid;grid-template-columns:252px 1fr;overflow:hidden}
 .sidebar{border-right:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:14px 0;display:flex;flex-direction:column}
 .sidebar-section{padding:8px 16px 3px;font-size:10px;font-family:var(--mono);letter-spacing:0.1em;color:var(--text3);text-transform:uppercase}
@@ -53,21 +71,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .sdiv{height:1px;background:var(--border);margin:10px 16px}
 .content{display:flex;flex-direction:column;overflow:hidden}
  
-/* Hamburger (hidden on desktop) */
+/* User info at bottom of sidebar */
+.sidebar-user{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.user-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--accent);flex-shrink:0}
+.user-name{font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-role{font-size:10px;font-family:var(--mono);color:var(--text3)}
+.logout-btn{background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;border-radius:4px;display:flex}
+.logout-btn:hover{color:var(--red)}
+ 
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
 .menu-btn{display:none;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;flex-shrink:0}
 .menu-btn svg{width:18px;height:18px;color:var(--text2)}
- 
-/* Drawer overlay */
 .drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;opacity:0;transition:opacity 0.25s;pointer-events:none}
 .drawer-overlay.open{opacity:1;pointer-events:auto}
- 
-/* Mobile bottom nav bar - removed */
 .bottom-nav{display:none!important}
-.bottom-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--text3);font-size:10px;font-family:var(--mono);padding:6px 4px;transition:color 0.12s;position:relative;border:none;background:none}
-.bottom-nav-item.active{color:var(--accent)}
-.bottom-nav-item svg{width:20px;height:20px}
-.bottom-nav-dot{position:absolute;top:6px;right:calc(50% - 14px);width:7px;height:7px;border-radius:50%;background:var(--red);display:none}
-.bottom-nav-dot.show{display:block}
  
 @media(max-width:700px){
   html,body{overflow:hidden;height:100%;position:fixed;width:100%}
@@ -75,37 +92,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
-  .metrics{flex-shrink:0}
-  .toolbar{flex-shrink:0}
-  .table-wrap{
-    flex:1;
-    overflow-y:scroll;
-    -webkit-overflow-scrolling:touch;
-    overscroll-behavior:contain;
-    padding-bottom:env(safe-area-inset-bottom, 40px);
-    min-height:0;
-  }
-  .upload-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom, 40px)}
- 
-  .pill:not(.live){display:none}
+  .metrics{flex-shrink:0}.toolbar{flex-shrink:0}
+  .table-wrap{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
+  .upload-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,40px)}
+  .pill:not(.live):not(.manager-pill){display:none}
   .topbar{padding:0 12px;gap:8px;flex-shrink:0}
   .menu-btn{display:flex}
   .topbar-right .btn:not(.primary){display:none}
   .btn.primary{padding:6px 10px;font-size:11px}
- 
-  .sidebar{
-    position:fixed;top:0;left:-280px;bottom:0;width:280px;
-    z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);
-    padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch
-  }
+  .sidebar{position:fixed;top:0;left:-280px;bottom:0;width:280px;z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
- 
   .metrics{grid-template-columns:repeat(2,1fr)}
   .toolbar{padding:8px 10px;gap:6px}
   .search{font-size:14px}
   select.filt{font-size:12px;padding:5px 6px}
   .xbtn{display:none}
- 
   thead th:nth-child(3),thead th:nth-child(5){display:none}
   .so-row td:nth-child(3),.so-row td:nth-child(5){display:none}
   .tr-row td:nth-child(3),.tr-row td:nth-child(5){display:none}
@@ -116,9 +117,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .upload-zone{padding:12px 14px;font-size:13px}
   .upload-card{padding:24px 20px}
   #refresh-pill{display:none!important}
+  .login-card{padding:28px 22px}
 }
  
-/* Metrics */
+/* ── Metrics ──────────────────────────────────────────────────────────────── */
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
 .metric{background:var(--surface);padding:11px 16px}
 .metric-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:2px}
@@ -126,7 +128,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .metric-val.red{color:var(--red)}.metric-val.amber{color:var(--amber)}.metric-val.green{color:var(--green)}
 .metric-sub{font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:1px}
  
-/* Toolbar */
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
 .toolbar{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
 .search{flex:1;min-width:160px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 11px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color 0.15s}
 .search:focus{border-color:var(--accent)}
@@ -135,44 +137,41 @@ select.filt{background:var(--surface2);border:1px solid var(--border2);border-ra
 .xbtn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.12s;border:1px solid var(--border2);background:var(--surface2);color:var(--text3)}
 .xbtn:hover{color:var(--text)}.xbtn.on{background:var(--accent-dim);border-color:rgba(200,240,96,0.3);color:var(--accent)}
  
-/* Table */
+/* ── Table ────────────────────────────────────────────────────────────────── */
 .table-wrap{flex:1;overflow-y:auto}
 table{width:100%;border-collapse:collapse}
 thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border2);padding:7px 10px;text-align:left;font-size:10px;font-family:var(--mono);letter-spacing:0.06em;color:var(--text3);text-transform:uppercase;white-space:nowrap}
- 
-/* SO row */
 .so-row{cursor:pointer;user-select:none}
 .so-row td{padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle;transition:background 0.1s}
 .so-row:hover td{background:var(--surface2)}
 .so-row.done td{background:rgba(96,208,138,0.04)}
 .so-row.done td:first-child{border-left:2px solid var(--green)}
 .so-row.pending td:first-child{border-left:2px solid var(--amber)}
- 
-/* Traveler rows */
 .tr-row td{padding:7px 10px 7px 34px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle;background:var(--surface);transition:background 0.1s}
 .tr-row:hover td{background:var(--surface2)}
-.tr-row:last-of-type td{border-bottom:2px solid var(--border2)}
 @keyframes fi{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 .tr-row{animation:fi 0.14s ease}
  
-/* Photo upload row */
+/* ── Photo row ────────────────────────────────────────────────────────────── */
 .photo-row td{padding:12px 10px 14px 34px;border-bottom:2px solid var(--border2);background:var(--surface)}
 .photo-section{display:flex;flex-direction:column;gap:10px}
 .photo-thumbs{display:flex;gap:8px;flex-wrap:wrap}
-.photo-thumb{width:72px;height:72px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);cursor:pointer;transition:all 0.15s}
+.photo-thumb-wrap{position:relative;display:inline-flex}
+.photo-thumb{width:72px;height:72px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);cursor:pointer;transition:all 0.15s;display:block}
 .photo-thumb:hover{border-color:var(--accent);transform:scale(1.04)}
+.photo-delete-btn{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);border:2px solid var(--bg);display:none;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:11px;font-weight:700;z-index:2;transition:transform 0.15s}
+.photo-delete-btn:hover{transform:scale(1.15)}
+.manager .photo-delete-btn{display:flex}
 .upload-zone{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px dashed var(--border2);border-radius:7px;cursor:pointer;transition:all 0.15s;position:relative;font-size:12px;color:var(--text3);width:fit-content}
 .upload-zone:hover{border-color:var(--accent);color:var(--accent)}
 .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .upload-zone.uploading{border-color:var(--amber);color:var(--amber)}
 .photo-bar{display:flex;align-items:center;gap:8px}
-.photo-count{font-size:11px;font-family:var(--mono);color:var(--text3)}
-.photo-count.has{color:var(--green)}
+.photo-meta{font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:2px}
  
+/* ── Tags ─────────────────────────────────────────────────────────────────── */
 .chevron{display:inline-flex;transition:transform 0.18s;color:var(--text3)}
 .chevron.open{transform:rotate(90deg)}
- 
-/* Tags */
 .tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:4px;font-weight:500;white-space:nowrap}
 .tr{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,95,95,0.2)}
 .ta{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.2)}
@@ -181,7 +180,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .td{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
 .mono{font-family:var(--mono);font-size:11px}
  
-/* Upload CSV view */
+/* ── Upload CSV ───────────────────────────────────────────────────────────── */
 .upload-view{flex:1;display:flex;align-items:center;justify-content:center;padding:36px;flex-direction:column;gap:18px}
 .upload-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:32px 40px;text-align:center;max-width:440px;width:100%}
 .dz{border:2px dashed var(--border2);border-radius:9px;padding:32px 18px;cursor:pointer;transition:all 0.2s;position:relative;margin-bottom:14px}
@@ -192,36 +191,39 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .ue{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;margin-bottom:5px}
 .ue-icon{width:24px;height:24px;border-radius:5px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0}
  
-/* Lightbox */
-.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+/* ── Lightbox ─────────────────────────────────────────────────────────────── */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:1000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
 .lightbox.open{display:flex}
-.lightbox img{max-width:90vw;max-height:82vh;border-radius:8px;object-fit:contain}
+.lightbox img{max-width:90vw;max-height:78vh;border-radius:8px;object-fit:contain}
 .lightbox-close{position:absolute;top:18px;right:22px;font-size:22px;cursor:pointer;color:var(--text2);background:none;border:none;font-family:var(--sans)}
-.lightbox-meta{font-size:12px;font-family:var(--mono);color:var(--text3)}
+.lightbox-meta{font-size:12px;font-family:var(--mono);color:var(--text3);text-align:center}
+.lightbox-actions{display:flex;gap:10px}
  
-/* Empty */
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px;color:var(--text3);text-align:center;gap:5px}
-.empty-icon{font-size:26px;opacity:0.25;margin-bottom:3px}
-.empty-title{font-size:13px;color:var(--text2)}
-.empty-sub{font-size:11px;font-family:var(--mono)}
+/* ── Confirm dialog ───────────────────────────────────────────────────────── */
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1100;display:none;align-items:center;justify-content:center;padding:24px}
+.confirm-overlay.open{display:flex}
+.confirm-card{background:var(--surface);border:1px solid rgba(255,95,95,0.3);border-radius:12px;padding:24px;max-width:340px;width:100%;text-align:center}
+.confirm-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px}
+.confirm-body{font-size:12px;font-family:var(--mono);color:var(--text3);margin-bottom:20px}
+.confirm-actions{display:flex;gap:10px;justify-content:center}
  
-/* Spinner */
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
-@keyframes spin{to{transform:rotate(360deg)}}
- 
-/* Date change banner */
+/* ── Date change banner ───────────────────────────────────────────────────── */
 .dc-banner{margin:10px 16px 0;background:var(--amber-dim);border:1px solid rgba(255,179,71,0.3);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--amber);display:none;flex-shrink:0}
 .dc-banner.show{display:block}
 .dc-banner-title{font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:5px}
 .dc-line{font-family:var(--mono);font-size:11px;opacity:0.85;margin-top:2px}
  
-/* Toast */
-.toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:12px 15px;font-size:13px;color:var(--text);max-width:300px;z-index:999;opacity:0;pointer-events:none;transition:all 0.22s;transform:translateY(8px)}
+/* ── Misc ─────────────────────────────────────────────────────────────────── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px;color:var(--text3);text-align:center;gap:5px}
+.empty-icon{font-size:26px;opacity:0.25;margin-bottom:3px}
+.empty-title{font-size:13px;color:var(--text2)}
+.empty-sub{font-size:11px;font-family:var(--mono)}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:12px 15px;font-size:13px;color:var(--text);max-width:300px;z-index:1200;opacity:0;pointer-events:none;transition:all 0.22s;transform:translateY(8px)}
 .toast.show{opacity:1;pointer-events:auto;transform:translateY(0)}
 .toast-title{font-weight:700;margin-bottom:2px}
 .toast-body{font-size:11px;font-family:var(--mono);color:var(--text2);white-space:pre-line}
- 
-/* Loading overlay */
 .loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
 .loading-overlay.hide{display:none}
 .loading-text{font-size:13px;font-family:var(--mono);color:var(--text3)}
@@ -229,37 +231,68 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 </head>
 <body>
  
-<div class="loading-overlay" id="loading-overlay">
-  <div class="spinner" style="width:24px;height:24px;border-width:3px"></div>
-  <div class="loading-text">Connecting to database…</div>
+<!-- ── Login screen ─────────────────────────────────────────────────────────── -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">PROD<span>TRACK</span></div>
+    <div class="login-sub">Production order management</div>
+    <div class="login-label">Email</div>
+    <input class="login-input" id="login-email" type="email" placeholder="your@email.com" autocomplete="email">
+    <div class="login-label">Password</div>
+    <input class="login-input" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign in</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
 </div>
  
-<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+<!-- ── Loading overlay ───────────────────────────────────────────────────────── -->
+<div class="loading-overlay hide" id="loading-overlay">
+  <div class="spinner" style="width:24px;height:24px;border-width:3px"></div>
+  <div class="loading-text" id="loading-text">Loading…</div>
+</div>
+ 
+<!-- ── Lightbox ──────────────────────────────────────────────────────────────── -->
+<div class="lightbox" id="lightbox">
   <button class="lightbox-close" onclick="closeLightbox()">✕</button>
   <img id="lightbox-img" src="" alt="Order photo">
   <div class="lightbox-meta" id="lightbox-meta"></div>
+  <div class="lightbox-actions" id="lightbox-actions"></div>
 </div>
  
-<div class="app">
+<!-- ── Confirm delete dialog ─────────────────────────────────────────────────── -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-card">
+    <div class="confirm-title">Delete this photo?</div>
+    <div class="confirm-body">This cannot be undone. The photo will be permanently removed.</div>
+    <div class="confirm-actions">
+      <button class="btn" onclick="closeConfirm()">Cancel</button>
+      <button class="btn danger" id="confirm-yes" onclick="confirmDelete()">Delete photo</button>
+    </div>
+  </div>
+</div>
+ 
+<!-- ── Main app ───────────────────────────────────────────────────────────────── -->
+<div class="app" id="main-app" style="display:none">
   <div class="topbar">
-    <button class="menu-btn" onclick="toggleDrawer()" aria-label="Menu">
+    <button class="menu-btn" onclick="toggleDrawer()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="logo">PROD<span>TRACK</span></div>
     <div class="pill live"><span class="dot pulse"></span>Live</div>
     <div class="pill" id="last-pill" style="display:none"></div>
-    <div class="pill" id="refresh-pill" style="display:none"></div>
+    <div class="pill manager-pill" id="role-pill" style="display:none"></div>
     <div class="topbar-right">
-      <button class="btn" onclick="refreshPhotos()" id="refresh-btn">
+      <button class="btn" onclick="refreshData()" id="refresh-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
         Refresh
       </button>
-      <button class="btn primary" onclick="sv('upload')">
+      <button class="btn primary" id="upload-csv-btn" onclick="sv('upload')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Upload CSV
       </button>
     </div>
   </div>
+ 
   <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
  
   <div class="main">
@@ -285,18 +318,30 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Date changes<span class="nav-badge amber" id="b-datechanges">0</span>
       </div>
-      <div class="nav-item" id="nav-upload" onclick="sv('upload')">
+      <div class="nav-item" id="nav-upload" onclick="sv('upload')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Upload CSV
       </div>
       <div class="sdiv"></div>
       <div class="sidebar-section">Prod lines</div>
       <div id="line-nav"></div>
+ 
+      <!-- User info -->
+      <div class="sidebar-user">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div style="flex:1;overflow:hidden">
+          <div class="user-name" id="user-name">—</div>
+          <div class="user-role" id="user-role">—</div>
+        </div>
+        <button class="logout-btn" onclick="doLogout()" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
     </div>
  
-    <div class="content" id="content">
+    <div class="content">
  
-      <!-- Main dashboard view -->
+      <!-- Dashboard view -->
       <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
         <div class="metrics">
           <div class="metric"><div class="metric-label">Ship date</div><div class="metric-val" id="m-date" style="font-size:15px;margin-top:2px">—</div><div class="metric-sub">showing below</div></div>
@@ -304,12 +349,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           <div class="metric"><div class="metric-label">Photo uploaded</div><div class="metric-val green" id="m-done">—</div><div class="metric-sub">confirmed</div></div>
           <div class="metric"><div class="metric-label">No photo yet</div><div class="metric-val red" id="m-pending">—</div><div class="metric-sub">needs attention</div></div>
         </div>
- 
-        <!-- Date change banner -->
         <div class="dc-banner" id="dc-banner">
           <div class="dc-banner-title">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Ship dates changed since last upload — <span style="cursor:pointer;text-decoration:underline" onclick="sv('datechanges')">view all</span>
+            Ship dates changed — <span style="cursor:pointer;text-decoration:underline" onclick="sv('datechanges')">view all</span>
           </div>
           <div id="dc-banner-list"></div>
         </div>
@@ -356,13 +399,11 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div id="view-datechanges" style="display:none;flex-direction:column;flex:1;overflow:hidden">
         <div style="flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch">
           <div style="font-size:10px;font-family:var(--mono);letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:12px" id="dc-view-hdr">No date changes detected</div>
-          <div id="dc-view-body">
-            <div class="empty"><div class="empty-icon">✓</div><div class="empty-title">All ship dates are the same</div><div class="empty-sub">Date changes will appear here after uploading a new CSV</div></div>
-          </div>
+          <div id="dc-view-body"><div class="empty"><div class="empty-icon">✓</div><div class="empty-title">All ship dates are the same</div><div class="empty-sub">Date changes appear here after uploading a new CSV</div></div></div>
         </div>
       </div>
  
-      <!-- Upload CSV view -->
+      <!-- Upload CSV view (managers only) -->
       <div id="view-upload" style="display:none;flex-direction:column;flex:1">
         <div class="upload-view">
           <div class="upload-card">
@@ -383,35 +424,8 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       </div>
  
     </div>
-  </div><!-- end main -->
- 
-  <!-- Mobile bottom nav -->
-  <nav class="bottom-nav">
-    <button class="bottom-nav-item active" id="bnav-tomorrow" onclick="sv('tomorrow');closeDrawer()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      Tomorrow
-      <span class="bottom-nav-dot" id="bdot-tomorrow"></span>
-    </button>
-    <button class="bottom-nav-item" id="bnav-all" onclick="sv('all');closeDrawer()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      All
-    </button>
-    <button class="bottom-nav-item" id="bnav-pending" onclick="sv('pending');closeDrawer()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Pending
-      <span class="bottom-nav-dot" id="bdot-pending"></span>
-    </button>
-    <button class="bottom-nav-item" id="bnav-done" onclick="sv('done');closeDrawer()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      Done
-    </button>
-    <button class="bottom-nav-item" id="bnav-upload" onclick="sv('upload');closeDrawer()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Upload
-    </button>
-  </nav>
- 
-</div><!-- end app -->
+  </div>
+</div>
  
 <div class="toast" id="toast">
   <div class="toast-title" id="t-title"></div>
@@ -423,68 +437,160 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 const SUPA_URL = 'https://hfzqxxfmaqnraxadztoc.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmenF4eGZtYXFucmF4YWR6dG9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MjY0MzcsImV4cCI6MjA5NDIwMjQzN30.MI7iVdsydhD9uX0X53SU57yx-pI5_SLcTysBAotUflA';
 const BUCKET  = 'order-photos';
-const HDR     = {'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY};
  
 // ── State ─────────────────────────────────────────────────────────────────────
-let orders   = [];   // from supabase orders table
-let photos   = {};   // map: so -> [{url,filename,uploaded_at}]
-let dateChanges = []; // SOs whose ship date changed in last upload
-let expanded = new Set();
-let allExp   = false;
-let activeLine = '';
-let activeView = 'tomorrow';
-let uploads  = [];
+let currentUser  = null;  // Supabase auth user
+let currentProfile = null; // { full_name, role }
+let accessToken  = null;
+let orders       = [];
+let photos       = {};
+let dateChanges  = [];
+let expanded     = new Set();
+let allExp       = false;
+let activeLine   = '';
+let activeView   = 'tomorrow';
+let uploads      = [];
+let pendingDeleteId = null; // photo id pending delete confirmation
+ 
+// ── Auth headers ──────────────────────────────────────────────────────────────
+function hdrs(useToken=false){
+  const h = {'Content-Type':'application/json','apikey':SUPA_KEY};
+  h['Authorization'] = 'Bearer ' + (useToken && accessToken ? accessToken : SUPA_KEY);
+  return h;
+}
+ 
+// ── Login ─────────────────────────────────────────────────────────────────────
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-pass').focus(); });
+ 
+async function doLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const btn   = document.getElementById('login-btn');
+  const err   = document.getElementById('login-error');
+  if(!email||!pass){ err.textContent='Please enter email and password.'; return; }
+  btn.disabled=true; btn.textContent='Signing in…'; err.textContent='';
+  try{
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPA_KEY},
+      body: JSON.stringify({email, password:pass})
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error_description || data.msg || 'Login failed');
+    accessToken  = data.access_token;
+    currentUser  = data.user;
+    // Load profile
+    const pr = await fetch(`${SUPA_URL}/rest/v1/profiles?id=eq.${currentUser.id}&select=*`, {headers:hdrs(true)});
+    const profiles = await pr.json();
+    currentProfile = profiles[0] || {full_name: email, role:'worker'};
+    showApp();
+  } catch(e){
+    err.textContent = e.message;
+    btn.disabled=false; btn.textContent='Sign in';
+  }
+}
+ 
+async function doLogout(){
+  await fetch(`${SUPA_URL}/auth/v1/logout`, {method:'POST', headers:{...hdrs(true)}}).catch(()=>{});
+  accessToken=null; currentUser=null; currentProfile=null;
+  document.getElementById('main-app').style.display='none';
+  document.getElementById('login-screen').classList.remove('hide');
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-error').textContent='';
+  document.getElementById('login-btn').disabled=false;
+  document.getElementById('login-btn').textContent='Sign in';
+}
+ 
+function showApp(){
+  document.getElementById('login-screen').classList.add('hide');
+  document.getElementById('main-app').style.display='grid';
+  const isManager = currentProfile?.role === 'manager';
+  const name = currentProfile?.full_name || currentUser?.email || '?';
+  // User info
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-role').textContent = isManager ? 'Manager' : 'Worker';
+  document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
+  // Role pill
+  const rp = document.getElementById('role-pill');
+  if(isManager){ rp.textContent='Manager'; rp.style.display='inline-flex'; } else { rp.style.display='none'; }
+  // Show upload CSV only for managers
+  document.getElementById('upload-csv-btn').style.display = isManager ? 'inline-flex' : 'none';
+  document.getElementById('nav-upload').style.display = isManager ? 'flex' : 'none';
+  // Add manager class to body for CSS-based delete button visibility
+  if(isManager) document.body.classList.add('manager');
+  else document.body.classList.remove('manager');
+  // Load data
+  loadAll();
+}
  
 // ── Supabase helpers ──────────────────────────────────────────────────────────
 async function sbGet(table, params=''){
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {headers:HDR});
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {headers:hdrs(true)});
   if(!r.ok) throw new Error(await r.text());
   return r.json();
-}
-async function sbUpsert(table, rows){
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
-    method:'POST',
-    headers:{...HDR,'Prefer':'resolution=merge-duplicates','Content-Type':'application/json'},
-    body: JSON.stringify(rows)
-  });
-  if(!r.ok) throw new Error(await r.text());
 }
 async function sbUpsertOrders(rows){
   const r = await fetch(`${SUPA_URL}/rest/v1/orders?on_conflict=traveler`, {
     method:'POST',
-    headers:{...HDR,'Prefer':'resolution=merge-duplicates','Content-Type':'application/json'},
+    headers:{...hdrs(true),'Prefer':'resolution=merge-duplicates'},
     body: JSON.stringify(rows)
   });
   if(!r.ok) throw new Error(await r.text());
 }
-async function sbDelete(table, params){
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {method:'DELETE', headers:HDR});
+async function sbInsert(table, row){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
+    method:'POST', headers:{...hdrs(true),'Prefer':'return=representation'},
+    body: JSON.stringify(row)
+  });
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbDeleteRow(table, id){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {method:'DELETE', headers:hdrs(true)});
   if(!r.ok) throw new Error(await r.text());
 }
-async function uploadPhoto(so, file){
+async function uploadPhotoFile(so, file){
   const ext  = file.name.split('.').pop();
   const path = `${so}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
   const r = await fetch(`${SUPA_URL}/storage/v1/object/${BUCKET}/${path}`, {
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':file.type},
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+(accessToken||SUPA_KEY),'Content-Type':file.type},
     body: file
   });
   if(!r.ok) throw new Error(await r.text());
   const url = `${SUPA_URL}/storage/v1/object/public/${BUCKET}/${path}`;
-  // Save to photos table
-  await sbUpsert('photos', [{so, filename:file.name, url, uploaded_by:'worker'}]);
-  return url;
+  const rows = await sbInsert('photos', {so, filename:file.name, url, uploaded_by: currentProfile?.full_name || currentUser?.email || 'worker', storage_path: path});
+  return {url, id: rows[0]?.id, storage_path: path};
+}
+async function deletePhotoRecord(photoId, storagePath){
+  // Delete from storage
+  if(storagePath){
+    await fetch(`${SUPA_URL}/storage/v1/object/${BUCKET}/${storagePath}`, {
+      method:'DELETE',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+(accessToken||SUPA_KEY)}
+    }).catch(()=>{});
+  }
+  // Delete from table
+  await sbDeleteRow('photos', photoId);
 }
  
 // ── Load data ─────────────────────────────────────────────────────────────────
+async function loadAll(){
+  showLoading('Loading orders…');
+  try{
+    await Promise.all([loadOrders(), loadPhotos()]);
+    updateAll(); sv('tomorrow');
+  } catch(e){ toast('Error loading data', e.message, 'red'); }
+  hideLoading();
+}
 async function loadOrders(){
   const rows = await sbGet('orders','select=*&order=so_ship.asc,so.asc');
   orders = rows.map(r=>({
-    traveler: r.traveler, so: r.so, item: r.item,
-    desc: r.description, qty: r.qty, line: r.line,
-    soShip: r.so_ship ? r.so_ship.slice(5).split('-').reverse().join('/').replace(/^0/,'').replace('/0','/') : '',
-    soShipRaw: r.so_ship,
-    via: r.via, customer: r.customer
+    traveler:r.traveler, so:r.so, item:r.item,
+    desc:r.description, qty:r.qty, line:r.line,
+    soShip: r.so_ship ? fmtDate(r.so_ship) : '',
+    soShipRaw: r.so_ship, via:r.via, customer:r.customer
   }));
 }
 async function loadPhotos(){
@@ -492,38 +598,23 @@ async function loadPhotos(){
   photos = {};
   for(const r of rows){
     if(!photos[r.so]) photos[r.so]=[];
-    photos[r.so].push({url:r.url, filename:r.filename, uploaded_at:r.uploaded_at, id:r.id});
+    photos[r.so].push({url:r.url, filename:r.filename, uploaded_at:r.uploaded_at, id:r.id, uploaded_by:r.uploaded_by, storage_path:r.storage_path});
   }
 }
-async function init(){
-  try{
-    await Promise.all([loadOrders(), loadPhotos()]);
-    document.getElementById('loading-overlay').classList.add('hide');
-    updateAll();
-    sv('tomorrow');
-  } catch(e){
-    document.querySelector('.loading-text').textContent = 'Connection error: '+e.message;
-    document.querySelector('.loading-overlay .spinner').style.display='none';
-  }
-}
- 
-// ── Refresh photos (for management checking) ──────────────────────────────────
-async function refreshPhotos(){
-  const btn = document.getElementById('refresh-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div> Refreshing';
+async function refreshData(){
+  const btn=document.getElementById('refresh-btn');
+  btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Refreshing';
   try{
     await Promise.all([loadOrders(), loadPhotos()]);
     updateAll(); render();
     toast('Refreshed','Data is up to date.','green');
-    // Reset auto-refresh countdown
     startAutoRefresh();
   } catch(e){ toast('Error',e.message,'red'); }
-  btn.disabled = false;
-  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
+  btn.disabled=false;
+  btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
 }
  
-// ── CSV parse & upload ────────────────────────────────────────────────────────
+// ── CSV parse ─────────────────────────────────────────────────────────────────
 function parseCSV(txt){
   const out=[];
   for(const line of txt.split('\n')){
@@ -532,13 +623,8 @@ function parseCSV(txt){
     if(c.length<31) continue;
     const tr=c[19].replace(/^0+/,''), so=c[27].replace(/^0+/,'');
     if(!tr||!so||isNaN(+tr)) continue;
-    // Parse date MM/DD/YY -> YYYY-MM-DD
-    const ds = c[25].trim();
-    let soShipISO = null;
-    if(ds){
-      const p=ds.split('/');
-      if(p.length===3) soShipISO=`20${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
-    }
+    const ds=c[25].trim(); let soShipISO=null;
+    if(ds){const p=ds.split('/');if(p.length===3) soShipISO=`20${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;}
     out.push({traveler:tr, so, item:c[20].trim(), description:c[21].trim(),
       qty:parseFloat(c[22])||0, line:c[16].trim(),
       so_ship:soShipISO, via:c[26].trim(), customer:c[30].trim(),
@@ -563,6 +649,7 @@ dzEl.addEventListener('drop',e=>{e.preventDefault();dzEl.classList.remove('drag'
  
 async function handleCSV(file){
   if(!file) return;
+  if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can upload CSV files.','red'); return; }
   const st=document.getElementById('csv-status');
   const fr=new FileReader();
   fr.onload=async e=>{
@@ -570,74 +657,52 @@ async function handleCSV(file){
     if(!parsed.length){toast('Parse error','Could not read orders. Check the file format.','red');return;}
     st.textContent='Uploading '+parsed.length+' travelers…';
     try{
-      // Build map of current SO ship dates BEFORE uploading
       const prevSODates={};
       orders.forEach(o=>{ if(o.so&&o.soShipRaw) prevSODates[o.so]=o.soShipRaw; });
- 
-      // Upsert — add/update, never delete
-      for(let i=0;i<parsed.length;i+=500){
-        await sbUpsertOrders(parsed.slice(i,i+500));
-      }
- 
-      // Detect date changes: compare new CSV against what was in DB
+      for(let i=0;i<parsed.length;i+=500) await sbUpsertOrders(parsed.slice(i,i+500));
       const newSODates={};
       parsed.forEach(r=>{ if(r.so&&r.so_ship) newSODates[r.so]=r.so_ship; });
       dateChanges=[];
       for(const so of Object.keys(newSODates)){
-        if(prevSODates[so] && prevSODates[so]!==newSODates[so]){
-          // Find customer name
+        if(prevSODates[so]&&prevSODates[so]!==newSODates[so]){
           const t=parsed.find(r=>r.so===so);
-          dateChanges.push({
-            so,
-            customer: t?.customer||'',
-            from: prevSODates[so],
-            to: newSODates[so]
-          });
+          dateChanges.push({so, customer:t?.customer||'', from:prevSODates[so], to:newSODates[so]});
         }
       }
- 
       const ts=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       uploads.unshift({name:file.name,time:ts,count:parsed.length,changes:dateChanges.length});
       document.getElementById('last-pill').textContent='Last upload: '+ts;
       document.getElementById('last-pill').style.display='inline-flex';
       st.textContent='✓ '+parsed.length+' travelers loaded at '+ts;
-      await loadOrders();
-      updateAll();
- 
+      await loadOrders(); updateAll();
       if(dateChanges.length){
         toast(`${dateChanges.length} date change${dateChanges.length>1?'s':''} detected`,
           dateChanges.slice(0,3).map(c=>`SO ${c.so}: ${fmtDate(c.from)} → ${fmtDate(c.to)}`).join('\n'),'amber');
-        setTimeout(()=>sv('datechanges'),1200);
+        setTimeout(()=>sv('datechanges'),1400);
       } else {
         toast('CSV uploaded',''+parsed.length+' travelers saved. No date changes.','green');
         setTimeout(()=>sv('tomorrow'),1200);
       }
-    } catch(err){
-      st.textContent='Error: '+err.message;
-      toast('Upload failed',err.message,'red');
-    }
+    } catch(err){ st.textContent='Error: '+err.message; toast('Upload failed',err.message,'red'); }
   };
   fr.readAsText(file);
 }
  
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const isCus = o => o.item.includes('-CUS') || o.item.endsWith('CUS');
+const isCus=o=>o.item.includes('-CUS')||o.item.endsWith('CUS');
 function groupBySO(list){
   const map={},ord=[];
   for(const o of list){if(!map[o.so]){map[o.so]=[];ord.push(o.so);}map[o.so].push(o);}
   return ord.map(so=>({so,travelers:map[so]}));
 }
-function getTomorrow(){
-  const d=new Date(); d.setDate(d.getDate()+1);
-  return d.toISOString().slice(0,10);
-}
+function getTomorrow(){const d=new Date();d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);}
 function fmtDate(iso){
   if(!iso) return '—';
   const p=iso.split('-');
   return `${parseInt(p[1])}/${parseInt(p[2])}/${p[0].slice(2)}`;
 }
  
-// ── Update UI state ───────────────────────────────────────────────────────────
+// ── Update all UI ─────────────────────────────────────────────────────────────
 function updateAll(){
   const sos=new Set(orders.map(o=>o.so));
   const tomorrow=getTomorrow();
@@ -649,7 +714,6 @@ function updateAll(){
   document.getElementById('m-so').textContent=sos.size;
   document.getElementById('m-done').textContent=doneSOs.size;
   document.getElementById('m-pending').textContent=pendingSOs.size;
- 
   document.getElementById('b-total').textContent=sos.size;
   document.getElementById('b-tomorrow').textContent=tomorrowSOs.size;
   document.getElementById('b-pending').textContent=pendingSOs.size;
@@ -658,21 +722,18 @@ function updateAll(){
  
   // Date change banner
   const dcBanner=document.getElementById('dc-banner');
-  const dcList=document.getElementById('dc-banner-list');
   if(dateChanges.length){
     dcBanner.classList.add('show');
-    dcList.innerHTML=dateChanges.slice(0,4).map(c=>
+    document.getElementById('dc-banner-list').innerHTML=dateChanges.slice(0,4).map(c=>
       `<div class="dc-line">SO ${c.so} · ${c.customer} · ${fmtDate(c.from)} → ${fmtDate(c.to)}</div>`
     ).join('')+(dateChanges.length>4?`<div class="dc-line" style="opacity:0.5">…and ${dateChanges.length-4} more</div>`:'');
-  } else {
-    dcBanner.classList.remove('show');
-  }
+  } else { dcBanner.classList.remove('show'); }
  
   // Date changes view
   const dcHdr=document.getElementById('dc-view-hdr');
   const dcBody=document.getElementById('dc-view-body');
   if(dateChanges.length){
-    dcHdr.textContent=`${dateChanges.length} ship date change${dateChanges.length>1?'s':''} detected in last upload`;
+    dcHdr.textContent=`${dateChanges.length} ship date change${dateChanges.length>1?'s':''} detected`;
     dcBody.innerHTML=dateChanges.map(c=>`
       <div style="background:var(--surface);border:1px solid rgba(255,179,71,0.25);border-radius:8px;margin-bottom:8px;overflow:hidden">
         <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--border)">
@@ -689,12 +750,8 @@ function updateAll(){
       </div>`).join('');
   } else {
     dcHdr.textContent='No date changes detected';
-    dcBody.innerHTML='<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">All ship dates are the same</div><div class="empty-sub">Date changes will appear here after uploading a new CSV</div></div>';
+    dcBody.innerHTML='<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">All ship dates are the same</div><div class="empty-sub">Date changes appear here after uploading a new CSV</div></div>';
   }
- 
-  // Bottom nav red dots
-  document.getElementById('bdot-tomorrow')?.classList.toggle('show', tomorrowPending>0);
-  document.getElementById('bdot-pending')?.classList.toggle('show', pendingSOs.size>0);
  
   // Date filter
   const dates=[...new Set(orders.map(o=>o.soShipRaw).filter(Boolean))].sort();
@@ -721,39 +778,28 @@ function render(){
   const via=document.getElementById('f-via').value;
   const dateF=document.getElementById('f-date').value;
   const tomorrow=getTomorrow();
+  const isManager=currentProfile?.role==='manager';
  
   let filtered=orders.filter(o=>{
     if(activeLine&&o.line!==activeLine) return false;
     if(via&&o.via!==via) return false;
     if(dateF&&o.soShipRaw!==dateF) return false;
     if(activeView==='tomorrow'&&o.soShipRaw!==tomorrow) return false;
-    if(activeView==='pending'){
-      const ps=photos[o.so];
-      if(ps&&ps.length>0) return false;
-    }
-    if(activeView==='done'){
-      const ps=photos[o.so];
-      if(!ps||ps.length===0) return false;
-    }
+    if(activeView==='pending'&&photos[o.so]?.length>0) return false;
+    if(activeView==='done'&&(!photos[o.so]||photos[o.so].length===0)) return false;
     if(q&&![o.traveler,o.so,o.item,o.desc,o.customer].join(' ').toLowerCase().includes(q)) return false;
     return true;
   });
  
   const groups=groupBySO(filtered);
-  // Sort: no-photo first, then by ship date
   groups.sort((a,b)=>{
-    const aP=photos[a.so]&&photos[a.so].length>0;
-    const bP=photos[b.so]&&photos[b.so].length>0;
+    const aP=photos[a.so]?.length>0, bP=photos[b.so]?.length>0;
     if(!aP&&bP) return -1; if(aP&&!bP) return 1;
     return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
   });
  
-  // Update metric date label
-  if(activeView==='tomorrow'){
-    document.getElementById('m-date').textContent=fmtDate(tomorrow);
-  } else {
-    document.getElementById('m-date').textContent='All dates';
-  }
+  if(activeView==='tomorrow') document.getElementById('m-date').textContent=fmtDate(tomorrow);
+  else document.getElementById('m-date').textContent='All dates';
  
   const tbody=document.getElementById('tbody');
   const emf=document.getElementById('empty-f');
@@ -775,13 +821,11 @@ function render(){
     const soShip=travelers[0].soShipRaw;
     const viaShort=via0==='OUR TRUCK'?'Truck':via0==='PICK UP'?'Pickup':'Install';
     const viaCls=via0==='OUR TRUCK'?'tb':via0==='PICK UP'?'td':'tg';
- 
-    // Photo indicator for SO row
     const picIndicator=hasPic
       ?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`
       :`<span class="tag ta">No photo</span>`;
- 
     const rowCls='so-row'+(hasPic?' done':' pending');
+ 
     html+=`<tr class="${rowCls}" onclick="toggleSO('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
@@ -795,7 +839,6 @@ function render(){
     </tr>`;
  
     if(isOpen){
-      // Traveler rows
       for(const o of travelers){
         const cus=isCus(o);
         html+=`<tr class="tr-row">
@@ -808,12 +851,16 @@ function render(){
         </tr>`;
       }
  
-      // Photo upload row
-      const thumbsHtml=soPhotos.map(p=>
-        `<img class="photo-thumb" src="${p.url}" title="${p.filename} — ${new Date(p.uploaded_at).toLocaleString()}" onclick="openLightbox('${p.url}','${p.filename}','${new Date(p.uploaded_at).toLocaleString()}')" loading="lazy">`
-      ).join('');
+      // Photo row
+      const thumbsHtml=soPhotos.map(p=>`
+        <div class="photo-thumb-wrap">
+          <img class="photo-thumb" src="${p.url}"
+            title="${p.filename} · ${p.uploaded_by||'worker'} · ${new Date(p.uploaded_at).toLocaleString()}"
+            onclick="openLightbox('${p.url}','${p.filename}','${p.uploaded_by||'worker'}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}')">
+          <div class="photo-delete-btn" onclick="event.stopPropagation();askDelete('${p.id}','${p.storage_path||''}')">✕</div>
+        </div>`).join('');
  
-      html+=`<tr class="photo-row" id="photo-row-${so}">
+      html+=`<tr class="photo-row">
         <td colspan="6">
           <div class="photo-section">
             ${soPhotos.length?`<div class="photo-thumbs">${thumbsHtml}</div>`:''}
@@ -821,12 +868,13 @@ function render(){
               <label class="upload-zone" id="uz-${so}">
                 <input type="file" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Add photo${soPhotos.length>0?' (add more)':''}
+                ${soPhotos.length>0?'Add more photos':'Add photo'}
               </label>
-              <span class="photo-count${soPhotos.length>0?' has':''}" id="pc-${so}">
+              <span style="font-size:11px;font-family:var(--mono);color:${soPhotos.length>0?'var(--green)':'var(--text3)'}">
                 ${soPhotos.length===0?'No photos yet':soPhotos.length+' photo'+(soPhotos.length>1?'s':'')+' uploaded'}
               </span>
             </div>
+            ${soPhotos.length>0?`<div class="photo-meta">Last upload by ${soPhotos[0].uploaded_by||'worker'} · ${new Date(soPhotos[0].uploaded_at).toLocaleString()}</div>`:''}
           </div>
         </td>
       </tr>`;
@@ -840,7 +888,6 @@ function toggleSO(so){
   else expanded.add(so);
   render();
 }
- 
 function toggleExpandAll(){
   allExp=!allExp;
   const btn=document.getElementById('xbtn');
@@ -849,82 +896,124 @@ function toggleExpandAll(){
   render();
 }
  
-// ── Photo upload ───────────────────────────────────────────────────────────────
+// ── Photo upload ──────────────────────────────────────────────────────────────
 async function handlePhotoUpload(so, input){
   const files=[...input.files];
   if(!files.length) return;
   const uz=document.getElementById('uz-'+so);
-  const pc=document.getElementById('pc-'+so);
-  uz.classList.add('uploading');
-  uz.querySelector('span,svg')?.remove;
-  if(pc) pc.textContent='Uploading…';
+  if(uz) uz.classList.add('uploading');
   try{
     for(const file of files){
-      const url=await uploadPhoto(so, file);
+      const {url,id,storage_path}=await uploadPhotoFile(so, file);
       if(!photos[so]) photos[so]=[];
-      photos[so].unshift({url, filename:file.name, uploaded_at:new Date().toISOString()});
+      photos[so].unshift({url, id, storage_path, filename:file.name, uploaded_at:new Date().toISOString(), uploaded_by:currentProfile?.full_name||currentUser?.email||'worker'});
     }
-    updateAll();
-    render();
+    updateAll(); render();
     toast('Photo uploaded','SO '+so+' marked as done ✓','green');
-  } catch(err){
-    toast('Upload failed',err.message,'red');
-    if(pc) pc.textContent='Upload failed';
-  }
-  uz.classList.remove('uploading');
+  } catch(err){ toast('Upload failed',err.message,'red'); }
+  if(uz) uz.classList.remove('uploading');
   input.value='';
 }
  
+// ── Photo delete ──────────────────────────────────────────────────────────────
+let pendingDeleteStorage = null;
+function askDelete(photoId, storagePath){
+  if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can delete photos.','red'); return; }
+  pendingDeleteId=photoId;
+  pendingDeleteStorage=storagePath;
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function closeConfirm(){
+  pendingDeleteId=null; pendingDeleteStorage=null;
+  document.getElementById('confirm-overlay').classList.remove('open');
+}
+async function confirmDelete(){
+  if(!pendingDeleteId) return;
+  const btn=document.getElementById('confirm-yes');
+  btn.disabled=true; btn.textContent='Deleting…';
+  try{
+    await deletePhotoRecord(pendingDeleteId, pendingDeleteStorage);
+    // Remove from local state
+    for(const so of Object.keys(photos)){
+      photos[so]=photos[so].filter(p=>p.id!==pendingDeleteId);
+    }
+    closeConfirm();
+    closeLightbox();
+    updateAll(); render();
+    toast('Photo deleted','The photo has been removed.','green');
+  } catch(e){ toast('Delete failed',e.message,'red'); }
+  btn.disabled=false; btn.textContent='Delete photo';
+}
+ 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
-function openLightbox(url, filename, ts){
+let lightboxPhotoId=null, lightboxStoragePath=null;
+function openLightbox(url,filename,uploadedBy,ts,photoId,storagePath){
   document.getElementById('lightbox-img').src=url;
-  document.getElementById('lightbox-meta').textContent=filename+' — '+ts;
+  document.getElementById('lightbox-meta').textContent=`${filename} · uploaded by ${uploadedBy} · ${ts}`;
+  lightboxPhotoId=photoId; lightboxStoragePath=storagePath;
+  const actions=document.getElementById('lightbox-actions');
+  if(currentProfile?.role==='manager'){
+    actions.innerHTML=`<button class="btn danger" onclick="askDelete('${photoId}','${storagePath}')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      Delete photo</button>`;
+  } else { actions.innerHTML=''; }
   document.getElementById('lightbox').classList.add('open');
 }
-function closeLightbox(e){
-  if(!e||e.target===document.getElementById('lightbox')||e.target.classList.contains('lightbox-close')){
-    document.getElementById('lightbox').classList.remove('open');
-  }
-}
-document.addEventListener('keydown',e=>{if(e.key==='Escape') document.getElementById('lightbox').classList.remove('open');});
- 
-// ── Drawer (mobile sidebar) ───────────────────────────────────────────────────
-function toggleDrawer(){
-  const sb=document.getElementById('sidebar');
-  const ov=document.getElementById('drawer-overlay');
-  const isOpen=sb.classList.contains('open');
-  if(isOpen){ closeDrawer(); } else {
-    sb.classList.add('open');
-    ov.style.display='block';
-    requestAnimationFrame(()=>ov.classList.add('open'));
-  }
-}
-function closeDrawer(){
-  const sb=document.getElementById('sidebar');
-  const ov=document.getElementById('drawer-overlay');
-  sb.classList.remove('open');
-  ov.classList.remove('open');
-  setTimeout(()=>{ if(!ov.classList.contains('open')) ov.style.display='none'; }, 260);
-}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+document.getElementById('lightbox').addEventListener('click',e=>{if(e.target===document.getElementById('lightbox')) closeLightbox();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLightbox();closeConfirm();}});
  
 // ── View switch ───────────────────────────────────────────────────────────────
 function sv(v){
   activeView=v;
-  const isUpload=v==='upload';
-  const isDC=v==='datechanges';
-  const isMain=!isUpload&&!isDC;
+  const isUpload=v==='upload', isDC=v==='datechanges', isMain=!isUpload&&!isDC;
   document.getElementById('view-main').style.display=isMain?'flex':'none';
   document.getElementById('view-upload').style.display=isUpload?'flex':'none';
   document.getElementById('view-datechanges').style.display=isDC?'flex':'none';
   ['tomorrow','all','pending','done','datechanges','upload'].forEach(n=>{
     document.getElementById('nav-'+n)?.classList.remove('active');
-    document.getElementById('bnav-'+n)?.classList.remove('active');
   });
   document.getElementById('nav-'+v)?.classList.add('active');
-  document.getElementById('bnav-'+v)?.classList.add('active');
-  closeDrawer();
-  render();
+  closeDrawer(); render();
 }
+ 
+// ── Drawer ────────────────────────────────────────────────────────────────────
+function toggleDrawer(){
+  const sb=document.getElementById('sidebar'), ov=document.getElementById('drawer-overlay');
+  if(sb.classList.contains('open')){ closeDrawer(); return; }
+  sb.classList.add('open'); ov.style.display='block';
+  requestAnimationFrame(()=>ov.classList.add('open'));
+}
+function closeDrawer(){
+  const sb=document.getElementById('sidebar'), ov=document.getElementById('drawer-overlay');
+  sb.classList.remove('open'); ov.classList.remove('open');
+  setTimeout(()=>{ if(!ov.classList.contains('open')) ov.style.display='none'; },260);
+}
+ 
+// ── Auto-refresh ──────────────────────────────────────────────────────────────
+const AUTO_SEC=60;
+let refreshCountdown=AUTO_SEC, refreshTimer=null, countdownTimer=null;
+function startAutoRefresh(){
+  clearInterval(refreshTimer); clearInterval(countdownTimer);
+  refreshCountdown=AUTO_SEC; updateRefreshPill();
+  countdownTimer=setInterval(()=>{ refreshCountdown--; updateRefreshPill(); if(refreshCountdown<=0) refreshCountdown=AUTO_SEC; },1000);
+  refreshTimer=setInterval(async()=>{
+    refreshCountdown=AUTO_SEC;
+    try{ await Promise.all([loadOrders(),loadPhotos()]); updateAll(); render(); } catch(e){}
+  },AUTO_SEC*1000);
+}
+function updateRefreshPill(){
+  const pill=document.getElementById('refresh-pill');
+  if(pill){ pill.style.display='inline-flex'; pill.textContent=`Auto-refresh in ${refreshCountdown}s`; }
+}
+ 
+// ── Loading helpers ───────────────────────────────────────────────────────────
+function showLoading(msg){
+  const el=document.getElementById('loading-overlay');
+  document.getElementById('loading-text').textContent=msg||'Loading…';
+  el.classList.remove('hide');
+}
+function hideLoading(){ document.getElementById('loading-overlay').classList.add('hide'); }
  
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(title,body,type){
@@ -936,53 +1025,78 @@ function toast(title,body,type){
   setTimeout(()=>t.classList.remove('show'),5000);
 }
  
-// ── Auto-refresh ───────────────────────────────────────────────────────────────
-const AUTO_REFRESH_SEC = 60;
-let refreshCountdown = AUTO_REFRESH_SEC;
-let refreshTimer = null;
-let countdownTimer = null;
- 
-function startAutoRefresh(){
-  // Clear any existing timers
-  clearInterval(refreshTimer);
-  clearInterval(countdownTimer);
-  refreshCountdown = AUTO_REFRESH_SEC;
-  updateRefreshPill();
- 
-  // Countdown tick every second
-  countdownTimer = setInterval(()=>{
-    refreshCountdown--;
-    updateRefreshPill();
-    if(refreshCountdown <= 0) refreshCountdown = AUTO_REFRESH_SEC;
-  }, 1000);
- 
-  // Actual refresh every 60 seconds
-  refreshTimer = setInterval(async ()=>{
-    refreshCountdown = AUTO_REFRESH_SEC;
-    try{
-      await Promise.all([loadOrders(), loadPhotos()]);
-      updateAll();
-      render();
-      // Flash the pill green briefly
-      const pill = document.getElementById('refresh-pill');
-      pill.style.borderColor = 'var(--green)';
-      pill.style.color = 'var(--green)';
-      setTimeout(()=>{
-        pill.style.borderColor = '';
-        pill.style.color = '';
-      }, 1500);
-    } catch(e){ /* silent fail — no toast on background refresh */ }
-  }, AUTO_REFRESH_SEC * 1000);
-}
- 
-function updateRefreshPill(){
-  const pill = document.getElementById('refresh-pill');
-  pill.style.display = 'inline-flex';
-  pill.textContent = `Auto-refresh in ${refreshCountdown}s`;
-}
- 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-init().then(()=> startAutoRefresh());
+// Check for existing session
+(async()=>{
+  const stored = localStorage.getItem('pt_session');
+  if(stored){
+    try{
+      const sess=JSON.parse(stored);
+      if(sess.access_token && sess.expires_at > Date.now()/1000){
+        accessToken=sess.access_token;
+        currentUser={id:sess.user_id, email:sess.email};
+        const pr=await fetch(`${SUPA_URL}/rest/v1/profiles?id=eq.${sess.user_id}&select=*`,{headers:hdrs(true)});
+        const profiles=await pr.json();
+        currentProfile=profiles[0]||{full_name:sess.email,role:'worker'};
+        showApp();
+        startAutoRefresh();
+        return;
+      }
+    } catch(e){ localStorage.removeItem('pt_session'); }
+  }
+  // Show login
+})();
+ 
+// Save session after login so users stay logged in
+const _origDoLogin = doLogin;
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const btn=document.getElementById('login-btn');
+  const err=document.getElementById('login-error');
+  if(!email||!pass){err.textContent='Please enter email and password.';return;}
+  btn.disabled=true;btn.textContent='Signing in…';err.textContent='';
+  try{
+    const r=await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},
+      body:JSON.stringify({email,password:pass})
+    });
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error_description||data.msg||'Login failed');
+    accessToken=data.access_token;
+    currentUser=data.user;
+    // Save session
+    localStorage.setItem('pt_session',JSON.stringify({
+      access_token:data.access_token,
+      expires_at:data.expires_at||((Date.now()/1000)+3600),
+      user_id:data.user.id, email:data.user.email
+    }));
+    const pr=await fetch(`${SUPA_URL}/rest/v1/profiles?id=eq.${data.user.id}&select=*`,{headers:hdrs(true)});
+    const profiles=await pr.json();
+    currentProfile=profiles[0]||{full_name:email,role:'worker'};
+    showApp();
+    startAutoRefresh();
+  } catch(e){
+    err.textContent=e.message;
+    btn.disabled=false;btn.textContent='Sign in';
+  }
+}
+ 
+// Clear session on logout
+const _origLogout=doLogout;
+async function doLogout(){
+  localStorage.removeItem('pt_session');
+  await fetch(`${SUPA_URL}/auth/v1/logout`,{method:'POST',headers:{...hdrs(true)}}).catch(()=>{});
+  accessToken=null;currentUser=null;currentProfile=null;
+  document.getElementById('main-app').style.display='none';
+  document.getElementById('login-screen').classList.remove('hide');
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-error').textContent='';
+  document.getElementById('login-btn').disabled=false;
+  document.getElementById('login-btn').textContent='Sign in';
+  document.body.classList.remove('manager');
+  clearInterval(refreshTimer);clearInterval(countdownTimer);
+}
 </script>
 </body>
 </html>
