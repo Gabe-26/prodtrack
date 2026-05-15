@@ -695,6 +695,7 @@ async function loadApprovals(){
   }
 }
 async function loadOrders(){
+  const rows = await sbGet('orders','select=*&order=so_ship.asc,so.asc');
   orders = rows.map(r=>({
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
