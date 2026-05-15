@@ -530,8 +530,21 @@ const H = (tok) => ({
 });
  
 // ── Username → email ──────────────────────────────────────────────────────────
-const toEmail = u => `${u.trim().toLowerCase()}@${DOMAIN}`;
-const fromEmail = e => e ? e.replace(`@${DOMAIN}`,'') : '';
+const DOMAIN = 'prodtrack.local';
+const fromEmail = e => e ? e.replace(`@${DOMAIN}`,'').replace(/@.*$/,'') : '';
+ 
+// Looks up real email from profiles table by username
+async function getUserEmail(username){
+  try{
+    const r = await fetch(`${SUPA_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(username.trim().toLowerCase())}&select=email`, {
+      headers:{'Content-Type':'application/json','apikey':ANON_KEY,'Authorization':'Bearer '+ANON_KEY}
+    });
+    const rows = await r.json();
+    if(rows.length && rows[0].email) return rows[0].email;
+  } catch(e){}
+  // Fallback: try as prodtrack.local domain
+  return `${username.trim().toLowerCase()}@${DOMAIN}`;
+}
  
 // ── Login ─────────────────────────────────────────────────────────────────────
 document.getElementById('li-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
@@ -545,6 +558,7 @@ async function doLogin(){
   if(!username||!pass){ err.textContent='Please enter username and password.'; return; }
   btn.disabled=true; btn.textContent='Signing in…'; err.textContent='';
   try{
+    const email = await getUserEmail(username);
     const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`, {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':ANON_KEY},
@@ -752,7 +766,7 @@ async function doAddUser(){
     const r = await fetch(`${SUPA_URL}/auth/v1/signup`, {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':ANON_KEY},
-      body: JSON.stringify({email: toEmail(username), password: pass})
+      body: JSON.stringify({email: `${username}@${DOMAIN}`, password: pass})
     });
     const data = await r.json();
     if(!r.ok) throw new Error(data.msg || data.error_description || 'Could not create user.');
@@ -762,7 +776,7 @@ async function doAddUser(){
     await fetch(`${SUPA_URL}/rest/v1/profiles`, {
       method:'POST',
       headers:{...H(),'Prefer':'resolution=merge-duplicates'},
-      body: JSON.stringify({id:userId, email:toEmail(username), full_name:name, role, username})
+      body: JSON.stringify({id:userId, email:`${username}@${DOMAIN}`, full_name:name, role, username})
     });
     closeAddUser();
     await loadUsers();
