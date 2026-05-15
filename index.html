@@ -186,7 +186,20 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .td{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
 .mono{font-family:var(--mono);font-size:12px}
  
-/* ── Upload CSV ────────────────────────────────────────────────────────────── */
+/* ── Archive view ──────────────────────────────────────────────────────────── */
+.archive-view{flex:1;overflow-y:auto;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
+.archive-controls{padding:20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.archive-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px}
+.archive-desc{font-size:12px;font-family:var(--mono);color:var(--text3);margin-bottom:18px}
+.archive-box{background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:16px 18px;margin-bottom:12px}
+.archive-box-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.archive-box-desc{font-size:11px;font-family:var(--mono);color:var(--text3)}
+.archive-date-input{background:var(--surface);border:1px solid var(--border2);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color 0.15s}
+.archive-date-input:focus{border-color:var(--accent)}
+.archive-list-header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:10px;flex-wrap:wrap}
+.archive-table-wrap{flex:1;overflow-y:auto}
+.archive-row td{padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;color:var(--text2);transition:background 0.1s}
+.archive-row:hover td{background:var(--surface2)}
 .upload-view{flex:1;display:flex;align-items:center;justify-content:center;padding:36px;flex-direction:column;gap:18px}
 .upload-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:32px 40px;text-align:center;max-width:440px;width:100%}
 .dz{border:2px dashed var(--border2);border-radius:9px;padding:32px 18px;cursor:pointer;transition:all 0.2s;position:relative;margin-bottom:14px}
@@ -405,6 +418,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         Manage users
       </div>
+      <div class="nav-item" id="nav-archive" onclick="sv('archive')" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archive<span class="nb" id="b-archive">0</span>
+      </div>
       <div class="sb-user">
         <div class="u-avatar" id="u-avatar">?</div>
         <div style="flex:1;overflow:hidden">
@@ -502,6 +519,60 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         </div>
       </div>
  
+      <!-- Archive (managers only) -->
+      <div id="view-archive" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="archive-view">
+          <div class="archive-controls">
+            <div class="archive-title">Archive orders</div>
+            <div class="archive-desc">Archived orders are hidden from the main dashboard but never deleted. You can view and restore them below at any time.</div>
+            <div class="archive-box">
+              <div class="archive-box-title">Archive by ship date</div>
+              <div class="archive-box-desc">Move all orders with a ship date on or before this date to the archive.</div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+                <input type="date" id="archive-date-input" class="archive-date-input">
+                <button class="btn danger" onclick="archiveByDate()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/></svg>
+                  Archive these orders
+                </button>
+              </div>
+            </div>
+            <div class="archive-box">
+              <div class="archive-box-title">Archive already shipped</div>
+              <div class="archive-box-desc">Move all orders whose ship date has already passed (before today) to the archive.</div>
+              <div style="margin-top:12px">
+                <button class="btn danger" onclick="archiveShipped()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/></svg>
+                  Archive all past orders
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="archive-list-header">
+            <div style="font-size:13px;font-weight:600;color:var(--text)">Archived orders <span id="archive-count" style="font-family:var(--mono);font-size:11px;color:var(--text3)"></span></div>
+            <input type="text" class="search" id="archive-search" placeholder="Search archived..." oninput="renderArchive()" style="width:200px">
+          </div>
+          <div class="archive-table-wrap">
+            <table>
+              <thead><tr>
+                <th style="width:130px">SO #</th>
+                <th style="width:105px">Ship date</th>
+                <th style="width:86px">Ship via</th>
+                <th>Customer</th>
+                <th style="width:72px;text-align:right">Travelers</th>
+                <th style="width:100px">Photos</th>
+                <th style="width:90px"></th>
+              </tr></thead>
+              <tbody id="archive-tbody"></tbody>
+            </table>
+            <div class="empty" id="archive-empty">
+              <div class="empty-icon">◎</div>
+              <div class="empty-title">No archived orders yet</div>
+              <div class="empty-sub">Use the controls above to archive old orders</div>
+            </div>
+          </div>
+        </div>
+      </div>
+ 
     </div>
   </div>
 </div>
@@ -522,7 +593,7 @@ const BUCKET   = 'order-photos';
 let accessToken = null;
 let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
-let orders = [], photos = {}, dateChanges = [], approvals = {}; // approvals map: traveler -> {approved_by, approved_at}
+let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [];
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
 let pendingDelPhotoId = null, pendingDelStoragePath = null;
 let pendingDelUserId = null;
@@ -609,6 +680,7 @@ function showApp(){
   document.getElementById('top-upload-btn').style.display = isMgr ? 'inline-flex' : 'none';
   document.getElementById('nav-upload').style.display = isMgr ? 'flex' : 'none';
   document.getElementById('nav-users').style.display = isMgr ? 'flex' : 'none';
+  document.getElementById('nav-archive').style.display = isMgr ? 'flex' : 'none';
   // Manager = can delete photos; Worker/Viewer = cannot
   if(isMgr) document.body.classList.add('manager');
   else document.body.classList.remove('manager');
@@ -691,12 +763,23 @@ async function loadApprovals(){
   }
 }
 async function loadOrders(){
-  const rows = await sbGet('orders','select=*&order=so_ship.asc,so.asc');
+  const rows = await sbGet('orders','select=*&archived=eq.false&order=so_ship.asc,so.asc');
   orders = rows.map(r=>({
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
     soShipRaw:r.so_ship, via:r.via, customer:r.customer
   }));
+  // Load archived separately
+  const arch = await sbGet('orders','select=*&archived=eq.true&order=so_ship.desc,so.asc');
+  const archMap = {};
+  arch.forEach(r=>{
+    if(!archMap[r.so]) archMap[r.so]=[];
+    archMap[r.so].push({traveler:r.traveler,so:r.so,item:r.item,desc:r.description,
+      qty:r.qty,line:r.line,soShip:r.so_ship?fmtDate(r.so_ship):'',soShipRaw:r.so_ship,via:r.via,customer:r.customer});
+  });
+  archivedOrders = Object.keys(archMap).map(so=>({so, travelers:archMap[so],
+    soShip: archMap[so][0].soShip, soShipRaw: archMap[so][0].soShipRaw,
+    via: archMap[so][0].via, customer: archMap[so][0].customer}));
 }
 async function loadPhotos(){
   const rows = await sbGet('photos','select=*&order=uploaded_at.desc');
@@ -936,6 +1019,8 @@ function updateAll(){
   document.getElementById('b-pending').textContent=pendingSOs.size;
   document.getElementById('b-done').textContent=doneSOs.size;
   document.getElementById('b-dc').textContent=dateChanges.length;
+  const archBadge=document.getElementById('b-archive');
+  if(archBadge) archBadge.textContent=archivedOrders.length;
  
   // DC banner
   const banner=document.getElementById('dc-banner');
@@ -1195,20 +1280,99 @@ function openLB(url,filename,by,ts,pid,sp){
 function closeLB(){ document.getElementById('lightbox').classList.remove('open'); }
 document.getElementById('lightbox').addEventListener('click',e=>{if(e.target===document.getElementById('lightbox')) closeLB();});
  
-// ── View switch ───────────────────────────────────────────────────────────────
+// ── Archive ───────────────────────────────────────────────────────────────────
+async function archiveByDate(){
+  if(currentProfile?.role!=='manager'){toast('Access denied','Only managers can archive.','red');return;}
+  const d = document.getElementById('archive-date-input').value;
+  if(!d){toast('Pick a date','Please select a date first.','amber');return;}
+  const count = orders.filter(o=>o.soShipRaw&&o.soShipRaw<=d).map(o=>o.so);
+  const uniqueSOs = [...new Set(count)];
+  if(!uniqueSOs.length){toast('Nothing to archive',`No orders on or before ${fmtDate(d)}.`,'amber');return;}
+  if(!confirm(`Archive ${uniqueSOs.length} sales order${uniqueSOs.length>1?'s':''} on or before ${fmtDate(d)}? They will be hidden from the main dashboard.`)) return;
+  try{
+    // Archive orders
+    await fetch(`${SUPA_URL}/rest/v1/orders?archived=eq.false&so_ship=lte.${d}`,{
+      method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
+      body: JSON.stringify({archived:true})
+    });
+    await loadOrders(); updateAll(); renderArchive();
+    toast(`${uniqueSOs.length} order${uniqueSOs.length>1?'s':''} archived`,`Moved to archive successfully.`,'green');
+  } catch(e){toast('Error',e.message,'red');}
+}
+ 
+async function archiveShipped(){
+  if(currentProfile?.role!=='manager'){toast('Access denied','Only managers can archive.','red');return;}
+  const today = new Date().toISOString().slice(0,10);
+  const pastOrders = [...new Set(orders.filter(o=>o.soShipRaw&&o.soShipRaw<today).map(o=>o.so))];
+  if(!pastOrders.length){toast('Nothing to archive','No past orders found in the dashboard.','amber');return;}
+  if(!confirm(`Archive ${pastOrders.length} order${pastOrders.length>1?'s':''} with past ship dates? They will be hidden from the main dashboard.`)) return;
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/orders?archived=eq.false&so_ship=lt.${today}`,{
+      method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
+      body: JSON.stringify({archived:true})
+    });
+    await loadOrders(); updateAll(); renderArchive();
+    toast(`${pastOrders.length} order${pastOrders.length>1?'s':''} archived`,'Moved to archive successfully.','green');
+  } catch(e){toast('Error',e.message,'red');}
+}
+ 
+async function restoreSO(so){
+  if(currentProfile?.role!=='manager'){toast('Access denied','Only managers can restore orders.','red');return;}
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${so}&archived=eq.true`,{
+      method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
+      body: JSON.stringify({archived:false})
+    });
+    await loadOrders(); updateAll(); renderArchive();
+    toast('Order restored',`SO ${so} is back in the main dashboard.`,'green');
+  } catch(e){toast('Error',e.message,'red');}
+}
+ 
+function renderArchive(){
+  const q=(document.getElementById('archive-search')?.value||'').toLowerCase();
+  const filtered = archivedOrders.filter(g=>{
+    if(!q) return true;
+    return [g.so, g.customer, g.via, g.soShip, ...g.travelers.map(t=>t.item+' '+t.desc)].join(' ').toLowerCase().includes(q);
+  });
+  const tbody=document.getElementById('archive-tbody');
+  const empty=document.getElementById('archive-empty');
+  const cnt=document.getElementById('archive-count');
+  if(cnt) cnt.textContent=`(${archivedOrders.length} total)`;
+  if(!filtered.length){tbody.innerHTML='';empty.style.display='flex';return;}
+  empty.style.display='none';
+  tbody.innerHTML=filtered.map(g=>{
+    const soPhotos=photos[g.so]||[];
+    const hasPic=soPhotos.length>0;
+    const viaShort=g.via==='OUR TRUCK'?'Truck':g.via==='PICK UP'?'Pickup':'Install';
+    const viaCls=g.via==='OUR TRUCK'?'tb':g.via==='PICK UP'?'td':'tg';
+    const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length}</span>`:`<span class="tag td">No photo</span>`;
+    return `<tr class="archive-row">
+      <td style="font-family:var(--mono);font-weight:600;color:var(--text)">${g.so}</td>
+      <td><span class="mono">${g.soShip}</span></td>
+      <td><span class="tag ${viaCls}">${viaShort}</span></td>
+      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${g.customer}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--text3)">${g.travelers.length}</td>
+      <td>${picTag}</td>
+      <td><button class="btn" onclick="restoreSO('${g.so}')">Restore</button></td>
+    </tr>`;
+  }).join('');
+}
+ 
+ 
 function sv(v){
   activeView=v;
-  const views={main:['tomorrow','all','pending','done'],datechanges:['datechanges'],upload:['upload'],users:['users']};
-  const showMain=views.main.includes(v);
+  const showMain=['tomorrow','all','pending','done'].includes(v);
   document.getElementById('view-main').style.display=showMain?'flex':'none';
   document.getElementById('view-datechanges').style.display=v==='datechanges'?'flex':'none';
   document.getElementById('view-upload').style.display=v==='upload'?'flex':'none';
   document.getElementById('view-users').style.display=v==='users'?'flex':'none';
-  ['tomorrow','all','pending','done','datechanges','upload','users'].forEach(n=>{
+  document.getElementById('view-archive').style.display=v==='archive'?'flex':'none';
+  ['tomorrow','all','pending','done','datechanges','upload','users','archive'].forEach(n=>{
     document.getElementById('nav-'+n)?.classList.remove('active');
   });
   document.getElementById('nav-'+v)?.classList.add('active');
-  if(v==='users'){ loadUsers(); }
+  if(v==='users') loadUsers();
+  if(v==='archive') renderArchive();
   closeDrawer(); render();
 }
  
