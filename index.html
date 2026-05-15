@@ -838,21 +838,31 @@ function parseCSV(txt){
   const out=[];
   for(const line of txt.split('\n')){
     if(!line.trim()) continue;
-    const c=parseRow(line); if(c.length<31) continue;
-    const tr=c[19].replace(/^0+/,''), so=c[27].replace(/^0+/,'');
+    const cols=parseRow(line); if(cols.length<31) continue;
+    const tr=cols[19].replace(/^0+/,''), so=cols[27].replace(/^0+/,'');
     if(!tr||!so||isNaN(+tr)) continue;
-    const ds=c[25].trim(); let soShipISO=null;
+    const ds=cols[25].trim(); let soShipISO=null;
     if(ds){const p=ds.split('/');if(p.length===3) soShipISO=`20${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;}
-    out.push({traveler:tr,so,item:c[20].trim(),description:c[21].trim(),
-      qty:parseFloat(c[22])||0,line:c[16].trim(),so_ship:soShipISO,
-      via:c[26].trim(),customer:c[30].trim(),report_date:new Date().toISOString().slice(0,10)});
+    out.push({traveler:tr, so, item:cols[20].trim(), description:cols[21].trim(),
+      qty:parseFloat(cols[22])||0, line:cols[16].trim(),
+      so_ship:soShipISO, via:cols[26].trim(), customer:cols[30].trim(),
+      report_date:new Date().toISOString().slice(0,10)});
   }
   return out;
 }
 function parseRow(line){
-  const r=[]; let cur='',inQ=false;
-  for(const ch of line){if(ch==='"'){inQ=!inQ;continue;}if(ch===','&&!inQ){r.push(cur);cur='';continue;}cur+=ch;}
-  r.push(cur); return r;
+  const r=[]; let cur='', inQ=false, i=0;
+  while(i < line.length){
+    const ch=line[i];
+    if(ch==='"'){
+      if(inQ && line[i+1]==='"'){ cur+='"'; i+=2; continue; } // escaped quote
+      inQ=!inQ; i++; continue;
+    }
+    if(ch===','&&!inQ){ r.push(cur.trim()); cur=''; i++; continue; }
+    cur+=ch; i++;
+  }
+  r.push(cur.trim());
+  return r;
 }
 const dzEl=document.getElementById('dz');
 dzEl.addEventListener('dragover',e=>{e.preventDefault();dzEl.classList.add('drag');});
