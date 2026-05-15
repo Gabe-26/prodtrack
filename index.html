@@ -694,7 +694,7 @@ async function loadApprovals(){
     approvals[r.traveler] = {approved_by: r.approved_by, approved_at: r.approved_at, id: r.id};
   }
 }
-  const rows = await sbGet('orders','select=*&order=so_ship.asc,so.asc');
+async function loadOrders(){
   orders = rows.map(r=>({
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
@@ -1131,7 +1131,7 @@ async function unapproveTraveler(traveler){
  
  
 function toggleSO(so){ if(expanded.has(so)) expanded.delete(so); else expanded.add(so); render(); }
-  allExp=!allExp;
+function toggleExpandAll(){
   const btn=document.getElementById('xbtn');
   if(allExp){orders.forEach(o=>expanded.add(o.so));btn.textContent='▲ Collapse all';btn.classList.add('on');}
   else{expanded.clear();btn.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg> Expand all';btn.classList.remove('on');}
