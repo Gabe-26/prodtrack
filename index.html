@@ -530,7 +530,6 @@ const H = (tok) => ({
 });
  
 // ── Username → email ──────────────────────────────────────────────────────────
-const DOMAIN = 'prodtrack.local';
 const fromEmail = e => e ? e.replace(`@${DOMAIN}`,'').replace(/@.*$/,'') : '';
  
 // Looks up real email from profiles table by username
