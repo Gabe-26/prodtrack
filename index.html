@@ -146,6 +146,11 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .so-row.done td{background:rgba(96,208,138,0.04)}
 .so-row.done td:first-child{border-left:2px solid var(--green)}
 .so-row.pending td:first-child{border-left:2px solid var(--amber)}
+.tr-row.approved-row td{background:rgba(96,208,138,0.04)}
+.approve-btn{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:4px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.approve-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.approve-btn.approved{background:var(--green-dim);border-color:rgba(96,208,138,0.3);color:var(--green)}
+.approve-btn.approved:hover{background:var(--red-dim);border-color:rgba(255,95,95,0.3);color:var(--red)}
 .tr-row td{padding:7px 10px 7px 34px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle;background:var(--surface);transition:background 0.1s}
 .tr-row:hover td{background:var(--surface2)}
 @keyframes fi{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
@@ -521,7 +526,7 @@ const BUCKET   = 'order-photos';
 let accessToken = null;
 let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
-let orders = [], photos = {}, dateChanges = [];
+let orders = [], photos = {}, dateChanges = [], approvals = {}; // approvals map: traveler -> {approved_by, approved_at}
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
 let pendingDelPhotoId = null, pendingDelStoragePath = null;
 let pendingDelUserId = null;
@@ -678,11 +683,17 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos()]); updateAll(); sv('tomorrow'); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals()]); updateAll(); sv('tomorrow'); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
-async function loadOrders(){
+async function loadApprovals(){
+  const rows = await sbGet('approvals','select=*');
+  approvals = {};
+  for(const r of rows){
+    approvals[r.traveler] = {approved_by: r.approved_by, approved_at: r.approved_at, id: r.id};
+  }
+}
   const rows = await sbGet('orders','select=*&order=so_ship.asc,so.asc');
   orders = rows.map(r=>({
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
@@ -702,7 +713,7 @@ async function loadPhotos(){
 async function refreshData(){
   const btn=document.getElementById('refresh-btn');
   btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Refreshing';
-  try{ await Promise.all([loadOrders(),loadPhotos()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
+  try{ await Promise.all([loadOrders(),loadPhotos(),loadApprovals()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
   btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
@@ -1016,10 +1027,21 @@ function render(){
     const viaCls=via0==='OUR TRUCK'?'tb':via0==='PICK UP'?'td':'tg';
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`:`<span class="tag ta">No photo</span>`;
  
+    // Approval status for SO
+    const approvedTravelers = travelers.filter(o => approvals[o.traveler]);
+    const allApproved = travelers.length > 0 && approvedTravelers.length === travelers.length;
+    const someApproved = approvedTravelers.length > 0 && !allApproved;
+    const approvalBadge = allApproved
+      ? `<span class="tag tg" style="margin-left:6px">✓ Approved</span>`
+      : someApproved
+      ? `<span class="tag td" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span>`
+      : '';
+ 
     html+=`<tr class="so-row ${hasPic?'done':'pending'}" onclick="toggleSO('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
+        ${approvalBadge}
       </div></td>
       <td><span class="mono">${fmtDate(soShipRaw)}</span></td>
       <td><span class="tag ${viaCls}">${viaShort}</span></td>
@@ -1029,14 +1051,30 @@ function render(){
     </tr>`;
  
     if(isOpen){
+      const isMgr = currentProfile?.role === 'manager';
       for(const o of travelers){
-        html+=`<tr class="tr-row">
+        const isApproved = !!approvals[o.traveler];
+        const approvalInfo = approvals[o.traveler];
+        const approveBtn = isMgr
+          ? isApproved
+            ? `<button class="approve-btn approved" onclick="event.stopPropagation();unapproveTraveler('${o.traveler}')" title="Approved by ${approvalInfo.approved_by} · Click to undo">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Approved
+              </button>`
+            : `<button class="approve-btn" onclick="event.stopPropagation();approveTraveler('${o.traveler}','${so}')">
+                Approve
+              </button>`
+          : isApproved
+            ? `<span class="tag tg" title="Approved by ${approvalInfo.approved_by}">✓ Approved</span>`
+            : `<span class="tag td">Pending</span>`;
+ 
+        html+=`<tr class="tr-row${isApproved?' approved-row':''}">
           <td style="color:var(--text3);font-size:11px;font-family:var(--mono)"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text2)">${o.traveler}</span></td>
           <td style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${o.desc}</td>
           <td><span class="mono${isCus(o)?' style=color:var(--amber)':''}">${o.item}</span></td>
           <td style="text-align:right;font-family:var(--mono);font-size:11px">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
           <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${o.line}</td>
-          <td></td>
+          <td>${approveBtn}</td>
         </tr>`;
       }
       const thumbs=soPhotos.map(p=>`
@@ -1067,8 +1105,32 @@ function render(){
   tbody.innerHTML=html;
 }
  
+// ── Approvals ─────────────────────────────────────────────────────────────────
+async function approveTraveler(traveler, so){
+  if(currentProfile?.role !== 'manager'){ toast('Access denied','Only managers can approve travelers.','red'); return; }
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/approvals`, {
+      method:'POST',
+      headers:{...H(),'Prefer':'resolution=merge-duplicates'},
+      body: JSON.stringify({traveler, so, approved_by: currentProfile.full_name})
+    });
+    approvals[traveler] = {approved_by: currentProfile.full_name, approved_at: new Date().toISOString()};
+    render();
+    toast('Traveler approved', `T-${traveler} marked as approved ✓`, 'green');
+  } catch(e){ toast('Error', e.message, 'red'); }
+}
+async function unapproveTraveler(traveler){
+  if(currentProfile?.role !== 'manager'){ toast('Access denied','Only managers can remove approvals.','red'); return; }
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/approvals?traveler=eq.${traveler}`, {method:'DELETE', headers:H()});
+    delete approvals[traveler];
+    render();
+    toast('Approval removed', `T-${traveler} approval undone.`, 'amber');
+  } catch(e){ toast('Error', e.message, 'red'); }
+}
+ 
+ 
 function toggleSO(so){ if(expanded.has(so)) expanded.delete(so); else expanded.add(so); render(); }
-function toggleExpandAll(){
   allExp=!allExp;
   const btn=document.getElementById('xbtn');
   if(allExp){orders.forEach(o=>expanded.add(o.so));btn.textContent='▲ Collapse all';btn.classList.add('on');}
@@ -1175,7 +1237,7 @@ function startAutoRefresh(){
   countdownTimer=setInterval(()=>{refreshCountdown--;if(refreshCountdown<=0)refreshCountdown=60;},1000);
   refreshTimer=setInterval(async()=>{
     refreshCountdown=60;
-    try{await Promise.all([loadOrders(),loadPhotos()]);updateAll();render();}catch(e){}
+    try{await Promise.all([loadOrders(),loadPhotos(),loadApprovals()]);updateAll();render();}catch(e){}
   },60000);
 }
  
