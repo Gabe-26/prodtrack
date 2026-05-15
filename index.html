@@ -916,17 +916,76 @@ async function doDeleteUser(){
 // ── CSV ───────────────────────────────────────────────────────────────────────
 function parseCSV(txt){
   const out=[];
-  for(const line of txt.split('\n')){
+  const lines=txt.split('\n');
+  if(!lines.length) return out;
+ 
+  // Detect format by checking first line content
+  // New format: "Open Work Ticket by Product Line Report" in col 0
+  // Old format: cols are wider (40 cols), traveler at col 19, SO at col 27
+  const firstRow = parseRow(lines[0]);
+  const isProductLineFormat = firstRow[0] && firstRow[0].includes('Product Line');
+ 
+  for(const line of lines){
     if(!line.trim()) continue;
-    const cols=parseRow(line); if(cols.length<31) continue;
-    const tr=cols[19].replace(/^0+/,''), so=cols[27].replace(/^0+/,'');
-    if(!tr||!so||isNaN(+tr)) continue;
-    const ds=cols[25].trim(); let soShipISO=null;
-    if(ds){const p=ds.split('/');if(p.length===3) soShipISO=`20${p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;}
-    out.push({traveler:tr, so, item:cols[20].trim(), description:cols[21].trim(),
-      qty:parseFloat(cols[22])||0, line:cols[16].trim(),
-      so_ship:soShipISO, via:cols[26].trim(), customer:cols[30].trim(),
-      report_date:new Date().toISOString().slice(0,10)});
+    const c = parseRow(line);
+ 
+    if(isProductLineFormat){
+      // New format: Product Line Report
+      // Col 10=ProdLine, Col 11=Traveler, Col 12=Item, Col 13=Desc
+      // Col 14=Qty, Col 15=WorkDt, Col 16=ProdDue(=ShipDate), Col 17=SO
+      if(c.length < 18) continue;
+      const traveler = c[11].trim().replace(/^0+/,'');
+      const so       = c[17].trim().replace(/^0+/,'');
+      if(!traveler || !so || !so.match(/^\d+$/) || isNaN(+traveler)) continue;
+      const ds = c[16].trim();
+      let soShipISO = null;
+      if(ds){
+        const p=ds.split('/');
+        if(p.length===3){
+          const yr = p[2].length===4 ? p[2].slice(2) : p[2];
+          soShipISO=`20${yr}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
+        }
+      }
+      out.push({
+        traveler, so,
+        item:        c[12].trim(),
+        description: c[13].trim().replace(/^\*/,''),
+        qty:         parseFloat(c[14])||0,
+        line:        c[10].trim(),
+        so_ship:     soShipISO,
+        via:         '',
+        customer:    '',
+        report_date: new Date().toISOString().slice(0,10)
+      });
+    } else {
+      // Old format: Due Date Report (40 cols)
+      // Col 16=ProdLine, Col 19=Traveler, Col 20=Item, Col 21=Desc
+      // Col 22=Qty, Col 25=ShipDate, Col 26=Via, Col 27=SO, Col 30=Customer
+      if(c.length < 31) continue;
+      const traveler = c[19].replace(/^0+/,'');
+      const so       = c[27].replace(/^0+/,'');
+      if(!traveler || !so || isNaN(+traveler)) continue;
+      const ds = c[25].trim();
+      let soShipISO = null;
+      if(ds){
+        const p=ds.split('/');
+        if(p.length===3){
+          const yr = p[2].length===4 ? p[2].slice(2) : p[2];
+          soShipISO=`20${yr}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
+        }
+      }
+      out.push({
+        traveler, so,
+        item:        c[20].trim(),
+        description: c[21].trim(),
+        qty:         parseFloat(c[22])||0,
+        line:        c[16].trim(),
+        so_ship:     soShipISO,
+        via:         c[26].trim(),
+        customer:    c[30].trim(),
+        report_date: new Date().toISOString().slice(0,10)
+      });
+    }
   }
   return out;
 }
