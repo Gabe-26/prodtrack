@@ -392,7 +392,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div class="s-sec">Views</div>
       <div class="nav-item active" id="nav-tomorrow" onclick="sv('tomorrow')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Tomorrow's orders<span class="nb amber" id="b-tomorrow">0</span>
+        <span id="nav-tomorrow-label">Tomorrow's orders</span><span class="nb amber" id="b-tomorrow">0</span>
       </div>
       <div class="nav-item" id="nav-all" onclick="sv('all')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -1055,7 +1055,29 @@ function groupBySO(list){
   for(const o of list){if(!map[o.so]){map[o.so]=[];ord.push(o.so);}map[o.so].push(o);}
   return ord.map(so=>({so,travelers:map[so]}));
 }
-function getTomorrow(){const d=new Date();d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);}
+function getNextWorkingDays(){
+  // Returns array of ISO date strings to show in "Tomorrow's orders"
+  // If tomorrow is Saturday: show Sat + Sun + Mon
+  // If tomorrow is Sunday: show Sun + Mon
+  // Otherwise: just tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const day = tomorrow.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+ 
+  const toISO = d => d.toISOString().slice(0,10);
+ 
+  if(day === 6){ // tomorrow is Saturday
+    const sun = new Date(tomorrow); sun.setDate(sun.getDate()+1);
+    const mon = new Date(tomorrow); mon.setDate(mon.getDate()+2);
+    return [toISO(tomorrow), toISO(sun), toISO(mon)];
+  } else if(day === 0){ // tomorrow is Sunday
+    const mon = new Date(tomorrow); mon.setDate(mon.getDate()+1);
+    return [toISO(tomorrow), toISO(mon)];
+  } else {
+    return [toISO(tomorrow)];
+  }
+}
+function getTomorrow(){ return getNextWorkingDays()[0]; }
 function fmtDate(iso){
   if(!iso) return '—';
   const p=iso.split('-');
@@ -1065,8 +1087,8 @@ function fmtDate(iso){
 // ── Update all ────────────────────────────────────────────────────────────────
 function updateAll(){
   const sos=new Set(orders.map(o=>o.so));
-  const tomorrow=getTomorrow();
-  const tomorrowSOs=new Set(orders.filter(o=>o.soShipRaw===tomorrow).map(o=>o.so));
+  const nextDays = getNextWorkingDays();
+  const tomorrowSOs=new Set(orders.filter(o=>o.soShipRaw&&nextDays.includes(o.soShipRaw)).map(o=>o.so));
   const doneSOs=new Set([...sos].filter(so=>photos[so]?.length>0));
   const pendingSOs=new Set([...sos].filter(so=>!photos[so]?.length));
  
@@ -1118,6 +1140,13 @@ function updateAll(){
   const df=document.getElementById('f-date'),cur=df.value;
   df.innerHTML='<option value="">All ship dates</option>'+dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${fmtDate(d)}</option>`).join('');
  
+  // Update tomorrow nav label based on day
+  const nextDaysCheck = getNextWorkingDays();
+  const navLabel = nextDaysCheck.length === 3 ? "Fri · Sat · Mon orders" :
+                   nextDaysCheck.length === 2 ? "Weekend + Mon orders" : "Tomorrow's orders";
+  const navTomEl = document.getElementById('nav-tomorrow-label');
+  if(navTomEl) navTomEl.textContent = navLabel;
+ 
   document.getElementById('empty-nd').style.display=orders.length?'none':'flex';
   render();
 }
@@ -1128,13 +1157,14 @@ function render(){
   const q=document.getElementById('search').value.toLowerCase();
   const via=document.getElementById('f-via').value;
   const dateF=document.getElementById('f-date').value;
-  const tomorrow=getTomorrow();
+  const nextDays = getNextWorkingDays();
+  const tomorrow = nextDays[0];
  
   let filtered=orders.filter(o=>{
     if(activeLine&&o.line!==activeLine) return false;
     if(via&&o.via!==via) return false;
     if(dateF&&o.soShipRaw!==dateF) return false;
-    if(activeView==='tomorrow'&&o.soShipRaw!==tomorrow) return false;
+    if(activeView==='tomorrow'&&(!o.soShipRaw||!nextDays.includes(o.soShipRaw))) return false;
     if(activeView==='pending'&&photos[o.so]?.length>0) return false;
     if(activeView==='done'&&!photos[o.so]?.length) return false;
     if(q&&![o.traveler,o.so,o.item,o.desc,o.customer].join(' ').toLowerCase().includes(q)) return false;
