@@ -101,7 +101,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .btn.primary{padding:6px 10px;font-size:11px}
   .sidebar{position:fixed;top:0;left:-290px;bottom:0;width:290px;z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
-  .metrics{grid-template-columns:repeat(2,1fr)}
+  .metrics{grid-template-columns:repeat(3,1fr)}
   .toolbar{padding:8px 10px;gap:6px}
   .search{font-size:14px}
   select.filt{font-size:12px;padding:5px 6px}
@@ -120,7 +120,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 }
  
 /* ── Metrics ───────────────────────────────────────────────────────────────── */
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
 .metric{background:var(--surface);padding:18px 22px}
 .metric-label{font-size:11px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px}
 .metric-val{font-size:32px;font-weight:700;letter-spacing:-0.04em;line-height:1}
@@ -405,9 +405,6 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         Manage users
       </div>
-      <div class="sdiv"></div>
-      <div class="s-sec">Prod lines</div>
-      <div id="line-nav"></div>
       <div class="sb-user">
         <div class="u-avatar" id="u-avatar">?</div>
         <div style="flex:1;overflow:hidden">
@@ -425,7 +422,6 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <!-- Dashboard -->
       <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
         <div class="metrics">
-          <div class="metric"><div class="metric-label">Ship date</div><div class="metric-val" id="m-date" style="font-size:15px;margin-top:2px">—</div><div class="metric-sub">showing below</div></div>
           <div class="metric"><div class="metric-label">Sales orders</div><div class="metric-val" id="m-so">—</div><div class="metric-sub">grouped</div></div>
           <div class="metric"><div class="metric-label">Photo uploaded</div><div class="metric-val green" id="m-done">—</div><div class="metric-sub">confirmed</div></div>
           <div class="metric"><div class="metric-label">No photo yet</div><div class="metric-val red" id="m-pending">—</div><div class="metric-sub">needs attention</div></div>
@@ -978,19 +974,9 @@ function updateAll(){
   const df=document.getElementById('f-date'),cur=df.value;
   df.innerHTML='<option value="">All ship dates</option>'+dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${fmtDate(d)}</option>`).join('');
  
-  // Line nav
-  const lines=[...new Set(orders.map(o=>o.line))].sort();
-  document.getElementById('line-nav').innerHTML=lines.map(l=>
-    `<div class="nav-item${activeLine===l?' active':''}" onclick="setLine('${l}')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      Line ${l}<span class="nb">${orders.filter(o=>o.line===l).length}</span>
-    </div>`).join('');
- 
   document.getElementById('empty-nd').style.display=orders.length?'none':'flex';
   render();
 }
- 
-function setLine(l){activeLine=activeLine===l?'':l;updateAll();sv('tomorrow');}
  
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(){
@@ -1018,7 +1004,6 @@ function render(){
     return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
   });
  
-  document.getElementById('m-date').textContent=activeView==='tomorrow'?fmtDate(tomorrow):'All dates';
   const tbody=document.getElementById('tbody');
   const emf=document.getElementById('empty-f');
   if(!groups.length&&orders.length){tbody.innerHTML='';emf.style.display='flex';return;}
