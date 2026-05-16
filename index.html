@@ -616,6 +616,7 @@ let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
 let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [];
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
+let missingFromCSV = [];
 let pendingDelPhotoId = null, pendingDelStoragePath = null, pendingDelSO = null, pendingDelFilename = null;
 let pendingDelUserId = null;
  
@@ -1063,10 +1064,19 @@ async function handleCSV(file){
       const newSODates={};
       parsed.forEach(r=>{if(r.so&&r.so_ship) newSODates[r.so]=r.so_ship;});
       dateChanges=[];
+      missingFromCSV=[];
       for(const so of Object.keys(newSODates)){
         if(prevSODates[so]&&prevSODates[so]!==newSODates[so]){
           const t=parsed.find(r=>r.so===so);
           dateChanges.push({so,customer:t?.customer||'',from:prevSODates[so],to:newSODates[so]});
+        }
+      }
+      // Detect SOs that were in the DB but are completely gone from this CSV
+      const prevSOs=Object.keys(prevSODates);
+      for(const so of prevSOs){
+        if(!newSODates[so]){
+          const existing=orders.find(o=>o.so===so);
+          missingFromCSV.push({so, customer:existing?.customer||'', lastDate:prevSODates[so]});
         }
       }
       const ts=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -1074,9 +1084,14 @@ async function handleCSV(file){
       document.getElementById('last-pill').style.display='inline-flex';
       st.textContent='✓ '+parsed.length+' travelers at '+ts;
       await loadOrders(); updateAll();
-      if(dateChanges.length){
-        toast(`${dateChanges.length} date change${dateChanges.length>1?'s':''} detected`,
-          dateChanges.slice(0,3).map(c=>`SO ${c.so}: ${fmtDate(c.from)} → ${fmtDate(c.to)}`).join('\n'),'amber');
+      const hasIssues = dateChanges.length || missingFromCSV.length;
+      if(hasIssues){
+        const parts=[];
+        if(dateChanges.length) parts.push(`${dateChanges.length} date change${dateChanges.length>1?'s':''}`);
+        if(missingFromCSV.length) parts.push(`${missingFromCSV.length} missing SO${missingFromCSV.length>1?'s':''}`);
+        toast(parts.join(' · '),
+          [...dateChanges.slice(0,2).map(c=>`SO ${c.so}: ${fmtDate(c.from)} → ${fmtDate(c.to)}`),
+           ...missingFromCSV.slice(0,2).map(c=>`⚠ SO ${c.so} not in CSV`)].join('\n'),'amber');
         setTimeout(()=>sv('datechanges'),1400);
       } else {
         toast('CSV uploaded',''+parsed.length+' travelers saved.','green');
@@ -1136,24 +1151,31 @@ function updateAll(){
   document.getElementById('b-tomorrow').textContent=tomorrowSOs.size;
   document.getElementById('b-pending').textContent=pendingSOs.size;
   document.getElementById('b-done').textContent=doneSOs.size;
-  document.getElementById('b-dc').textContent=dateChanges.length;
+  document.getElementById('b-dc').textContent=dateChanges.length+missingFromCSV.length;
   const archBadge=document.getElementById('b-archive');
   if(archBadge) archBadge.textContent=archivedOrders.length;
  
   // DC banner
   const banner=document.getElementById('dc-banner');
-  if(dateChanges.length){
+  if(dateChanges.length||missingFromCSV.length){
     banner.classList.add('show');
-    document.getElementById('dc-banner-list').innerHTML=dateChanges.slice(0,3).map(c=>
-      `<div class="dc-line">SO ${c.so} · ${c.customer} · ${fmtDate(c.from)} → ${fmtDate(c.to)}</div>`
-    ).join('')+(dateChanges.length>3?`<div class="dc-line" style="opacity:0.5">…and ${dateChanges.length-3} more</div>`:'');
+    const bannerLines=[
+      ...dateChanges.slice(0,2).map(c=>`<div class="dc-line">SO ${c.so} · ${c.customer} · ${fmtDate(c.from)} → ${fmtDate(c.to)}</div>`),
+      ...missingFromCSV.slice(0,2).map(c=>`<div class="dc-line" style="color:var(--red)">⚠ SO ${c.so} · ${c.customer} · not in CSV</div>`)
+    ];
+    const total=dateChanges.length+missingFromCSV.length;
+    document.getElementById('dc-banner-list').innerHTML=bannerLines.join('')+(total>4?`<div class="dc-line" style="opacity:0.5">…and ${total-4} more</div>`:'');
   } else { banner.classList.remove('show'); }
  
   // DC view
   const dcHdr=document.getElementById('dc-hdr'), dcBody=document.getElementById('dc-body');
-  if(dateChanges.length){
-    dcHdr.textContent=`${dateChanges.length} ship date change${dateChanges.length>1?'s':''} detected`;
-    dcBody.innerHTML=dateChanges.map(c=>`
+  const totalIssues=dateChanges.length+missingFromCSV.length;
+  if(totalIssues){
+    const parts=[];
+    if(dateChanges.length) parts.push(`${dateChanges.length} date change${dateChanges.length>1?'s':''}`);
+    if(missingFromCSV.length) parts.push(`${missingFromCSV.length} missing SO${missingFromCSV.length>1?'s':''}`);
+    dcHdr.textContent=parts.join(' · ');
+    const dcCards=dateChanges.map(c=>`
       <div style="background:var(--surface);border:1px solid rgba(255,179,71,0.25);border-radius:8px;margin-bottom:8px;overflow:hidden">
         <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--border)">
           <span class="tag ta">DATE MOVED</span>
@@ -1167,6 +1189,20 @@ function updateAll(){
           <span style="margin-left:auto;color:var(--text3)">${photos[c.so]?.length>0?'✓ '+photos[c.so].length+' photo':'No photo yet'}</span>
         </div>
       </div>`).join('');
+    const missingCards=missingFromCSV.map(c=>`
+      <div style="background:var(--surface);border:1px solid rgba(255,95,95,0.3);border-radius:8px;margin-bottom:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--border)">
+          <span class="tag tr">NOT IN CSV</span>
+          <span style="font-weight:700;font-size:13px;color:var(--text)">SO ${c.so}</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--text3)">${c.customer}</span>
+        </div>
+        <div style="padding:9px 13px;font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:10px">
+          <span style="color:var(--text2)">Last known ship date:</span>
+          <span style="color:var(--red);font-weight:600">${fmtDate(c.lastDate)}</span>
+          <span style="margin-left:auto;color:var(--text3)">Check Sage for correct date</span>
+        </div>
+      </div>`).join('');
+    dcBody.innerHTML=dcCards+missingCards;
   } else {
     dcHdr.textContent='No date changes detected';
     dcBody.innerHTML='<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">All ship dates are the same</div></div>';
