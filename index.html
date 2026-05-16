@@ -1724,6 +1724,14 @@ tr:last-child td{border-bottom:none}
  
 .footer{text-align:center;padding:28px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:10px}
  
+/* ── CSS-only lightbox ── */
+.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:20px}
+.lb-overlay:target{display:flex}
+.lb-close-area{position:absolute;inset:0;z-index:0}
+.lb-overlay img{max-width:92vw;max-height:78vh;object-fit:contain;border-radius:8px;position:relative;z-index:1}
+.lb-caption{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);text-align:center;position:relative;z-index:1;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-close-btn{position:absolute;top:16px;right:20px;font-size:24px;color:rgba(255,255,255,0.7);text-decoration:none;z-index:2;line-height:1;padding:8px}
+ 
 @media(max-width:600px){
   .summary{grid-template-columns:repeat(2,1fr)}
   .so-date{display:none}
@@ -1770,7 +1778,16 @@ ${soData.map(s => {
   }).join('');
  
   const photoGrid = s.soPhotos.length
-    ? `<div class="photo-grid">${s.soPhotos.map(p=>`<a href="${p.url}" target="_blank"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>`).join('')}</div>`
+    ? `<div class="photo-grid">${s.soPhotos.map((p,i)=>{
+        const id=`lb-${s.so}-${i}`;
+        return `<a href="#${id}"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>
+<div class="lb-overlay" id="${id}">
+  <a href="#" class="lb-close-area"></a>
+  <img src="${p.url}" alt="${p.filename}">
+  <div class="lb-caption">${p.filename}</div>
+  <a href="#" class="lb-close-btn">✕</a>
+</div>`;
+      }).join('')}</div>`
     : `<div class="no-photos">No photos uploaded yet</div>`;
  
   // Auto-open SOs with no photo
