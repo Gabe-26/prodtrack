@@ -103,15 +103,42 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
   .metrics{grid-template-columns:repeat(3,1fr)}
   .toolbar{padding:8px 10px;gap:6px}
-  .search{font-size:14px}
-  select.filt{font-size:12px;padding:5px 6px}
+  .search{font-size:13px}
+  select.filt{font-size:11px;padding:5px 6px}
   .xbtn{display:none}
-  thead th:nth-child(3),thead th:nth-child(5){display:none}
-  .so-row td:nth-child(3),.so-row td:nth-child(5){display:none}
-  .tr-row td:nth-child(3),.tr-row td:nth-child(5){display:none}
-  .photo-row td{padding:12px 10px 14px 20px}
-  .tr-row td{padding-left:20px}
-  .so-row td{padding:13px 10px}
+ 
+  /* Show ship via col, hide travelers col on mobile */
+  thead th:nth-child(5){display:none}
+  .so-row td:nth-child(5){display:none}
+  .tr-row td:nth-child(5){display:none}
+ 
+  /* SO row sizing */
+  .so-row td{padding:10px 6px;font-size:11px}
+  .so-row td:first-child{padding-left:8px}
+ 
+  /* Shrink SO number */
+  .so-row td:first-child span[style*="font-size:13px"]{font-size:11px!important}
+ 
+  /* Ship date smaller */
+  .so-row td:nth-child(2) span{font-size:11px!important}
+ 
+  /* Customer smaller */
+  .so-row td:nth-child(4){font-size:11px!important;max-width:100px}
+ 
+  /* Photos tag smaller */
+  .so-row .tag{font-size:10px;padding:2px 6px}
+ 
+  /* Via pill — mobile shows emoji icon only */
+  .via-pill .via-label{display:none}
+  .via-pill{padding:5px 7px;font-size:14px;gap:0;min-width:28px;justify-content:center}
+ 
+  /* Approval badge — mobile shows ✓ only */
+  .appr-full{display:none}
+  .appr-check{display:inline-flex!important}
+ 
+  /* Traveler rows */
+  .tr-row td{padding:8px 6px 8px 18px;font-size:11px}
+  .photo-row td{padding:12px 10px 14px 18px}
   .photo-thumb{width:80px;height:80px}
   .upload-zone{padding:12px 14px;font-size:13px}
   .upload-card{padding:24px 20px}
@@ -190,6 +217,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .tb{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,184,240,0.2)}
 .td{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
 .mono{font-family:var(--mono);font-size:12px}
+.appr-check{display:none}
  
 /* ── Archive view ──────────────────────────────────────────────────────────── */
 .archive-view{flex:1;overflow-y:auto;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
@@ -1123,12 +1151,12 @@ async function handleCSV(file){
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const isCus=o=>o.item.includes('-CUS')||o.item.endsWith('CUS');
 function makeViaTag(via, location){
-  if(via==='OUR TRUCK') return `<span class="via-pill via-truck">🚚 Our Truck</span>`;
-  if(via==='INSTALL/REPAIR') return `<span class="via-pill via-install">🔧 Install/Repair</span>`;
+  if(via==='OUR TRUCK') return `<span class="via-pill via-truck">🚚<span class="via-label"> Our Truck</span></span>`;
+  if(via==='INSTALL/REPAIR') return `<span class="via-pill via-install">🔧<span class="via-label"> Install/Repair</span></span>`;
   if(via==='PICK UP'){
     const loc=(location||'').toLowerCase();
-    if(loc.includes('amityville')) return `<span class="via-pill via-amendolas">📦 Pick Up Amendolas</span>`;
-    return `<span class="via-pill via-interstate">📦 Pick Up Interstate</span>`;
+    if(loc.includes('amityville')) return `<span class="via-pill via-amendolas">📦<span class="via-label"> Pick Up Amendolas</span></span>`;
+    return `<span class="via-pill via-interstate">📦<span class="via-label"> Pick Up Interstate</span></span>`;
   }
   return `<span class="via-pill via-install">${via||'—'}</span>`;
 }
@@ -1310,9 +1338,9 @@ function render(){
     const allApproved = travelers.length > 0 && approvedTravelers.length === travelers.length;
     const someApproved = approvedTravelers.length > 0 && !allApproved;
     const approvalBadge = allApproved
-      ? `<span class="tag tg" style="margin-left:6px">✓ Approved</span>`
+      ? `<span class="tag tg appr-full" style="margin-left:6px">✓ Approved</span><span class="appr-check tag tg" style="display:none;margin-left:4px">✓</span>`
       : someApproved
-      ? `<span class="tag td" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span>`
+      ? `<span class="tag td appr-full" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span><span class="appr-check tag td" style="display:none;margin-left:4px">${approvedTravelers.length}/${travelers.length}</span>`
       : '';
  
     html+=`<tr class="so-row ${hasPic?'done':'pending'}" onclick="toggleSO('${so}')">
