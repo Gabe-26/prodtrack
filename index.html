@@ -422,6 +422,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
         Archive<span class="nb" id="b-archive">0</span>
       </div>
+      <div class="nav-item" id="nav-log" onclick="sv('log')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Activity log
+      </div>
       <div class="sb-user">
         <div class="u-avatar" id="u-avatar">?</div>
         <div style="flex:1;overflow:hidden">
@@ -573,6 +577,24 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         </div>
       </div>
  
+      <!-- Activity Log (all roles) -->
+      <div id="view-log" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+          <input class="search" id="log-search" placeholder="Search SO, name, action..." oninput="renderLog()" style="max-width:280px">
+          <select class="filt" id="log-filter" onchange="renderLog()">
+            <option value="">All actions</option>
+            <option value="photo_upload">Photo uploads</option>
+            <option value="photo_delete">Photo deletions</option>
+            <option value="approved">Approvals</option>
+            <option value="unapproved">Approvals removed</option>
+          </select>
+          <span style="margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text3)" id="log-count"></span>
+        </div>
+        <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch" id="log-body">
+          <div class="empty"><div class="spinner"></div></div>
+        </div>
+      </div>
+ 
     </div>
   </div>
 </div>
@@ -595,7 +617,7 @@ let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
 let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [];
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
-let pendingDelPhotoId = null, pendingDelStoragePath = null;
+let pendingDelPhotoId = null, pendingDelStoragePath = null, pendingDelSO = null, pendingDelFilename = null;
 let pendingDelUserId = null;
  
 // ── Headers ───────────────────────────────────────────────────────────────────
@@ -919,11 +941,11 @@ function parseCSV(txt){
   const lines=txt.split('\n');
   if(!lines.length) return out;
  
-  // Detect format by checking first line content
-  // New format: "Open Work Ticket by Product Line Report" in col 0
-  // Old format: cols are wider (40 cols), traveler at col 19, SO at col 27
-  const firstRow = parseRow(lines[0]);
-  const isProductLineFormat = firstRow[0] && firstRow[0].includes('Product Line');
+  // Detect format by column count of first non-empty line
+  // Due Date format: 30+ columns (traveler@19, SO@27, ship via@26, customer@30)
+  // Product Line format: ~18 columns (traveler@11, SO@17)
+  const firstRow = parseRow(lines.find(l=>l.trim())||'');
+  const isProductLineFormat = firstRow.length < 25;
  
   for(const line of lines){
     if(!line.trim()) continue;
@@ -1251,8 +1273,8 @@ function render(){
         <div class="photo-thumb-wrap">
           <img class="photo-thumb" src="${p.url}" loading="lazy"
             title="${p.filename} · ${p.uploaded_by} · ${new Date(p.uploaded_at).toLocaleString()}"
-            onclick="openLB('${p.url}','${p.filename}','${p.uploaded_by||''}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}')">
-          <div class="photo-del" onclick="event.stopPropagation();askDelPhoto('${p.id}','${p.storage_path||''}')">✕</div>
+            onclick="openLB('${p.url}','${p.filename}','${p.uploaded_by||''}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}','${so}')">
+          <div class="photo-del" onclick="event.stopPropagation();askDelPhoto('${p.id}','${p.storage_path||''}','${so}','${(p.filename||'').replace(/'/g,"\\'")}')">✕</div>
         </div>`).join('');
       html+=`<tr class="photo-row"><td colspan="6">
         <div class="photo-section">
@@ -1285,6 +1307,7 @@ async function approveTraveler(traveler, so){
       body: JSON.stringify({traveler, so, approved_by: currentProfile.full_name})
     });
     approvals[traveler] = {approved_by: currentProfile.full_name, approved_at: new Date().toISOString()};
+    await logActivity('approved', so, `Approved traveler T-${traveler}`);
     render();
     toast('Traveler approved', `T-${traveler} marked as approved ✓`, 'green');
   } catch(e){ toast('Error', e.message, 'red'); }
@@ -1294,6 +1317,7 @@ async function unapproveTraveler(traveler){
   try{
     await fetch(`${SUPA_URL}/rest/v1/approvals?traveler=eq.${traveler}`, {method:'DELETE', headers:H()});
     delete approvals[traveler];
+    await logActivity('unapproved', null, `Removed approval for T-${traveler}`);
     render();
     toast('Approval removed', `T-${traveler} approval undone.`, 'amber');
   } catch(e){ toast('Error', e.message, 'red'); }
@@ -1306,6 +1330,87 @@ function toggleExpandAll(){
   if(allExp){orders.forEach(o=>expanded.add(o.so));btn.textContent='▲ Collapse all';btn.classList.add('on');}
   else{expanded.clear();btn.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg> Expand all';btn.classList.remove('on');}
   render();
+}
+ 
+// ── Activity log ──────────────────────────────────────────────────────────────
+let activityLog = [];
+ 
+async function logActivity(action, so, detail){
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/activity_log`, {
+      method:'POST',
+      headers:{...H(),'Prefer':'return=minimal'},
+      body: JSON.stringify({action, so, actor: currentProfile?.full_name||'unknown', detail})
+    });
+  } catch(e){ console.warn('Log write failed:', e.message); }
+}
+ 
+async function loadLog(){
+  try{
+    const rows = await sbGet('activity_log','select=*&order=created_at.desc&limit=500');
+    activityLog = rows;
+  } catch(e){ activityLog=[]; }
+  renderLog();
+}
+ 
+function renderLog(){
+  const q=(document.getElementById('log-search')?.value||'').toLowerCase();
+  const f=(document.getElementById('log-filter')?.value||'');
+  const body=document.getElementById('log-body');
+  const cnt=document.getElementById('log-count');
+  if(!body) return;
+ 
+  let filtered=activityLog.filter(r=>{
+    if(f&&r.action!==f) return false;
+    if(q&&![r.actor,r.so,r.detail,r.action].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+ 
+  if(cnt) cnt.textContent=`${filtered.length} event${filtered.length!==1?'s':''}`;
+ 
+  if(!filtered.length){
+    body.innerHTML='<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">No activity yet</div><div class="empty-sub">Uploads, deletions and approvals will appear here</div></div>';
+    return;
+  }
+ 
+  const actionMeta={
+    photo_upload: {label:'Photo uploaded', cls:'tg', icon:'📷'},
+    photo_delete: {label:'Photo deleted',  cls:'tr', icon:'🗑'},
+    approved:     {label:'Approved',       cls:'tb', icon:'✓'},
+    unapproved:   {label:'Approval removed',cls:'td',icon:'↩'},
+  };
+ 
+  // Group by date
+  const byDate={};
+  for(const r of filtered){
+    const day=r.created_at.slice(0,10);
+    if(!byDate[day]) byDate[day]=[];
+    byDate[day].push(r);
+  }
+ 
+  let html='';
+  for(const day of Object.keys(byDate)){
+    const d=new Date(day+'T12:00:00');
+    const label=d.toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'});
+    html+=`<div style="padding:10px 20px 4px;font-size:10px;font-family:var(--mono);letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface)">${label}</div>`;
+    for(const r of byDate[day]){
+      const m=actionMeta[r.action]||{label:r.action,cls:'td',icon:'·'};
+      const time=new Date(r.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:11px 20px;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <span style="font-size:16px;flex-shrink:0;margin-top:1px">${m.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:600;color:var(--text)">${r.actor}</span>
+            <span class="tag ${m.cls}" style="font-size:10px">${m.label}</span>
+            ${r.so?`<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">SO #${r.so}</span>`:''}
+          </div>
+          ${r.detail?`<div style="font-size:12px;font-family:var(--mono);color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.detail}</div>`:''}
+        </div>
+        <span style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;margin-top:2px">${time}</span>
+      </div>`;
+    }
+  }
+  body.innerHTML=html;
 }
  
 // ── Photo upload ──────────────────────────────────────────────────────────────
@@ -1363,6 +1468,7 @@ async function handlePhotoUpload(so, input){
       const rows=await sbInsert('photos',{so,filename:file.name,url,uploaded_by:currentProfile?.full_name||'worker',storage_path:path});
       if(!photos[so]) photos[so]=[];
       photos[so].unshift({url,id:rows[0]?.id,storage_path:path,filename:file.name,uploaded_at:new Date().toISOString(),uploaded_by:currentProfile?.full_name||'worker'});
+      await logActivity('photo_upload', so, `Uploaded "${file.name}"`);
       if(savedKB > 50) console.log(`Compressed ${file.name}: saved ${savedKB}KB`);
     }
     updateAll(); render();
@@ -1373,8 +1479,8 @@ async function handlePhotoUpload(so, input){
 }
  
 // ── Photo delete ──────────────────────────────────────────────────────────────
-function askDelPhoto(id, sp){ pendingDelPhotoId=id; pendingDelStoragePath=sp; document.getElementById('confirm-photo').classList.add('open'); }
-function closeConfirmPhoto(){ pendingDelPhotoId=null; pendingDelStoragePath=null; document.getElementById('confirm-photo').classList.remove('open'); }
+function askDelPhoto(id, sp, so, filename){ pendingDelPhotoId=id; pendingDelStoragePath=sp; pendingDelSO=so||''; pendingDelFilename=filename||''; document.getElementById('confirm-photo').classList.add('open'); }
+function closeConfirmPhoto(){ pendingDelPhotoId=null; pendingDelStoragePath=null; pendingDelSO=null; pendingDelFilename=null; document.getElementById('confirm-photo').classList.remove('open'); }
 async function doDeletePhoto(){
   if(!pendingDelPhotoId) return;
   const btn=document.getElementById('confirm-photo-yes');
@@ -1385,6 +1491,7 @@ async function doDeletePhoto(){
         {method:'DELETE',headers:{'apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY)}}).catch(()=>{});
     }
     await sbDelete('photos', pendingDelPhotoId);
+    await logActivity('photo_delete', pendingDelSO, `Deleted "${pendingDelFilename||'photo'}"`);
     for(const so of Object.keys(photos)) photos[so]=photos[so].filter(p=>p.id!==pendingDelPhotoId);
     closeConfirmPhoto(); closeLB(); updateAll(); render();
     toast('Photo deleted','Removed successfully.','green');
@@ -1393,12 +1500,12 @@ async function doDeletePhoto(){
 }
  
 // ── Lightbox ──────────────────────────────────────────────────────────────────
-function openLB(url,filename,by,ts,pid,sp){
+function openLB(url,filename,by,ts,pid,sp,so){
   document.getElementById('lb-img').src=url;
   document.getElementById('lb-meta').textContent=`${filename} · uploaded by ${by} · ${ts}`;
   const act=document.getElementById('lb-actions');
   if(currentProfile?.role==='manager'){
-    act.innerHTML=`<button class="btn danger" onclick="askDelPhoto('${pid}','${sp}')">
+    act.innerHTML=`<button class="btn danger" onclick="askDelPhoto('${pid}','${sp}','${so}','${(filename||'').replace(/'/g,"\\'")}')">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
       Delete photo</button>`;
   } else act.innerHTML='';
@@ -1494,12 +1601,14 @@ function sv(v){
   document.getElementById('view-upload').style.display=v==='upload'?'flex':'none';
   document.getElementById('view-users').style.display=v==='users'?'flex':'none';
   document.getElementById('view-archive').style.display=v==='archive'?'flex':'none';
-  ['tomorrow','all','pending','done','datechanges','upload','users','archive'].forEach(n=>{
+  document.getElementById('view-log').style.display=v==='log'?'flex':'none';
+  ['tomorrow','all','pending','done','datechanges','upload','users','archive','log'].forEach(n=>{
     document.getElementById('nav-'+n)?.classList.remove('active');
   });
   document.getElementById('nav-'+v)?.classList.add('active');
   if(v==='users') loadUsers();
   if(v==='archive') renderArchive();
+  if(v==='log') loadLog();
   closeDrawer(); render();
 }
  
