@@ -179,6 +179,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .chevron{display:inline-flex;transition:transform 0.18s;color:var(--text3)}
 .chevron.open{transform:rotate(90deg)}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:5px;font-weight:600;white-space:nowrap}
+.via-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap;letter-spacing:0.01em}
+.via-truck{background:#1b2a4a;color:#a8c8f0;border:1px solid #2a3d6a}
+.via-pickup{background:#2a2010;color:#c8a84a;border:1px solid #3d3018}
+.via-install{background:#2a1a3a;color:#b090d0;border:1px solid #3d2458}
 .tr{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,95,95,0.2)}
 .ta{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.2)}
 .tg{background:var(--green-dim);color:var(--green);border:1px solid rgba(96,208,138,0.2)}
@@ -1215,8 +1219,11 @@ function render(){
     const soPhotos=photos[so]||[], hasPic=soPhotos.length>0;
     const isOpen=allExp||expanded.has(so);
     const via0=travelers[0].via, customer=travelers[0].customer, soShipRaw=travelers[0].soShipRaw;
-    const viaShort=via0==='OUR TRUCK'?'Truck':via0==='PICK UP'?'Pickup':'Install';
-    const viaCls=via0==='OUR TRUCK'?'tb':via0==='PICK UP'?'td':'tg';
+    const viaTag=via0==='OUR TRUCK'
+      ?`<span class="via-pill via-truck">🚚 Our Truck</span>`
+      :via0==='PICK UP'
+      ?`<span class="via-pill via-pickup">📦 Pick Up</span>`
+      :`<span class="via-pill via-install">🔧 Install/Repair</span>`;
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`:`<span class="tag ta">No photo</span>`;
  
     // Approval status for SO
@@ -1236,7 +1243,7 @@ function render(){
         ${approvalBadge}
       </div></td>
       <td><span class="mono">${fmtDate(soShipRaw)}</span></td>
-      <td><span class="tag ${viaCls}">${viaShort}</span></td>
+      <td>${viaTag}</td>
       <td style="color:var(--text2);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${customer}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--text3)">${travelers.length}</td>
       <td>${picTag}</td>
@@ -1577,13 +1584,16 @@ function renderArchive(){
   tbody.innerHTML=filtered.map(g=>{
     const soPhotos=photos[g.so]||[];
     const hasPic=soPhotos.length>0;
-    const viaShort=g.via==='OUR TRUCK'?'Truck':g.via==='PICK UP'?'Pickup':'Install';
-    const viaCls=g.via==='OUR TRUCK'?'tb':g.via==='PICK UP'?'td':'tg';
+    const viaTag=g.via==='OUR TRUCK'
+      ?`<span class="via-pill via-truck">🚚 Our Truck</span>`
+      :g.via==='PICK UP'
+      ?`<span class="via-pill via-pickup">📦 Pick Up</span>`
+      :`<span class="via-pill via-install">🔧 Install/Repair</span>`;
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length}</span>`:`<span class="tag td">No photo</span>`;
     return `<tr class="archive-row">
       <td style="font-family:var(--mono);font-weight:600;color:var(--text)">${g.so}</td>
       <td><span class="mono">${g.soShip}</span></td>
-      <td><span class="tag ${viaCls}">${viaShort}</span></td>
+      <td>${viaTag}</td>
       <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${g.customer}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--text3)">${g.travelers.length}</td>
       <td>${picTag}</td>
