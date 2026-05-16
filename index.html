@@ -1113,9 +1113,7 @@ function updateAll(){
   const doneSOs=new Set([...sos].filter(so=>photos[so]?.length>0));
   const pendingSOs=new Set([...sos].filter(so=>!photos[so]?.length));
  
-  document.getElementById('m-so').textContent=sos.size;
-  document.getElementById('m-done').textContent=doneSOs.size;
-  document.getElementById('m-pending').textContent=pendingSOs.size;
+  
   document.getElementById('b-total').textContent=sos.size;
   document.getElementById('b-tomorrow').textContent=tomorrowSOs.size;
   document.getElementById('b-pending').textContent=pendingSOs.size;
