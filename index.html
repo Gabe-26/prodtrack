@@ -1631,7 +1631,7 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-si
 .sum-val.green{color:var(--green)}.sum-val.red{color:var(--red)}.sum-val.amber{color:var(--amber)}
 .container{max-width:1100px;margin:0 auto;padding:20px 16px}
 .so-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
-.so-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;transition:background 0.12s}
+.so-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;transition:background 0.12s;-webkit-tap-highlight-color:rgba(200,240,96,0.08);touch-action:manipulation}
 .so-header:hover{background:var(--surface2)}
 .so-header.open{border-bottom:1px solid var(--border2)}
 .chevron{display:inline-flex;transition:transform 0.18s;color:var(--text3);flex-shrink:0}
@@ -1705,7 +1705,7 @@ ${soData.map(s => {
     : `<div class="no-photos">No photos uploaded yet</div>`;
  
   return `<div class="so-card">
-  <div class="so-header" onclick="toggle(this)">
+  <div class="so-header" onclick="toggle(this)" ontouchstart="">
     <span class="chevron"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
     <span class="so-num">${s.so}</span>
     <span class="so-date">${s.soShip}</span>
