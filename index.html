@@ -1725,12 +1725,12 @@ tr:last-child td{border-bottom:none}
 .footer{text-align:center;padding:28px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:10px}
  
 /* ── CSS-only lightbox ── */
-.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:16px}
-.lb-overlay:target{display:flex}
-.lb-close-area{position:absolute;inset:0;z-index:0}
-.lb-overlay img{width:calc(100vw - 32px);height:calc(100vh - 80px);object-fit:contain;border-radius:8px;position:relative;z-index:1}
-.lb-caption{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);text-align:center;position:relative;z-index:1;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-close-btn{position:absolute;top:16px;right:20px;font-size:24px;color:rgba(255,255,255,0.7);text-decoration:none;z-index:2;line-height:1;padding:8px}
+.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:16px;cursor:zoom-out}
+.lb-overlay.open{display:flex}
+.lb-overlay img{width:calc(100vw - 32px);height:calc(100vh - 80px);object-fit:contain;border-radius:8px;cursor:default;transition:transform 0.2s;transform-origin:center}
+.lb-overlay img.zoomed{transform:scale(2);cursor:zoom-out}
+.lb-caption{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);text-align:center;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-close-btn{position:absolute;top:16px;right:20px;font-size:28px;color:rgba(255,255,255,0.8);background:none;border:none;cursor:pointer;z-index:2;line-height:1;padding:8px;-webkit-tap-highlight-color:transparent}
  
 @media(max-width:600px){
   .summary{grid-template-columns:repeat(2,1fr)}
@@ -1779,14 +1779,7 @@ ${soData.map(s => {
  
   const photoGrid = s.soPhotos.length
     ? `<div class="photo-grid">${s.soPhotos.map((p,i)=>{
-        const id=`lb-${s.so}-${i}`;
-        return `<a href="#${id}"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>
-<div class="lb-overlay" id="${id}">
-  <a href="#" class="lb-close-area"></a>
-  <img src="${p.url}" alt="${p.filename}">
-  <div class="lb-caption">${p.filename}</div>
-  <a href="#" class="lb-close-btn">✕</a>
-</div>`;
+        return `<img src="${p.url}" loading="lazy" alt="${p.filename}" onclick="openLB(this.src,'${p.filename.replace(/'/g,"\\'")}')" style="cursor:zoom-in">`;
       }).join('')}</div>`
     : `<div class="no-photos">No photos uploaded yet</div>`;
  
@@ -1819,6 +1812,31 @@ ${soData.map(s => {
 </div>
  
 <div class="footer">ProdTrack · ${soData.length} orders · ${dateLabel} · ${generatedAt}</div>
+ 
+<div class="lb-overlay" id="lb" onclick="closeLB()">
+  <button class="lb-close-btn" onclick="closeLB()">✕</button>
+  <img id="lb-img" src="" alt="" onclick="event.stopPropagation();toggleZoom(this)">
+  <div class="lb-caption" id="lb-cap"></div>
+</div>
+ 
+<script>
+function openLB(src, name){
+  document.getElementById('lb-img').src=src;
+  document.getElementById('lb-img').classList.remove('zoomed');
+  document.getElementById('lb-cap').textContent=name;
+  document.getElementById('lb').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeLB(){
+  document.getElementById('lb').classList.remove('open');
+  document.getElementById('lb-img').classList.remove('zoomed');
+  document.body.style.overflow='';
+}
+function toggleZoom(img){
+  img.classList.toggle('zoomed');
+}
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeLB(); });
+<\/script>
 </body>
 </html>`;
  
