@@ -1261,10 +1261,10 @@ function render(){
             : `<span class="tag td">Pending</span>`;
  
         html+=`<tr class="tr-row${isApproved?' approved-row':''}">
-          <td style="color:var(--text3);font-size:11px;font-family:var(--mono)"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text2)">${o.traveler}</span></td>
-          <td style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${o.desc}</td>
-          <td><span class="mono${isCus(o)?' style=color:var(--amber)':''}">${o.item}</span></td>
-          <td style="text-align:right;font-family:var(--mono);font-size:11px">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
+          <td style="font-size:12px;font-family:var(--mono)"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text);font-weight:600">${o.traveler}</span></td>
+          <td style="color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${o.desc}</td>
+          <td><span class="mono" style="${isCus(o)?'color:var(--amber)':'color:var(--text)'};font-weight:600">${o.item}</span></td>
+          <td style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
           <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${o.line}</td>
           <td>${approveBtn}</td>
         </tr>`;
