@@ -1071,13 +1071,21 @@ async function handleCSV(file){
           dateChanges.push({so,customer:t?.customer||'',from:prevSODates[so],to:newSODates[so]});
         }
       }
-      // Detect SOs that were in the DB but are completely gone from this CSV
+      // Detect SOs that were in the DB but are completely gone from this CSV — auto-archive them
       const prevSOs=Object.keys(prevSODates);
+      missingFromCSV=[];
       for(const so of prevSOs){
         if(!newSODates[so]){
           const existing=orders.find(o=>o.so===so);
           missingFromCSV.push({so, customer:existing?.customer||'', lastDate:prevSODates[so]});
         }
+      }
+      // Archive all missing SOs
+      for(const m of missingFromCSV){
+        await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${m.so}&archived=eq.false`,{
+          method:'PATCH',headers:{...H(),'Prefer':'return=minimal'},
+          body:JSON.stringify({archived:true})
+        }).catch(()=>{});
       }
       const ts=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       document.getElementById('last-pill').textContent='Last upload: '+ts;
@@ -1199,7 +1207,7 @@ function updateAll(){
         <div style="padding:9px 13px;font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:10px">
           <span style="color:var(--text2)">Last known ship date:</span>
           <span style="color:var(--red);font-weight:600">${fmtDate(c.lastDate)}</span>
-          <span style="margin-left:auto;color:var(--text3)">Check Sage for correct date</span>
+          <span style="margin-left:auto;color:var(--text3)">Auto-archived — restore if needed</span>
         </div>
       </div>`).join('');
     dcBody.innerHTML=dcCards+missingCards;
