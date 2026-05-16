@@ -1041,7 +1041,25 @@ async function handleCSV(file){
     try{
       const prevSODates={};
       orders.forEach(o=>{if(o.so&&o.soShipRaw) prevSODates[o.so]=o.soShipRaw;});
+ 
+      // Upsert all parsed rows
       for(let i=0;i<parsed.length;i+=500) await sbUpsertOrders(parsed.slice(i,i+500));
+ 
+      // For each SO in the CSV, remove any travelers in the DB that are no longer in the CSV
+      // (handles voided/replaced travelers in Sage)
+      const csvSOMap={}; // so -> Set of traveler strings
+      for(const r of parsed){
+        if(!csvSOMap[r.so]) csvSOMap[r.so]=new Set();
+        csvSOMap[r.so].add(r.traveler);
+      }
+      for(const so of Object.keys(csvSOMap)){
+        const csvTravelers=[...csvSOMap[so]].join(',');
+        // Delete DB rows for this SO whose traveler is NOT in the CSV list
+        await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${so}&traveler=not.in.(${csvTravelers})&archived=eq.false`,{
+          method:'DELETE',headers:{...H(),'Prefer':'return=minimal'}
+        }).catch(()=>{});
+      }
+ 
       const newSODates={};
       parsed.forEach(r=>{if(r.so&&r.so_ship) newSODates[r.so]=r.so_ship;});
       dateChanges=[];
