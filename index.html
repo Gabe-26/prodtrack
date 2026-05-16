@@ -1725,10 +1725,10 @@ tr:last-child td{border-bottom:none}
 .footer{text-align:center;padding:28px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:10px}
  
 /* ── CSS-only lightbox ── */
-.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:20px}
+.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:16px}
 .lb-overlay:target{display:flex}
 .lb-close-area{position:absolute;inset:0;z-index:0}
-.lb-overlay img{max-width:92vw;max-height:78vh;object-fit:contain;border-radius:8px;position:relative;z-index:1}
+.lb-overlay img{width:calc(100vw - 32px);height:calc(100vh - 80px);object-fit:contain;border-radius:8px;position:relative;z-index:1}
 .lb-caption{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);text-align:center;position:relative;z-index:1;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lb-close-btn{position:absolute;top:16px;right:20px;font-size:24px;color:rgba(255,255,255,0.7);text-decoration:none;z-index:2;line-height:1;padding:8px}
  
