@@ -1589,19 +1589,21 @@ function generateReport(){
  
   if(!groups.length){ toast('No orders','No orders found for tomorrow.','amber'); return; }
  
-  // Build SO data with photos
   const soData = groups.map(({so, travelers}) => {
     const soPhotos = photos[so] || [];
     const t0 = travelers[0];
-    const viaEmoji = t0.via==='OUR TRUCK' ? '🚚' : t0.via==='PICK UP' ? '📦' : '🔧';
-    const viaLabel = t0.via==='OUR TRUCK' ? 'Our Truck' : t0.via==='PICK UP' ? 'Pick Up' : 'Install/Repair';
-    const viaCls   = t0.via==='OUR TRUCK' ? 'truck' : t0.via==='PICK UP' ? 'pickup' : 'install';
+    const viaEmoji  = t0.via==='OUR TRUCK' ? '🚚' : t0.via==='PICK UP' ? '📦' : '🔧';
+    const viaLabel  = t0.via==='OUR TRUCK' ? 'Our Truck' : t0.via==='PICK UP' ? 'Pick Up' : 'Install/Repair';
+    const viaCls    = t0.via==='OUR TRUCK' ? 'truck' : t0.via==='PICK UP' ? 'pickup' : 'install';
     const approvedCount = travelers.filter(o => approvals[o.traveler]).length;
     return { so, travelers, soPhotos, customer: t0.customer, soShip: t0.soShip, viaEmoji, viaLabel, viaCls, approvedCount };
   });
  
-  const dateLabel = nextDays.length===3 ? 'Fri · Sat · Mon' : nextDays.length===2 ? 'Weekend + Mon' : 'Tomorrow';
-  const generatedAt = new Date().toLocaleString([], {weekday:'long', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  const dateLabel    = nextDays.length===3 ? 'Fri · Sat · Mon' : nextDays.length===2 ? 'Weekend + Mon' : 'Tomorrow';
+  const generatedAt  = new Date().toLocaleString([], {weekday:'long', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  const totalTravelers = soData.reduce((a,s)=>a+s.travelers.length,0);
+  const totalPhotos    = soData.filter(s=>s.soPhotos.length>0).length;
+  const totalNone      = soData.filter(s=>s.soPhotos.length===0).length;
  
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1613,73 +1615,88 @@ function generateReport(){
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#26262c;
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
   --text:#e8e6e0;--text2:#8a8880;--text3:#5a5856;
   --accent:#c8f060;--red:#ff5f5f;--amber:#ffb347;--green:#60d08a;
   --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
 }
 html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100%}
-.header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+ 
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .logo{font-size:18px;font-weight:700;letter-spacing:-0.02em}.logo span{color:var(--accent)}
-.report-title{font-size:13px;font-family:var(--mono);color:var(--text3)}
-.report-date{font-size:11px;font-family:var(--mono);color:var(--text3);margin-left:auto}
-.summary{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
-.sum-item{background:var(--surface);padding:14px 22px;flex:1}
+.report-meta{font-size:11px;font-family:var(--mono);color:var(--text3);margin-left:auto;text-align:right}
+ 
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.sum-item{background:var(--surface);padding:14px 18px}
 .sum-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px}
-.sum-val{font-size:26px;font-weight:700;letter-spacing:-0.03em}
-.sum-val.green{color:var(--green)}.sum-val.red{color:var(--red)}.sum-val.amber{color:var(--amber)}
-.container{max-width:1100px;margin:0 auto;padding:20px 16px}
-.so-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
-.so-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;transition:background 0.12s;-webkit-tap-highlight-color:rgba(200,240,96,0.08);touch-action:manipulation}
-.so-header:hover{background:var(--surface2)}
-.so-header.open{border-bottom:1px solid var(--border2)}
-.chevron{display:inline-flex;transition:transform 0.18s;color:var(--text3);flex-shrink:0}
-.chevron.open{transform:rotate(90deg)}
-.so-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)}
-.so-date{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)}
-.so-customer{font-size:13px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sum-val{font-size:24px;font-weight:700;letter-spacing:-0.03em}
+.green{color:var(--green)}.red{color:var(--red)}.amber{color:var(--amber)}
+ 
+.container{max-width:1000px;margin:0 auto;padding:16px}
+ 
+/* ── Pure CSS accordion via <details> — works everywhere including iOS Safari ── */
+details{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+details[open]{border-color:var(--border2)}
+summary{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent;flex-wrap:wrap;row-gap:6px}
+summary::-webkit-details-marker{display:none}
+summary::marker{display:none}
+summary:hover{background:var(--surface2)}
+summary:active{background:var(--surface2)}
+.chevron{width:18px;height:18px;flex-shrink:0;transition:transform 0.2s;color:var(--text3)}
+details[open] .chevron{transform:rotate(90deg)}
+.so-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text);flex-shrink:0}
+.so-date{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);flex-shrink:0}
+.so-customer{font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.so-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+ 
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:5px;font-weight:600;white-space:nowrap}
 .tg{background:rgba(96,208,138,0.10);color:#60d08a;border:1px solid rgba(96,208,138,0.2)}
 .ta{background:rgba(255,179,71,0.12);color:#ffb347;border:1px solid rgba(255,179,71,0.2)}
 .td{background:#26262c;color:#5a5856;border:1px solid rgba(255,255,255,0.07)}
-.via-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap}
+.via-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0}
 .via-truck{background:#1b2a4a;color:#a8c8f0;border:1px solid #2a3d6a}
 .via-pickup{background:#2a2010;color:#c8a84a;border:1px solid #3d3018}
 .via-install{background:#2a1a3a;color:#b090d0;border:1px solid #3d2458}
-.so-body{display:none;padding:0 16px 16px}
-.so-body.open{display:block}
-.travelers-table{width:100%;border-collapse:collapse;margin-top:12px;margin-bottom:14px}
-.travelers-table th{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.07em;text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--border2);text-align:left}
-.travelers-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);vertical-align:middle}
-.travelers-table tr:last-child td{border-bottom:none}
-.photos-section{margin-top:4px}
-.photos-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px}
+ 
+.body{padding:0 16px 16px;border-top:1px solid var(--border2)}
+table{width:100%;border-collapse:collapse;margin-top:12px;margin-bottom:14px}
+th{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.07em;text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--border2);text-align:left}
+td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+ 
+.photos-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
 .photo-grid{display:flex;flex-wrap:wrap;gap:10px}
-.photo-grid a{display:block}
-.photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);transition:all 0.15s;display:block}
-.photo-grid img:hover{border-color:var(--accent);transform:scale(1.04)}
+.photo-grid a{display:block;-webkit-tap-highlight-color:transparent}
+.photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);display:block}
 .no-photos{font-size:12px;font-family:var(--mono);color:var(--text3)}
-.footer{text-align:center;padding:32px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:20px}
+ 
+.footer{text-align:center;padding:28px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:10px}
+ 
 @media(max-width:600px){
-  .summary{flex-wrap:wrap}.sum-item{flex:1 1 45%;min-width:120px}
-  .so-customer{max-width:140px}
+  .summary{grid-template-columns:repeat(2,1fr)}
   .so-date{display:none}
+  .photo-grid img{width:90px;height:90px}
+  table{font-size:12px}
+  th,td{padding:7px 6px}
 }
 </style>
 </head>
 <body>
+ 
 <div class="header">
   <div class="logo">PROD<span>TRACK</span></div>
-  <div class="report-title">${dateLabel} shipping report · ${soData.length} orders</div>
-  <div class="report-date">Generated ${generatedAt}</div>
+  <div style="font-size:13px;font-family:var(--mono);color:var(--text3)">${dateLabel} shipping report · ${soData.length} orders</div>
+  <div class="report-meta">Generated<br>${generatedAt}</div>
 </div>
+ 
 <div class="summary">
-  <div class="sum-item"><div class="sum-label">Total orders</div><div class="sum-val amber">${soData.length}</div></div>
-  <div class="sum-item"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${soData.filter(s=>s.soPhotos.length>0).length}</div></div>
-  <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${soData.filter(s=>s.soPhotos.length===0).length}</div></div>
-  <div class="sum-item"><div class="sum-label">Total travelers</div><div class="sum-val">${soData.reduce((a,s)=>a+s.travelers.length,0)}</div></div>
+  <div class="sum-item"><div class="sum-label">Orders</div><div class="sum-val amber">${soData.length}</div></div>
+  <div class="sum-item"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
+  <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
+  <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
 </div>
+ 
 <div class="container">
 ${soData.map(s => {
   const hasPic = s.soPhotos.length > 0;
@@ -1691,58 +1708,49 @@ ${soData.map(s => {
  
   const travelerRows = s.travelers.map(o => {
     const isApp = !!approvals[o.traveler];
+    const isCus = o.item.includes('-CUS') || o.item.endsWith('CUS');
     return `<tr>
-      <td style="font-family:var(--mono);font-weight:600">${o.traveler}</td>
+      <td style="font-family:var(--mono);font-weight:700">${o.traveler}</td>
       <td>${o.desc}</td>
-      <td style="font-family:var(--mono);color:${o.item.includes('-CUS')||o.item.endsWith('CUS')?'var(--amber)':'var(--text)'};font-weight:600">${o.item}</td>
+      <td style="font-family:var(--mono);font-weight:600;color:${isCus?'var(--amber)':'var(--text)'}">${o.item}</td>
       <td style="text-align:right;font-family:var(--mono);font-weight:600">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
       <td>${isApp?'<span class="tag tg">✓ Approved</span>':'<span class="tag td">Pending</span>'}</td>
     </tr>`;
   }).join('');
  
   const photoGrid = s.soPhotos.length
-    ? `<div class="photo-grid">${s.soPhotos.map(p=>`<a href="${p.url}" target="_blank"><img src="${p.url}" loading="lazy" title="${p.filename} · ${p.uploaded_by}"></a>`).join('')}</div>`
+    ? `<div class="photo-grid">${s.soPhotos.map(p=>`<a href="${p.url}" target="_blank"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>`).join('')}</div>`
     : `<div class="no-photos">No photos uploaded yet</div>`;
  
-  return `<div class="so-card">
-  <div class="so-header" onclick="toggle(this)" ontouchstart="">
-    <span class="chevron"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
+  // Auto-open SOs with no photo
+  const openAttr = !hasPic ? ' open' : '';
+ 
+  return `<details${openAttr}>
+  <summary>
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
     <span class="so-num">${s.so}</span>
     <span class="so-date">${s.soShip}</span>
     <span class="via-pill via-${s.viaCls}">${s.viaEmoji} ${s.viaLabel}</span>
     <span class="so-customer">${s.customer}</span>
-    <span style="font-family:var(--mono);font-size:12px;color:var(--text3);margin-left:auto;flex-shrink:0">${s.travelers.length} traveler${s.travelers.length>1?'s':''}</span>
-    ${approvalTag}
-    ${picTag}
-  </div>
-  <div class="so-body">
-    <table class="travelers-table">
+    <span class="so-right">
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${s.travelers.length}t</span>
+      ${approvalTag}
+      ${picTag}
+    </span>
+  </summary>
+  <div class="body">
+    <table>
       <thead><tr><th>Traveler</th><th>Description</th><th>Item</th><th style="text-align:right">Qty</th><th>Status</th></tr></thead>
       <tbody>${travelerRows}</tbody>
     </table>
-    <div class="photos-section">
-      <div class="photos-label">Photos</div>
-      ${photoGrid}
-    </div>
+    <div class="photos-label">Photos</div>
+    ${photoGrid}
   </div>
-</div>`;
-}).join('')}
+</details>`;
+}).join('\n')}
 </div>
-<div class="footer">ProdTrack · Generated ${generatedAt} · ${soData.length} orders for ${dateLabel}</div>
-<script>
-function toggle(hdr){
-  hdr.classList.toggle('open');
-  const body=hdr.nextElementSibling;
-  body.classList.toggle('open');
-  const chev=hdr.querySelector('.chevron');
-  chev.classList.toggle('open');
-}
-// Expand all that have no photo by default
-document.querySelectorAll('.so-header').forEach(hdr=>{
-  const noPic=hdr.querySelector('.ta');
-  if(noPic){ toggle(hdr); }
-});
-<\/script>
+ 
+<div class="footer">ProdTrack · ${soData.length} orders · ${dateLabel} · ${generatedAt}</div>
 </body>
 </html>`;
  
