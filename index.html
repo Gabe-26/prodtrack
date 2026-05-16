@@ -180,9 +180,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .chevron.open{transform:rotate(90deg)}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:5px;font-weight:600;white-space:nowrap}
 .via-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap;letter-spacing:0.01em}
-.via-truck{background:#1b2a4a;color:#a8c8f0;border:1px solid #2a3d6a}
-.via-pickup{background:#2a2010;color:#c8a84a;border:1px solid #3d3018}
-.via-install{background:#2a1a3a;color:#b090d0;border:1px solid #3d2458}
+.via-truck{background:#0f2a1a;color:#60d08a;border:1px solid #1a4a2a}
+.via-interstate{background:#2a1800;color:#ffb347;border:1px solid #4a2e00}
+.via-amendolas{background:#0f1f3a;color:#60b8f0;border:1px solid #1a3060}
+.via-install{background:#1a1a1a;color:#c0b8b0;border:1px solid #333}
 .tr{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,95,95,0.2)}
 .ta{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.2)}
 .tg{background:var(--green-dim);color:var(--green);border:1px solid rgba(96,208,138,0.2)}
@@ -461,7 +462,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           <input class="search" id="search" placeholder="Search SO, traveler, item, customer..." oninput="render()">
           <select class="filt" id="f-via" onchange="render()">
             <option value="">All ship methods</option>
-            <option>OUR TRUCK</option><option>PICK UP</option><option>INSTALL/REPAIR</option>
+            <option value="OUR TRUCK">Our Truck</option>
+            <option value="PICK UP|Interstate">Pick Up Interstate</option>
+            <option value="PICK UP|Amityville">Pick Up Amendolas</option>
+            <option value="INSTALL/REPAIR">Install/Repair</option>
           </select>
           <select class="filt" id="f-date" onchange="render()">
             <option value="">All ship dates</option>
@@ -794,7 +798,7 @@ async function loadOrders(){
   orders = rows.map(r=>({
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
-    soShipRaw:r.so_ship, via:r.via, customer:r.customer
+    soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer
   }));
   // Load archived separately
   const arch = await sbGet('orders','select=*&archived=eq.true&order=so_ship.desc,so.asc');
@@ -802,7 +806,7 @@ async function loadOrders(){
   arch.forEach(r=>{
     if(!archMap[r.so]) archMap[r.so]=[];
     archMap[r.so].push({traveler:r.traveler,so:r.so,item:r.item,desc:r.description,
-      qty:r.qty,line:r.line,soShip:r.so_ship?fmtDate(r.so_ship):'',soShipRaw:r.so_ship,via:r.via,customer:r.customer});
+      qty:r.qty,line:r.line,soShip:r.so_ship?fmtDate(r.so_ship):'',soShipRaw:r.so_ship,via:r.via,location:r.location||'',customer:r.customer});
   });
   archivedOrders = Object.keys(archMap).map(so=>({so, travelers:archMap[so],
     soShip: archMap[so][0].soShip, soShipRaw: archMap[so][0].soShipRaw,
@@ -1009,6 +1013,7 @@ function parseCSV(txt){
         line:        c[16].trim(),
         so_ship:     soShipISO,
         via:         c[26].trim(),
+        location:    c[18].trim(),
         customer:    c[30].trim(),
         report_date: new Date().toISOString().slice(0,10)
       });
@@ -1117,6 +1122,16 @@ async function handleCSV(file){
  
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const isCus=o=>o.item.includes('-CUS')||o.item.endsWith('CUS');
+function makeViaTag(via, location){
+  if(via==='OUR TRUCK') return `<span class="via-pill via-truck">🚚 Our Truck</span>`;
+  if(via==='INSTALL/REPAIR') return `<span class="via-pill via-install">🔧 Install/Repair</span>`;
+  if(via==='PICK UP'){
+    const loc=(location||'').toLowerCase();
+    if(loc.includes('amityville')) return `<span class="via-pill via-amendolas">📦 Pick Up Amendolas</span>`;
+    return `<span class="via-pill via-interstate">📦 Pick Up Interstate</span>`;
+  }
+  return `<span class="via-pill via-install">${via||'—'}</span>`;
+}
 function groupBySO(list){
   const map={},ord=[];
   for(const o of list){if(!map[o.so]){map[o.so]=[];ord.push(o.so);}map[o.so].push(o);}
@@ -1248,7 +1263,15 @@ function render(){
  
   let filtered=orders.filter(o=>{
     if(activeLine&&o.line!==activeLine) return false;
-    if(via&&o.via!==via) return false;
+    if(via){
+      const [viaType, viaLoc] = via.split('|');
+      if(viaLoc){
+        if(o.via !== viaType) return false;
+        if(!o.location.toLowerCase().includes(viaLoc.toLowerCase())) return false;
+      } else {
+        if(o.via !== viaType) return false;
+      }
+    }
     if(dateF&&o.soShipRaw!==dateF) return false;
     if(activeView==='tomorrow'&&(!o.soShipRaw||!nextDays.includes(o.soShipRaw))) return false;
     if(activeView==='pending'&&photos[o.so]?.length>0) return false;
@@ -1279,11 +1302,7 @@ function render(){
     const soPhotos=photos[so]||[], hasPic=soPhotos.length>0;
     const isOpen=allExp||expanded.has(so);
     const via0=travelers[0].via, customer=travelers[0].customer, soShipRaw=travelers[0].soShipRaw;
-    const viaTag=via0==='OUR TRUCK'
-      ?`<span class="via-pill via-truck">🚚 Our Truck</span>`
-      :via0==='PICK UP'
-      ?`<span class="via-pill via-pickup">📦 Pick Up</span>`
-      :`<span class="via-pill via-install">🔧 Install/Repair</span>`;
+    const viaTag=makeViaTag(via0, travelers[0].location);
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`:`<span class="tag ta">No photo</span>`;
  
     // Approval status for SO
@@ -1592,9 +1611,12 @@ function generateReport(){
   const soData = groups.map(({so, travelers}) => {
     const soPhotos = photos[so] || [];
     const t0 = travelers[0];
-    const viaEmoji  = t0.via==='OUR TRUCK' ? '🚚' : t0.via==='PICK UP' ? '📦' : '🔧';
-    const viaLabel  = t0.via==='OUR TRUCK' ? 'Our Truck' : t0.via==='PICK UP' ? 'Pick Up' : 'Install/Repair';
-    const viaCls    = t0.via==='OUR TRUCK' ? 'truck' : t0.via==='PICK UP' ? 'pickup' : 'install';
+    const loc = t0.location||'';
+    const viaEmoji  = t0.via==='OUR TRUCK' ? '🚚' : t0.via==='INSTALL/REPAIR' ? '🔧' : '📦';
+    const viaLabel  = t0.via==='OUR TRUCK' ? 'Our Truck' : t0.via==='INSTALL/REPAIR' ? 'Install/Repair'
+      : loc.toLowerCase().includes('amityville') ? 'Pick Up Amendolas' : 'Pick Up Interstate';
+    const viaCls    = t0.via==='OUR TRUCK' ? 'truck' : t0.via==='INSTALL/REPAIR' ? 'install'
+      : loc.toLowerCase().includes('amityville') ? 'amendolas' : 'interstate';
     const approvedCount = travelers.filter(o => approvals[o.traveler]).length;
     return { so, travelers, soPhotos, customer: t0.customer, soShip: t0.soShip, viaEmoji, viaLabel, viaCls, approvedCount };
   });
@@ -1655,9 +1677,10 @@ details[open] .chevron{transform:rotate(90deg)}
 .ta{background:rgba(255,179,71,0.12);color:#ffb347;border:1px solid rgba(255,179,71,0.2)}
 .td{background:#26262c;color:#5a5856;border:1px solid rgba(255,255,255,0.07)}
 .via-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0}
-.via-truck{background:#1b2a4a;color:#a8c8f0;border:1px solid #2a3d6a}
-.via-pickup{background:#2a2010;color:#c8a84a;border:1px solid #3d3018}
-.via-install{background:#2a1a3a;color:#b090d0;border:1px solid #3d2458}
+.via-truck{background:#0f2a1a;color:#60d08a;border:1px solid #1a4a2a}
+.via-interstate{background:#2a1800;color:#ffb347;border:1px solid #4a2e00}
+.via-amendolas{background:#0f1f3a;color:#60b8f0;border:1px solid #1a3060}
+.via-install{background:#1a1a1a;color:#c0b8b0;border:1px solid #333}
  
 .body{padding:0 16px 16px;border-top:1px solid var(--border2)}
 table{width:100%;border-collapse:collapse;margin-top:12px;margin-bottom:14px}
@@ -1827,11 +1850,7 @@ function renderArchive(){
   tbody.innerHTML=filtered.map(g=>{
     const soPhotos=photos[g.so]||[];
     const hasPic=soPhotos.length>0;
-    const viaTag=g.via==='OUR TRUCK'
-      ?`<span class="via-pill via-truck">🚚 Our Truck</span>`
-      :g.via==='PICK UP'
-      ?`<span class="via-pill via-pickup">📦 Pick Up</span>`
-      :`<span class="via-pill via-install">🔧 Install/Repair</span>`;
+    const viaTag=makeViaTag(g.via, g.travelers[0]?.location||'');
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length}</span>`:`<span class="tag td">No photo</span>`;
     return `<tr class="archive-row">
       <td style="font-family:var(--mono);font-weight:600;color:var(--text)">${g.so}</td>
