@@ -1629,12 +1629,39 @@ function closeLB(){ document.getElementById('lightbox').classList.remove('open')
 document.getElementById('lightbox').addEventListener('click',e=>{if(e.target===document.getElementById('lightbox')) closeLB();});
  
 // ── Share report ──────────────────────────────────────────────────────────────
-function generateReport(){
+async function generateReport(){
   const nextDays = getNextWorkingDays();
   const tomorrowOrders = orders.filter(o => o.soShipRaw && nextDays.includes(o.soShipRaw));
   const groups = groupBySO(tomorrowOrders);
  
   if(!groups.length){ toast('No orders','No orders found for tomorrow.','amber'); return; }
+ 
+  // Show progress toast
+  const totalPhotosCount = groups.reduce((a,{so})=>a+(photos[so]||[]).length,0);
+  toast('Building report', `Embedding ${totalPhotosCount} photo${totalPhotosCount!==1?'s':''}… please wait`, 'amber');
+ 
+  // Pre-fetch all photos as base64
+  async function toBase64(url){
+    try{
+      const r = await fetch(url);
+      if(!r.ok) return null;
+      const blob = await r.blob();
+      return await new Promise(res=>{
+        const fr = new FileReader();
+        fr.onload = ()=>res(fr.result);
+        fr.onerror = ()=>res(null);
+        fr.readAsDataURL(blob);
+      });
+    } catch(e){ return null; }
+  }
+ 
+  // Build base64 map: url -> base64 string
+  const b64map = {};
+  const allPhotoUrls = groups.flatMap(({so})=>(photos[so]||[]).map(p=>p.url));
+  await Promise.all(allPhotoUrls.map(async url=>{
+    const b64 = await toBase64(url);
+    if(b64) b64map[url] = b64;
+  }));
  
   const soData = groups.map(({so, travelers}) => {
     const soPhotos = photos[so] || [];
@@ -1779,9 +1806,9 @@ ${soData.map(s => {
  
   const photoGrid = s.soPhotos.length
     ? `<div class="photo-grid">${s.soPhotos.map((p,i)=>{
-        const src = p.url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        const name = p.filename.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        return `<a href="javascript:openLB('${src}','${name}')" style="display:block;-webkit-tap-highlight-color:transparent"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>`;
+        const src = b64map[p.url] || p.url;
+        const idx = allPhotoUrls.indexOf(p.url);
+        return `<a href="javascript:openLBIdx(${idx})" style="display:block;-webkit-tap-highlight-color:transparent"><img src="${src}" loading="lazy" alt="${p.filename}"></a>`;
       }).join('')}</div>`
     : `<div class="no-photos">No photos uploaded yet</div>`;
  
@@ -1823,9 +1850,15 @@ ${soData.map(s => {
 </div>
  
 <script>
-function openLB(src,name){
-  document.getElementById('lb-img').src=src;
-  document.getElementById('lb-cap').textContent=name;
+var PHOTOS=${JSON.stringify(allPhotoUrls.map(url=>({
+  src: b64map[url]||url,
+  name: groups.flatMap(({so})=>photos[so]||[]).find(p=>p.url===url)?.filename||''
+})))};
+function openLBIdx(i){
+  var p=PHOTOS[i];
+  if(!p) return;
+  document.getElementById('lb-img').src=p.src;
+  document.getElementById('lb-cap').textContent=p.name;
   document.getElementById('lb').classList.add('open');
   document.body.style.overflow='hidden';
 }
