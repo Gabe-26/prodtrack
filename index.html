@@ -1729,7 +1729,7 @@ tr:last-child td{border-bottom:none}
 .lb-overlay.open{display:flex}
 .lb-overlay > img{max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom}
 .lb-caption{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);text-align:center;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-close-btn{position:absolute;top:12px;right:12px;font-size:22px;color:#fff;background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:44px;height:44px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;font-family:sans-serif}
+.lb-close-btn{position:absolute;top:12px;right:12px;font-size:22px;color:#fff;background:rgba(255,255,255,0.2);border-radius:50%;width:44px;height:44px;z-index:2;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;text-decoration:none;font-family:sans-serif}
 .photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);display:block;cursor:pointer;-webkit-tap-highlight-color:rgba(200,240,96,0.2)}
  
 @media(max-width:600px){
@@ -1778,10 +1778,10 @@ ${soData.map(s => {
   }).join('');
  
   const photoGrid = s.soPhotos.length
-    ? `<div class="photo-grid">${s.soPhotos.map((p)=>{
+    ? `<div class="photo-grid">${s.soPhotos.map((p,i)=>{
         const src = p.url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
         const name = p.filename.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        return `<img src="${p.url}" loading="lazy" alt="${p.filename}" ontouchstart="" onclick="openLB('${src}','${name}')">`;
+        return `<a href="javascript:openLB('${src}','${name}')" style="display:block;-webkit-tap-highlight-color:transparent"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>`;
       }).join('')}</div>`
     : `<div class="no-photos">No photos uploaded yet</div>`;
  
@@ -1815,10 +1815,11 @@ ${soData.map(s => {
  
 <div class="footer">ProdTrack · ${soData.length} orders · ${dateLabel} · ${generatedAt}</div>
  
-<div class="lb-overlay" id="lb" ontouchstart="" onclick="closeLB()">
-  <button class="lb-close-btn" onclick="closeLB()">✕</button>
-  <img id="lb-img" src="" alt="" onclick="event.stopPropagation()">
-  <div class="lb-caption" id="lb-cap"></div>
+<div class="lb-overlay" id="lb">
+  <a href="javascript:closeLB()" class="lb-close-btn">✕</a>
+  <a href="javascript:closeLB()" style="position:absolute;inset:0;z-index:0;display:block"></a>
+  <img id="lb-img" src="" alt="" style="position:relative;z-index:1;max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom">
+  <div class="lb-caption" id="lb-cap" style="position:relative;z-index:1"></div>
 </div>
  
 <script>
