@@ -1629,39 +1629,11 @@ function closeLB(){ document.getElementById('lightbox').classList.remove('open')
 document.getElementById('lightbox').addEventListener('click',e=>{if(e.target===document.getElementById('lightbox')) closeLB();});
  
 // ── Share report ──────────────────────────────────────────────────────────────
-async function generateReport(){
+function generateReport(){
   const nextDays = getNextWorkingDays();
   const tomorrowOrders = orders.filter(o => o.soShipRaw && nextDays.includes(o.soShipRaw));
   const groups = groupBySO(tomorrowOrders);
- 
   if(!groups.length){ toast('No orders','No orders found for tomorrow.','amber'); return; }
- 
-  // Show progress toast
-  const totalPhotosCount = groups.reduce((a,{so})=>a+(photos[so]||[]).length,0);
-  toast('Building report', `Embedding ${totalPhotosCount} photo${totalPhotosCount!==1?'s':''}… please wait`, 'amber');
- 
-  // Pre-fetch all photos as base64
-  async function toBase64(url){
-    try{
-      const r = await fetch(url);
-      if(!r.ok) return null;
-      const blob = await r.blob();
-      return await new Promise(res=>{
-        const fr = new FileReader();
-        fr.onload = ()=>res(fr.result);
-        fr.onerror = ()=>res(null);
-        fr.readAsDataURL(blob);
-      });
-    } catch(e){ return null; }
-  }
- 
-  // Build base64 map: url -> base64 string
-  const b64map = {};
-  const allPhotoUrls = groups.flatMap(({so})=>(photos[so]||[]).map(p=>p.url));
-  await Promise.all(allPhotoUrls.map(async url=>{
-    const b64 = await toBase64(url);
-    if(b64) b64map[url] = b64;
-  }));
  
   const soData = groups.map(({so, travelers}) => {
     const soPhotos = photos[so] || [];
@@ -1676,11 +1648,14 @@ async function generateReport(){
     return { so, travelers, soPhotos, customer: t0.customer, soShip: t0.soShip, viaEmoji, viaLabel, viaCls, approvedCount };
   });
  
-  const dateLabel    = nextDays.length===3 ? 'Fri · Sat · Mon' : nextDays.length===2 ? 'Weekend + Mon' : 'Tomorrow';
-  const generatedAt  = new Date().toLocaleString([], {weekday:'long', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  const dateLabel   = nextDays.length===3 ? 'Fri · Sat · Mon' : nextDays.length===2 ? 'Weekend + Mon' : 'Tomorrow';
+  const generatedAt = new Date().toLocaleString([], {weekday:'long', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
   const totalTravelers = soData.reduce((a,s)=>a+s.travelers.length,0);
   const totalPhotos    = soData.filter(s=>s.soPhotos.length>0).length;
   const totalNone      = soData.filter(s=>s.soPhotos.length===0).length;
+ 
+  // Build flat photo list for lightbox index lookup
+  const allPhotos = soData.flatMap(s=>s.soPhotos.map(p=>({src:p.url,name:p.filename})));
  
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1698,35 +1673,28 @@ async function generateReport(){
   --accent:#c8f060;--red:#ff5f5f;--amber:#ffb347;--green:#60d08a;
   --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
 }
-html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100%}
- 
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5}
 .header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .logo{font-size:18px;font-weight:700;letter-spacing:-0.02em}.logo span{color:var(--accent)}
 .report-meta{font-size:11px;font-family:var(--mono);color:var(--text3);margin-left:auto;text-align:right}
- 
 .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
 .sum-item{background:var(--surface);padding:14px 18px}
 .sum-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px}
 .sum-val{font-size:24px;font-weight:700;letter-spacing:-0.03em}
 .green{color:var(--green)}.red{color:var(--red)}.amber{color:var(--amber)}
- 
 .container{max-width:1000px;margin:0 auto;padding:16px}
- 
-/* ── Pure CSS accordion via <details> — works everywhere including iOS Safari ── */
 details{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
 details[open]{border-color:var(--border2)}
-summary{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent;flex-wrap:wrap;row-gap:6px}
+summary{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent;flex-wrap:wrap;row-gap:6px;user-select:none}
 summary::-webkit-details-marker{display:none}
 summary::marker{display:none}
-summary:hover{background:var(--surface2)}
 summary:active{background:var(--surface2)}
-.chevron{width:18px;height:18px;flex-shrink:0;transition:transform 0.2s;color:var(--text3)}
+.chevron{width:16px;height:16px;flex-shrink:0;transition:transform 0.2s;color:var(--text3)}
 details[open] .chevron{transform:rotate(90deg)}
 .so-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text);flex-shrink:0}
 .so-date{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);flex-shrink:0}
 .so-customer{font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .so-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
- 
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:5px;font-weight:600;white-space:nowrap}
 .tg{background:rgba(96,208,138,0.10);color:#60d08a;border:1px solid rgba(96,208,138,0.2)}
 .ta{background:rgba(255,179,71,0.12);color:#ffb347;border:1px solid rgba(255,179,71,0.2)}
@@ -1736,65 +1704,54 @@ details[open] .chevron{transform:rotate(90deg)}
 .via-interstate{background:#2a1800;color:#ffb347;border:1px solid #4a2e00}
 .via-amendolas{background:#0f1f3a;color:#60b8f0;border:1px solid #1a3060}
 .via-install{background:#1a1a1a;color:#c0b8b0;border:1px solid #333}
- 
 .body{padding:0 16px 16px;border-top:1px solid var(--border2)}
 table{width:100%;border-collapse:collapse;margin-top:12px;margin-bottom:14px}
 th{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.07em;text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--border2);text-align:left}
 td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);vertical-align:middle}
 tr:last-child td{border-bottom:none}
- 
 .photos-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
 .photo-grid{display:flex;flex-wrap:wrap;gap:10px}
-.photo-grid a{display:block;-webkit-tap-highlight-color:transparent}
-.photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);display:block}
+.photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.13);display:block;cursor:pointer}
 .no-photos{font-size:12px;font-family:var(--mono);color:var(--text3)}
- 
 .footer{text-align:center;padding:28px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:10px}
- 
-/* ── CSS-only lightbox ── */
-.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:16px}
-.lb-overlay.open{display:flex}
-.lb-overlay > img{max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom}
-.lb-caption{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);text-align:center;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-close-btn{position:absolute;top:12px;right:12px;font-size:22px;color:#fff;background:rgba(255,255,255,0.2);border-radius:50%;width:44px;height:44px;z-index:2;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;text-decoration:none;font-family:sans-serif}
-.photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);display:block;cursor:pointer;-webkit-tap-highlight-color:rgba(200,240,96,0.2)}
- 
+/* Lightbox */
+#lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:999;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+#lb.open{display:flex}
+#lb img{max-width:95vw;max-height:82vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom}
+#lb-cap{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.4);margin-top:10px;text-align:center;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#lb-close{position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.15);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;font-family:sans-serif}
+#lb-bg{position:absolute;inset:0}
 @media(max-width:600px){
   .summary{grid-template-columns:repeat(2,1fr)}
   .so-date{display:none}
-  .photo-grid img{width:90px;height:90px}
-  table{font-size:12px}
-  th,td{padding:7px 6px}
+  .photo-grid img{width:85px;height:85px}
+  table{font-size:12px}th,td{padding:6px 8px}
 }
 </style>
 </head>
 <body>
- 
 <div class="header">
   <div class="logo">PROD<span>TRACK</span></div>
-  <div style="font-size:13px;font-family:var(--mono);color:var(--text3)">${dateLabel} shipping report · ${soData.length} orders</div>
+  <div style="font-size:13px;font-family:var(--mono);color:var(--text3)">${dateLabel} · ${soData.length} orders</div>
   <div class="report-meta">Generated<br>${generatedAt}</div>
 </div>
- 
 <div class="summary">
   <div class="sum-item"><div class="sum-label">Orders</div><div class="sum-val amber">${soData.length}</div></div>
   <div class="sum-item"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
   <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
   <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
 </div>
- 
 <div class="container">
 ${soData.map(s => {
   const hasPic = s.soPhotos.length > 0;
   const picTag = hasPic
     ? `<span class="tag tg">✓ ${s.soPhotos.length} photo${s.soPhotos.length>1?'s':''}</span>`
     : `<span class="tag ta">No photo</span>`;
-  const approvalTag = s.approvedCount === s.travelers.length && s.travelers.length > 0
+  const approvalTag = s.approvedCount===s.travelers.length && s.travelers.length>0
     ? `<span class="tag tg">✓ Approved</span>` : '';
- 
-  const travelerRows = s.travelers.map(o => {
-    const isApp = !!approvals[o.traveler];
-    const isCus = o.item.includes('-CUS') || o.item.endsWith('CUS');
+  const travelerRows = s.travelers.map(o=>{
+    const isApp=!!approvals[o.traveler];
+    const isCus=o.item.includes('-CUS')||o.item.endsWith('CUS');
     return `<tr>
       <td style="font-family:var(--mono);font-weight:700">${o.traveler}</td>
       <td>${o.desc}</td>
@@ -1803,71 +1760,43 @@ ${soData.map(s => {
       <td>${isApp?'<span class="tag tg">✓ Approved</span>':'<span class="tag td">Pending</span>'}</td>
     </tr>`;
   }).join('');
- 
-  const photoGrid = s.soPhotos.length
-    ? `<div class="photo-grid">${s.soPhotos.map((p,i)=>{
-        const src = b64map[p.url] || p.url;
-        const idx = allPhotoUrls.indexOf(p.url);
-        return `<a href="javascript:openLBIdx(${idx})" style="display:block;-webkit-tap-highlight-color:transparent"><img src="${src}" loading="lazy" alt="${p.filename}"></a>`;
-      }).join('')}</div>`
-    : `<div class="no-photos">No photos uploaded yet</div>`;
- 
-  // Auto-open SOs with no photo
-  const openAttr = !hasPic ? ' open' : '';
- 
-  return `<details${openAttr}>
+  const photoItems = s.soPhotos.map(p=>{
+    const idx = allPhotos.findIndex(x=>x.src===p.url);
+    return `<img src="${p.url}" loading="lazy" alt="${p.filename}" onclick="lb(${idx})">`;
+  }).join('');
+  const photoSection = hasPic ? `<div class="photo-grid">${photoItems}</div>` : `<div class="no-photos">No photos uploaded yet</div>`;
+  return `<details${!hasPic?' open':''}>
   <summary>
     <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
     <span class="so-num">${s.so}</span>
     <span class="so-date">${s.soShip}</span>
     <span class="via-pill via-${s.viaCls}">${s.viaEmoji} ${s.viaLabel}</span>
     <span class="so-customer">${s.customer}</span>
-    <span class="so-right">
-      <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${s.travelers.length}t</span>
-      ${approvalTag}
-      ${picTag}
-    </span>
+    <span class="so-right">${approvalTag}${picTag}</span>
   </summary>
   <div class="body">
-    <table>
-      <thead><tr><th>Traveler</th><th>Description</th><th>Item</th><th style="text-align:right">Qty</th><th>Status</th></tr></thead>
-      <tbody>${travelerRows}</tbody>
-    </table>
+    <table><thead><tr><th>Traveler</th><th>Description</th><th>Item</th><th style="text-align:right">Qty</th><th>Status</th></tr></thead>
+    <tbody>${travelerRows}</tbody></table>
     <div class="photos-label">Photos</div>
-    ${photoGrid}
+    ${photoSection}
   </div>
 </details>`;
 }).join('\n')}
 </div>
- 
 <div class="footer">ProdTrack · ${soData.length} orders · ${dateLabel} · ${generatedAt}</div>
  
-<div class="lb-overlay" id="lb">
-  <a href="javascript:closeLB()" class="lb-close-btn">✕</a>
-  <a href="javascript:closeLB()" style="position:absolute;inset:0;z-index:0;display:block"></a>
-  <img id="lb-img" src="" alt="" style="position:relative;z-index:1;max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom">
-  <div class="lb-caption" id="lb-cap" style="position:relative;z-index:1"></div>
+<div id="lb">
+  <div id="lb-bg" onclick="clb()"></div>
+  <a id="lb-close" onclick="clb()">✕</a>
+  <img id="lb-img" src="" alt="">
+  <div id="lb-cap"></div>
 </div>
  
 <script>
-var PHOTOS=${JSON.stringify(allPhotoUrls.map(url=>({
-  src: b64map[url]||url,
-  name: groups.flatMap(({so})=>photos[so]||[]).find(p=>p.url===url)?.filename||''
-})))};
-function openLBIdx(i){
-  var p=PHOTOS[i];
-  if(!p) return;
-  document.getElementById('lb-img').src=p.src;
-  document.getElementById('lb-cap').textContent=p.name;
-  document.getElementById('lb').classList.add('open');
-  document.body.style.overflow='hidden';
-}
-function closeLB(){
-  document.getElementById('lb').classList.remove('open');
-  document.getElementById('lb-img').src='';
-  document.body.style.overflow='';
-}
-document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLB();});
+var P=${JSON.stringify(allPhotos)};
+function lb(i){var p=P[i];if(!p)return;document.getElementById('lb-img').src=p.src;document.getElementById('lb-cap').textContent=p.name;document.getElementById('lb').classList.add('open');document.body.style.overflow='hidden';}
+function clb(){document.getElementById('lb').classList.remove('open');document.getElementById('lb-img').src='';document.body.style.overflow='';}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')clb();});
 <\/script>
 </body>
 </html>`;
@@ -1875,13 +1804,11 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLB();})
   const blob = new Blob([html], {type:'text/html'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  const dateStr = new Date().toISOString().slice(0,10);
-  a.download = `prodtrack-report-${dateStr}.html`;
+  a.download = `prodtrack-report-${new Date().toISOString().slice(0,10)}.html`;
   a.click();
   URL.revokeObjectURL(a.href);
-  toast('Report downloaded', `${soData.length} orders · open the HTML file to share`, 'green');
+  toast('Report downloaded', `${soData.length} orders · share the HTML file`, 'green');
 }
- 
 // ── Archive ───────────────────────────────────────────────────────────────────
 async function archiveByDate(){
   if(currentProfile?.role!=='manager'){toast('Access denied','Only managers can archive.','red');return;}
