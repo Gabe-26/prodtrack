@@ -1727,12 +1727,10 @@ tr:last-child td{border-bottom:none}
 /* ── CSS-only lightbox ── */
 .lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:16px}
 .lb-overlay.open{display:flex}
-.lb-overlay img{width:calc(100vw - 32px);height:calc(100vh - 100px);object-fit:contain;border-radius:8px;touch-action:pinch-zoom;-webkit-user-select:none;user-select:none}
+.lb-overlay > img{max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom}
 .lb-caption{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);text-align:center;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-close-btn{position:absolute;top:12px;right:12px;font-size:22px;color:#fff;background:rgba(255,255,255,0.15);border:none;border-radius:50%;width:40px;height:40px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
-.lb-bg{position:absolute;inset:0;z-index:0}
-.photo-grid button{background:none;border:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;display:block}
-.photo-grid button img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);display:block}
+.lb-close-btn{position:absolute;top:12px;right:12px;font-size:22px;color:#fff;background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:44px;height:44px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;font-family:sans-serif}
+.photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);display:block;cursor:pointer;-webkit-tap-highlight-color:rgba(200,240,96,0.2)}
  
 @media(max-width:600px){
   .summary{grid-template-columns:repeat(2,1fr)}
@@ -1781,7 +1779,9 @@ ${soData.map(s => {
  
   const photoGrid = s.soPhotos.length
     ? `<div class="photo-grid">${s.soPhotos.map((p)=>{
-        return `<button onclick="openLB('${p.url.replace(/'/g,"\\'")}','${p.filename.replace(/'/g,"\\'")}')"><img src="${p.url}" loading="lazy" alt="${p.filename}"></button>`;
+        const src = p.url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const name = p.filename.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return `<img src="${p.url}" loading="lazy" alt="${p.filename}" ontouchstart="" onclick="openLB('${src}','${name}')">`;
       }).join('')}</div>`
     : `<div class="no-photos">No photos uploaded yet</div>`;
  
@@ -1815,21 +1815,17 @@ ${soData.map(s => {
  
 <div class="footer">ProdTrack · ${soData.length} orders · ${dateLabel} · ${generatedAt}</div>
  
-<div class="lb-overlay" id="lb">
-  <button class="lb-bg" onclick="closeLB()"></button>
+<div class="lb-overlay" id="lb" ontouchstart="" onclick="closeLB()">
   <button class="lb-close-btn" onclick="closeLB()">✕</button>
-  <img id="lb-img" src="" alt="">
+  <img id="lb-img" src="" alt="" onclick="event.stopPropagation()">
   <div class="lb-caption" id="lb-cap"></div>
 </div>
  
 <script>
-function openLB(src, name){
-  var lb=document.getElementById('lb');
-  var img=document.getElementById('lb-img');
-  var cap=document.getElementById('lb-cap');
-  img.src=src;
-  cap.textContent=name;
-  lb.classList.add('open');
+function openLB(src,name){
+  document.getElementById('lb-img').src=src;
+  document.getElementById('lb-cap').textContent=name;
+  document.getElementById('lb').classList.add('open');
   document.body.style.overflow='hidden';
 }
 function closeLB(){
@@ -1837,7 +1833,7 @@ function closeLB(){
   document.getElementById('lb-img').src='';
   document.body.style.overflow='';
 }
-document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeLB(); });
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLB();});
 <\/script>
 </body>
 </html>`;
