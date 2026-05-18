@@ -1711,12 +1711,6 @@ tr:last-child td{border-bottom:none}
 .photo-grid img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.13);display:block;cursor:pointer}
 .no-photos{font-size:12px;font-family:var(--mono);color:var(--text3)}
 .footer{text-align:center;padding:28px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:10px}
-/* Lightbox — pure CSS :target, works on all iOS Safari */
-.lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:999;align-items:center;justify-content:center}
-.lb:target{display:flex}
-.lb img{max-width:100vw;max-height:100vh;object-fit:contain;touch-action:pinch-zoom;display:block}
-.lb-x{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.18);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-family:sans-serif;z-index:2}
-.lb-bg{position:absolute;inset:0;z-index:0;display:block}
 .photo-grid a{display:block;-webkit-tap-highlight-color:rgba(255,255,255,0.1)}
 .photo-grid a img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.13);display:block}
 @media(max-width:600px){
@@ -1759,13 +1753,7 @@ ${soData.map(s => {
     </tr>`;
   }).join('');
   const photoItems = s.soPhotos.map((p,i)=>{
-    const id = `p${s.so}-${i}`;
-    return `<a href="#${id}"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>
-<div class="lb" id="${id}">
-  <a class="lb-bg" href="#_"></a>
-  <a class="lb-x" href="#_">✕</a>
-  <img src="${p.url}" alt="${p.filename}">
-</div>`;
+    return `<a href="${p.url}" target="_blank"><img src="${p.url}" loading="lazy" alt="${p.filename}"></a>`;
   }).join('');
   const photoSection = hasPic ? `<div class="photo-grid">${photoItems}</div>` : `<div class="no-photos">No photos uploaded yet</div>`;
   return `<details${!hasPic?' open':''}>
