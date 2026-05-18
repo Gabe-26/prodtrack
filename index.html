@@ -98,6 +98,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .topbar{padding:0 12px;gap:8px;flex-shrink:0}
   .menu-btn{display:flex}
   .topbar-right .btn:not(.primary){display:none}
+  /* Keep Share report visible on mobile, compact */
+  #share-report-btn{display:inline-flex!important;padding:6px 8px;font-size:11px}
+  #share-report-btn svg{width:13px;height:13px}
+  /* Hide refresh button on mobile to save space (auto-refresh still works) */
+  #refresh-btn{display:none!important}
   .btn.primary{padding:6px 10px;font-size:11px}
   .sidebar{position:fixed;top:0;left:-290px;bottom:0;width:290px;z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
@@ -105,7 +110,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .toolbar{padding:8px 10px;gap:6px}
   .search{font-size:13px}
   select.filt{font-size:11px;padding:5px 6px}
-  .xbtn{display:none}
+  .xbtn{display:inline-flex;font-size:11px;padding:6px 9px}
  
   /* Show ship via col, hide travelers col on mobile */
   thead th:nth-child(5){display:none}
