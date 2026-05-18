@@ -1867,6 +1867,8 @@ function renderArchive(){
 function sv(v){
   activeView=v;
   const showMain=['tomorrow','all','pending','done'].includes(v);
+  const df=document.getElementById('f-date');
+  if(df) df.style.display=v==='tomorrow'?'none':'inline-block';
   document.getElementById('view-main').style.display=showMain?'flex':'none';
   document.getElementById('view-datechanges').style.display=v==='datechanges'?'flex':'none';
   document.getElementById('view-upload').style.display=v==='upload'?'flex':'none';
