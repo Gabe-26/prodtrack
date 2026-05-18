@@ -1293,11 +1293,12 @@ function render(){
     if(activeLine&&o.line!==activeLine) return false;
     if(via){
       const [viaType, viaLoc] = via.split('|');
-      if(viaLoc){
-        if(o.via !== viaType) return false;
-        if(!o.location.toLowerCase().includes(viaLoc.toLowerCase())) return false;
-      } else {
-        if(o.via !== viaType) return false;
+      if(o.via !== viaType) return false;
+      if(viaLoc === 'Amityville'){
+        if(!o.location.toLowerCase().includes('amityville')) return false;
+      } else if(viaLoc === 'Interstate'){
+        // Interstate = PICK UP where location is NOT amityville (mirrors makeViaTag)
+        if(o.location.toLowerCase().includes('amityville')) return false;
       }
     }
     if(dateF&&o.soShipRaw!==dateF) return false;
