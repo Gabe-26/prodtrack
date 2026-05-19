@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ProdTrack</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#26262c;
@@ -15,10 +15,10 @@
   --amber:#ffb347;--amber-dim:rgba(255,179,71,0.12);
   --blue:#60b8f0;--blue-dim:rgba(96,184,240,0.12);
   --green:#60d08a;--green-dim:rgba(96,208,138,0.10);
-  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden;font-variant-numeric:tabular-nums}
 .app{display:grid;grid-template-rows:auto 1fr;height:100dvh}
  
 /* ── Login ─────────────────────────────────────────────────────────────────── */
@@ -221,7 +221,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .tg{background:var(--green-dim);color:var(--green);border:1px solid rgba(96,208,138,0.2)}
 .tb{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,184,240,0.2)}
 .td{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
-.mono{font-family:var(--mono);font-size:12px}
+.mono{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
 .appr-check{display:none}
  
 /* ── Archive view ──────────────────────────────────────────────────────────── */
@@ -1669,7 +1669,7 @@ function generateReport(){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProdTrack — ${dateLabel} Report</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1677,7 +1677,7 @@ function generateReport(){
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
   --text:#e8e6e0;--text2:#8a8880;--text3:#5a5856;
   --accent:#c8f060;--red:#ff5f5f;--amber:#ffb347;--green:#60d08a;
-  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
 }
 html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5}
 .header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -1960,3 +1960,6 @@ document.addEventListener('keydown',e=>{
 </script>
 </body>
 </html>
+
+
+
