@@ -390,6 +390,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <option value="worker">Worker — can view orders and upload photos</option>
         <option value="manager">Manager — can also upload CSV and manage users</option>
         <option value="viewer">Viewer — can only view orders and photos, no uploads</option>
+        <option value="production">Production — can view orders/photos and change ship dates</option>
       </select>
     </div>
     <div class="modal-err" id="nu-err"></div>
@@ -411,6 +412,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     <div class="pill" id="last-pill" style="display:none"></div>
     <div class="pill mgr" id="mgr-pill" style="display:none">Manager</div>
     <div class="pill" id="viewer-pill" style="display:none;border-color:var(--text3);color:var(--text3)">Viewer</div>
+    <div class="pill" id="prod-pill" style="display:none;border-color:var(--amber);color:var(--amber)">Production</div>
     <div class="topbar-right">
       <button class="btn" onclick="refreshData()" id="refresh-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
@@ -627,6 +629,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
             <option value="photo_delete">Photo deletions</option>
             <option value="approved">Approvals</option>
             <option value="unapproved">Approvals removed</option>
+            <option value="date_change">Date changes</option>
           </select>
           <span style="margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text3)" id="log-count"></span>
         </div>
@@ -730,27 +733,28 @@ async function loadProfile(){
 function showApp(){
   document.getElementById('login-screen').classList.add('hide');
   document.getElementById('main-app').style.display='grid';
-  const isMgr = currentProfile?.role === 'manager';
+  const isMgr  = currentProfile?.role === 'manager';
   const isWorker = currentProfile?.role === 'worker';
   const isViewer = currentProfile?.role === 'viewer';
+  const isProd = currentProfile?.role === 'production';
   const name  = currentProfile?.full_name || '?';
   const uname = currentProfile?.username || '?';
   document.getElementById('u-name').textContent = name;
-  document.getElementById('u-role-label').textContent = isMgr ? 'Manager' : isViewer ? 'Viewer' : 'Worker';
+  document.getElementById('u-role-label').textContent = isMgr ? 'Manager' : isViewer ? 'Viewer' : isProd ? 'Production' : 'Worker';
   document.getElementById('u-avatar').textContent = name.charAt(0);
-  document.getElementById('mgr-pill').style.display = isMgr ? 'inline-flex' : 'none';
+  document.getElementById('mgr-pill').style.display   = isMgr  ? 'inline-flex' : 'none';
   document.getElementById('viewer-pill').style.display = isViewer ? 'inline-flex' : 'none';
-  document.getElementById('top-upload-btn').style.display = isMgr ? 'inline-flex' : 'none';
+  document.getElementById('prod-pill').style.display   = isProd ? 'inline-flex' : 'none';
+  // Manager-only UI
+  document.getElementById('top-upload-btn').style.display  = isMgr ? 'inline-flex' : 'none';
   document.getElementById('share-report-btn').style.display = isMgr ? 'inline-flex' : 'none';
-  document.getElementById('nav-upload').style.display = isMgr ? 'flex' : 'none';
-  document.getElementById('nav-users').style.display = isMgr ? 'flex' : 'none';
+  document.getElementById('nav-upload').style.display  = isMgr ? 'flex' : 'none';
+  document.getElementById('nav-users').style.display   = isMgr ? 'flex' : 'none';
   document.getElementById('nav-archive').style.display = isMgr ? 'flex' : 'none';
-  // Manager = can delete photos; Worker/Viewer = cannot
-  if(isMgr) document.body.classList.add('manager');
-  else document.body.classList.remove('manager');
-  // Viewer = hide photo upload zone
-  if(isViewer) document.body.classList.add('viewer');
-  else document.body.classList.remove('viewer');
+  // Body classes drive CSS permissions
+  document.body.classList.toggle('manager',    isMgr);
+  document.body.classList.toggle('viewer',     isViewer || isProd); // production = no photo upload
+  document.body.classList.toggle('can-edit-date', isMgr || isProd || uname === 'zgta26');
   loadAll();
 }
  
@@ -761,6 +765,7 @@ async function doLogout(){
   clearInterval(refreshTimer); clearInterval(countdownTimer);
   document.body.classList.remove('manager');
   document.body.classList.remove('viewer');
+  document.body.classList.remove('can-edit-date');
   document.getElementById('main-app').style.display='none';
   document.getElementById('login-screen').classList.remove('hide');
   document.getElementById('li-pass').value='';
@@ -875,23 +880,26 @@ async function loadUsers(){
 function renderUsers(){
   const list = document.getElementById('users-list');
   if(!allUsers.length){ list.innerHTML='<div class="empty"><div class="empty-title">No users yet</div></div>'; return; }
+  const roleOrder = ['manager','worker','production','viewer'];
+  const roleLabel = {manager:'Manager', worker:'Worker', production:'Production', viewer:'Viewer'};
+  const roleCls   = {manager:'tb', worker:'td', production:'ta', viewer:'td'};
+  const roleNext  = {manager:'worker', worker:'production', production:'viewer', viewer:'manager'};
+  const roleNextLabel = {manager:'→ Worker', worker:'→ Production', production:'→ Viewer', viewer:'→ Manager'};
   list.innerHTML = allUsers.map(u => {
-    const isMgr = u.role==='manager';
-    const isViewer = u.role==='viewer';
+    const role = u.role || 'worker';
+    const isMgr = role === 'manager';
     const uname = u.username || fromEmail(u.email||'');
     const isMe = u.id === currentUser?.id;
-    const avatarCls = isMgr?'mgr':isViewer?'':'wrk';
-    const nextRole = isMgr ? 'worker' : isViewer ? 'manager' : 'viewer';
-    const nextLabel = isMgr ? '→ Worker' : isViewer ? '→ Manager' : '→ Viewer';
+    const avatarCls = isMgr ? 'mgr' : role === 'worker' ? 'wrk' : '';
     return `<div class="user-card">
       <div class="uc-avatar ${avatarCls}">${(u.full_name||'?').charAt(0)}</div>
       <div class="uc-info">
         <div class="uc-name">${u.full_name||'—'} ${isMe?'<span class="tag td">you</span>':''}</div>
-        <div class="uc-username">@${uname} · <span class="tag ${isMgr?'tb':isViewer?'td':'td'}">${isMgr?'Manager':isViewer?'Viewer':'Worker'}</span></div>
+        <div class="uc-username">@${uname} · <span class="tag ${roleCls[role]||'td'}">${roleLabel[role]||role}</span></div>
       </div>
       <div class="uc-actions">
-        <button class="btn" onclick="toggleRole('${u.id}','${u.role}')" title="Change role to ${nextRole}">
-          ${nextLabel}
+        <button class="btn" onclick="toggleRole('${u.id}','${role}')" title="Change role to ${roleNext[role]}">
+          ${roleNextLabel[role]}
         </button>
         ${!isMe?`<button class="btn danger" onclick="askDeleteUser('${u.id}','${u.full_name||uname}')">Remove</button>`:''}
       </div>
@@ -900,11 +908,12 @@ function renderUsers(){
 }
  
 async function toggleRole(userId, currentRole){
-  const newRole = currentRole==='manager' ? 'worker' : currentRole==='worker' ? 'viewer' : 'manager';
+  const cycle = {manager:'worker', worker:'production', production:'viewer', viewer:'manager'};
+  const newRole = cycle[currentRole] || 'worker';
   try{
     await sbUpdate('profiles', userId, {role: newRole});
     await loadUsers();
-    toast('Role updated', `User is now a ${newRole}.`, 'green');
+    toast('Role updated', `User is now ${newRole}.`, 'green');
   } catch(e){ toast('Error', e.message, 'red'); }
 }
  
@@ -1344,13 +1353,23 @@ function render(){
       ? `<span class="tag td appr-full" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span><span class="appr-check tag td" style="display:none;margin-left:4px">${approvedTravelers.length}/${travelers.length}</span>`
       : '';
  
+    const canEditDate = document.body.classList.contains('can-edit-date');
+    const dateCell = canEditDate
+      ? `<td onclick="event.stopPropagation();openDatePicker('${so}','${soShipRaw||''}',this)">
+           <div style="display:flex;align-items:center;gap:6px;cursor:pointer;width:fit-content" title="Click to change ship date">
+             <span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span>
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2" style="flex-shrink:0"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+           </div>
+         </td>`
+      : `<td><span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span></td>`;
+ 
     html+=`<tr class="so-row ${hasPic?'done':'pending'}" onclick="toggleSO('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
         ${approvalBadge}
       </div></td>
-      <td><span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span></td>
+      ${dateCell}
       <td>${viaTag}</td>
       <td style="color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${customer}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${travelers.length}</td>
@@ -1440,6 +1459,90 @@ async function unapproveTraveler(traveler){
  
  
 function toggleSO(so){ if(expanded.has(so)) expanded.delete(so); else expanded.add(so); render(); }
+ 
+// ── Ship date editing ──────────────────────────────────────────────────────────
+function openDatePicker(so, currentRaw, tdEl){
+  // Remove any existing picker
+  const existing = document.getElementById('date-picker-popup');
+  if(existing) existing.remove();
+  if(document.body._datePickerSO === so){ document.body._datePickerSO = null; return; }
+  document.body._datePickerSO = so;
+ 
+  const popup = document.createElement('div');
+  popup.id = 'date-picker-popup';
+  popup.style.cssText = `position:fixed;z-index:600;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);min-width:220px`;
+ 
+  const rect = tdEl.getBoundingClientRect();
+  const top = Math.min(rect.bottom + 6, window.innerHeight - 120);
+  popup.style.top  = top + 'px';
+  popup.style.left = Math.min(rect.left, window.innerWidth - 240) + 'px';
+ 
+  popup.innerHTML = `
+    <div style="font-size:11px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px">Change ship date · SO ${so}</div>
+    <input type="date" id="dp-input" value="${currentRaw||''}"
+      style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;width:100%;margin-bottom:10px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeDatePicker()">Cancel</button>
+      <button class="btn primary" onclick="saveShipDate('${so}','${currentRaw||''}')">Save</button>
+    </div>`;
+ 
+  document.body.appendChild(popup);
+  const input = document.getElementById('dp-input');
+  input.focus();
+  input.addEventListener('keydown', e => { if(e.key==='Enter') saveShipDate(so, currentRaw); if(e.key==='Escape') closeDatePicker(); });
+ 
+  // Close on outside click
+  setTimeout(()=>{
+    document.addEventListener('click', function outsideClick(e){
+      if(!popup.contains(e.target)){ closeDatePicker(); document.removeEventListener('click', outsideClick); }
+    });
+  }, 10);
+}
+ 
+function closeDatePicker(){
+  const p = document.getElementById('date-picker-popup');
+  if(p) p.remove();
+  document.body._datePickerSO = null;
+}
+ 
+async function saveShipDate(so, oldRaw){
+  const input = document.getElementById('dp-input');
+  if(!input) return;
+  const newRaw = input.value;
+  if(!newRaw){ toast('No date selected','Please pick a date.','amber'); return; }
+  if(newRaw === oldRaw){ closeDatePicker(); return; }
+ 
+  const saveBtn = input.closest('div')?.querySelector?.('.btn.primary') || document.querySelector('#date-picker-popup .btn.primary');
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='Saving…'; }
+ 
+  try{
+    // Update all travelers for this SO
+    const r = await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${so}&archived=eq.false`, {
+      method:'PATCH',
+      headers:{...H(),'Prefer':'return=minimal'},
+      body: JSON.stringify({so_ship: newRaw})
+    });
+    if(!r.ok) throw new Error(await r.text());
+ 
+    const oldFmt = fmtDate(oldRaw);
+    const newFmt = fmtDate(newRaw);
+    const actor  = currentProfile?.full_name || 'Unknown';
+ 
+    // Log: "Lourdes changed order 657986 from 5/29/26 to 6/2/26"
+    await logActivity('date_change', so, `${actor} changed order ${so} from ${oldFmt} to ${newFmt}`);
+ 
+    // Update local state
+    orders.forEach(o => { if(o.so === so){ o.soShipRaw = newRaw; o.soShip = newFmt; } });
+ 
+    closeDatePicker();
+    updateAll();
+    render();
+    toast('Ship date updated', `SO ${so}: ${oldFmt} → ${newFmt}`, 'green');
+  } catch(e){
+    toast('Error', e.message, 'red');
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent='Save'; }
+  }
+}
 function toggleExpandAll(){
   allExp=!allExp;
   const btn=document.getElementById('xbtn');
@@ -1497,10 +1600,11 @@ function renderLog(){
   }
  
   const actionMeta={
-    photo_upload: {label:'Photo uploaded', cls:'tg', icon:'📷'},
-    photo_delete: {label:'Photo deleted',  cls:'tr', icon:'🗑'},
-    approved:     {label:'Approved',       cls:'tb', icon:'✓'},
-    unapproved:   {label:'Approval removed',cls:'td',icon:'↩'},
+    photo_upload: {label:'Photo uploaded',   cls:'tg', icon:'📷'},
+    photo_delete: {label:'Photo deleted',    cls:'tr', icon:'🗑'},
+    approved:     {label:'Approved',         cls:'tb', icon:'✓'},
+    unapproved:   {label:'Approval removed', cls:'td', icon:'↩'},
+    date_change:  {label:'Date changed',     cls:'ta', icon:'📅'},
   };
  
   // Group by date
@@ -1519,15 +1623,19 @@ function renderLog(){
     for(const r of byDate[day]){
       const m=actionMeta[r.action]||{label:r.action,cls:'td',icon:'·'};
       const time=new Date(r.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const isDateChange = r.action === 'date_change';
       html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:11px 20px;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <span style="font-size:16px;flex-shrink:0;margin-top:1px">${m.icon}</span>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-            <span style="font-size:13px;font-weight:600;color:var(--text)">${r.actor}</span>
-            <span class="tag ${m.cls}" style="font-size:10px">${m.label}</span>
-            ${r.so?`<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">SO #${r.so}</span>`:''}
+            ${isDateChange
+              ? `<span style="font-size:13px;font-weight:600;color:var(--text)">${r.detail||''}</span>`
+              : `<span style="font-size:13px;font-weight:600;color:var(--text)">${r.actor}</span>
+                 <span class="tag ${m.cls}" style="font-size:10px">${m.label}</span>
+                 ${r.so?`<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">SO #${r.so}</span>`:''}`
+            }
           </div>
-          ${r.detail?`<div style="font-size:12px;font-family:var(--mono);color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.detail}</div>`:''}
+          ${!isDateChange&&r.detail?`<div style="font-size:12px;font-family:var(--mono);color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.detail}</div>`:''}
         </div>
         <span style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;margin-top:2px">${time}</span>
       </div>`;
@@ -1960,6 +2068,3 @@ document.addEventListener('keydown',e=>{
 </script>
 </body>
 </html>
-
-
-
