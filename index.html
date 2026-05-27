@@ -308,6 +308,23 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
 .loading-overlay.hide{display:none}
 .loading-text{font-size:13px;font-family:var(--mono);color:var(--text3)}
+/* ── Comments ──────────────────────────────────────────────────────────────── */
+.comments-section{border-top:1px solid var(--border);margin-top:14px;padding-top:12px}
+.comments-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px}
+.comment-thread{display:flex;flex-direction:column;gap:7px;margin-bottom:12px}
+.comment-item{display:flex;align-items:flex-start;gap:9px}
+.comment-avatar{width:26px;height:26px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0;font-family:var(--mono);text-transform:uppercase}
+.comment-bubble{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 11px;flex:1;min-width:0}
+.comment-meta{font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.comment-body{font-size:13px;color:var(--text);line-height:1.4;word-break:break-word}
+.comment-del{background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;margin-left:auto;padding:0 2px;transition:color 0.12s;font-family:var(--mono)}
+.comment-del:hover{color:var(--red)}
+.comment-input-row{display:flex;gap:8px;align-items:flex-end}
+.comment-input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 11px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;resize:none;min-height:38px;max-height:90px;line-height:1.4;transition:border-color 0.15s}
+.comment-input:focus{border-color:var(--accent)}
+.comment-input::placeholder{color:var(--text3)}
+.comment-word-count{font-size:10px;font-family:var(--mono);color:var(--text3);text-align:right;margin-top:3px}
+.comment-word-count.over{color:var(--red)}
 </style>
 </head>
 <body>
@@ -658,7 +675,7 @@ const BUCKET   = 'order-photos';
 let accessToken = null;
 let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
-let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [];
+let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [], soComments = {};
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
 let missingFromCSV = [];
 let pendingDelPhotoId = null, pendingDelStoragePath = null, pendingDelSO = null, pendingDelFilename = null;
@@ -820,7 +837,7 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals()]); updateAll(); sv('tomorrow'); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments()]); updateAll(); sv('tomorrow'); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
@@ -859,10 +876,53 @@ async function loadPhotos(){
       id:r.id, uploaded_by:r.uploaded_by, storage_path:r.storage_path||''});
   }
 }
+async function loadComments(){
+  const rows = await sbGet('so_comments','select=*&order=created_at.desc');
+  soComments = {};
+  for(const r of rows){
+    if(!soComments[r.so]) soComments[r.so]=[];
+    soComments[r.so].push({id:r.id, so:r.so, body:r.body, actor:r.actor, actor_initials:r.actor_initials, created_at:r.created_at});
+  }
+}
+async function postComment(so){
+  const input = document.getElementById('ci-'+so);
+  if(!input) return;
+  const body = input.value.trim();
+  if(!body){ toast('Empty comment','Please type something first.','amber'); return; }
+  const words = body.trim().split(/\s+/).filter(Boolean);
+  if(words.length > 30){ toast('Too long',`Max 30 words (you have ${words.length}).`,'red'); return; }
+  const initials = (currentProfile?.full_name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  try{
+    const rows = await sbInsert('so_comments',{so, body, actor: currentProfile?.full_name||'unknown', actor_initials: initials});
+    if(!soComments[so]) soComments[so]=[];
+    soComments[so].unshift({id:rows[0]?.id, so, body, actor:currentProfile?.full_name||'unknown', actor_initials:initials, created_at:new Date().toISOString()});
+    input.value='';
+    document.getElementById('cwc-'+so).textContent='0 / 30 words';
+    document.getElementById('cwc-'+so).classList.remove('over');
+    render();
+  } catch(e){ toast('Error',e.message,'red'); }
+}
+async function deleteComment(id, so){
+  if(!confirm('Delete this comment?')) return;
+  try{
+    await sbDelete('so_comments', id);
+    if(soComments[so]) soComments[so] = soComments[so].filter(c=>c.id!==id);
+    render();
+    toast('Comment deleted','','green');
+  } catch(e){ toast('Error',e.message,'red'); }
+}
+function onCommentInput(so){
+  const input = document.getElementById('ci-'+so);
+  const wc = document.getElementById('cwc-'+so);
+  if(!input||!wc) return;
+  const words = input.value.trim().split(/\s+/).filter(Boolean).length;
+  wc.textContent = `${words} / 30 words`;
+  wc.classList.toggle('over', words > 30);
+}
 async function refreshData(){
   const btn=document.getElementById('refresh-btn');
   btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Refreshing';
-  try{ await Promise.all([loadOrders(),loadPhotos(),loadApprovals()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
+  try{ await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
   btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
@@ -1427,6 +1487,34 @@ function render(){
             </span>
           </div>
           ${soPhotos.length?`<div class="photo-meta">Last upload by ${soPhotos[0].uploaded_by||'worker'} · ${new Date(soPhotos[0].uploaded_at).toLocaleString()}</div>`:''}
+        </div>
+        <div class="comments-section">
+          <div class="comments-label">Comments</div>
+          <div class="comment-thread" id="ct-${so}">
+            ${(soComments[so]||[]).map(c=>{
+              const canDel = currentProfile?.role==='manager'||currentProfile?.role==='production';
+              return `<div class="comment-item">
+                <div class="comment-avatar">${c.actor_initials}</div>
+                <div class="comment-bubble">
+                  <div class="comment-meta">
+                    <span style="color:var(--text2);font-weight:600">${c.actor}</span>
+                    <span>${new Date(c.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                    ${canDel?`<button class="comment-del" onclick="deleteComment('${c.id}','${so}')">✕</button>`:''}
+                  </div>
+                  <div class="comment-body">${c.body}</div>
+                </div>
+              </div>`;
+            }).join('')}
+            ${!(soComments[so]||[]).length?'<div style="font-size:12px;font-family:var(--mono);color:var(--text3)">No comments yet</div>':''}
+          </div>
+          ${(currentProfile?.role==='manager'||currentProfile?.role==='production')?`
+          <div class="comment-input-row">
+            <textarea class="comment-input" id="ci-${so}" placeholder="Add a comment…" rows="1"
+              oninput="onCommentInput('${so}')"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postComment('${so}')}"></textarea>
+            <button class="btn primary" onclick="postComment('${so}')" style="padding:7px 12px;flex-shrink:0">Post</button>
+          </div>
+          <div class="comment-word-count" id="cwc-${so}">0 / 30 words</div>`:''}
         </div>
       </td></tr>`;
     }
@@ -2046,7 +2134,7 @@ function startAutoRefresh(){
   countdownTimer=setInterval(()=>{refreshCountdown--;if(refreshCountdown<=0)refreshCountdown=60;},1000);
   refreshTimer=setInterval(async()=>{
     refreshCountdown=60;
-    try{await Promise.all([loadOrders(),loadPhotos(),loadApprovals()]);updateAll();render();}catch(e){}
+    try{await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]);updateAll();render();}catch(e){}
   },60000);
 }
  
