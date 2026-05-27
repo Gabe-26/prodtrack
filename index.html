@@ -86,7 +86,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .drawer-overlay.open{opacity:1;pointer-events:auto}
  
 @media(max-width:700px){
-  html,body{overflow:hidden;height:100%;position:fixed;width:100%}
+  html,body{overflow-y:hidden;overflow-x:auto;height:100%;min-width:600px}
   .app{display:flex;flex-direction:column;height:100dvh}
   .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
