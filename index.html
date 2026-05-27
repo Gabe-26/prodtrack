@@ -754,7 +754,7 @@ function showApp(){
   // Body classes drive CSS permissions
   document.body.classList.toggle('manager',    isMgr);
   document.body.classList.toggle('viewer',     isViewer || isProd); // production = no photo upload
-  document.body.classList.toggle('can-edit-date', isMgr || isProd || uname === 'zgta26');
+  document.body.classList.toggle('can-edit-date', isProd || uname === 'zgta26');
   loadAll();
 }
  
