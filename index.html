@@ -1343,6 +1343,7 @@ function render(){
     const viaTag=makeViaTag(via0, travelers[0].location);
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`:`<span class="tag ta">No photo</span>`;
  
+    const isMgr = currentProfile?.role === 'manager';
     // Approval status for SO
     const approvedTravelers = travelers.filter(o => approvals[o.traveler]);
     const allApproved = travelers.length > 0 && approvedTravelers.length === travelers.length;
@@ -1373,11 +1374,13 @@ function render(){
       <td>${viaTag}</td>
       <td style="color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${customer}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${travelers.length}</td>
-      <td>${picTag}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${picTag}
+        ${isMgr && !allApproved ? `<button class="approve-btn" onclick="event.stopPropagation();approveAllTravelers('${so}')" style="font-size:10px;padding:3px 8px">Approve all</button>` : ''}
+      </div></td>
     </tr>`;
  
     if(isOpen){
-      const isMgr = currentProfile?.role === 'manager';
       for(const o of travelers){
         const isApproved = !!approvals[o.traveler];
         const approvalInfo = approvals[o.traveler];
@@ -1457,6 +1460,26 @@ async function unapproveTraveler(traveler){
   } catch(e){ toast('Error', e.message, 'red'); }
 }
  
+ 
+async function approveAllTravelers(so){
+  if(currentProfile?.role !== 'manager'){ toast('Access denied','Only managers can approve travelers.','red'); return; }
+  const soTravelers = orders.filter(o => o.so === so);
+  const unapproved = soTravelers.filter(o => !approvals[o.traveler]);
+  if(!unapproved.length){ toast('Already approved','All travelers are already approved.','amber'); return; }
+  try{
+    for(const o of unapproved){
+      await fetch(`${SUPA_URL}/rest/v1/approvals`, {
+        method:'POST',
+        headers:{...H(),'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify({traveler: o.traveler, so, approved_by: currentProfile.full_name})
+      });
+      approvals[o.traveler] = {approved_by: currentProfile.full_name, approved_at: new Date().toISOString()};
+    }
+    await logActivity('approved', so, `Approved all ${unapproved.length} traveler${unapproved.length>1?'s':''} for SO ${so}`);
+    render();
+    toast('All approved', `SO ${so} — ${unapproved.length} traveler${unapproved.length>1?'s':''} approved ✓`, 'green');
+  } catch(e){ toast('Error', e.message, 'red'); }
+}
  
 function toggleSO(so){ if(expanded.has(so)) expanded.delete(so); else expanded.add(so); render(); }
  
