@@ -1428,6 +1428,7 @@ function render(){
       <td><div style="display:flex;align-items:center;gap:8px">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
+        ${(soComments[so]||[]).length?`<span title="${soComments[so].length} comment${soComments[so].length>1?'s':''}" style="display:inline-flex;align-items:center;color:var(--blue);opacity:0.8"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span>`:''}
         ${approvalBadge}
       </div></td>
       ${dateCell}
