@@ -112,10 +112,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   select.filt{font-size:11px;padding:5px 6px}
   .xbtn{display:inline-flex;font-size:11px;padding:6px 9px}
  
-  /* Show ship via col, hide travelers col on mobile */
+  /* Hide travelers + photos cols on mobile — shown inline in SO cell instead */
   thead th:nth-child(5){display:none}
+  thead th:nth-child(6){display:none}
   .so-row td:nth-child(5){display:none}
+  .so-row td:nth-child(6){display:none}
   .tr-row td:nth-child(5){display:none}
+  .so-row-mobile-meta{display:flex!important;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
  
   /* SO row sizing */
   .so-row td{padding:10px 6px;font-size:13px}
@@ -1427,9 +1430,17 @@ function render(){
     html+=`<tr class="so-row ${hasPic?'done':'pending'}" onclick="toggleSO('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
-        <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
-        ${(soComments[so]||[]).length?`<span title="${soComments[so].length} comment${soComments[so].length>1?'s':''}" style="display:inline-flex;align-items:center;color:var(--blue);opacity:0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></span>`:''}
-        ${approvalBadge}
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
+            ${(soComments[so]||[]).length?`<span title="${soComments[so].length} comment${soComments[so].length>1?'s':''}" style="display:inline-flex;align-items:center;color:var(--blue);opacity:0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></span>`:''}
+            ${approvalBadge}
+          </div>
+          <div class="so-row-mobile-meta" style="display:none">
+            ${picTag}
+            ${isMgr && !allApproved ? `<button class="approve-btn" onclick="event.stopPropagation();approveAllTravelers('${so}')" style="font-size:10px;padding:3px 8px">Approve all</button>` : ''}
+          </div>
+        </div>
       </div></td>
       ${dateCell}
       <td>${viaTag}</td>
