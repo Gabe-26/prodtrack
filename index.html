@@ -86,14 +86,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .drawer-overlay.open{opacity:1;pointer-events:auto}
  
 @media(max-width:700px){
-  html,body{overflow-y:hidden;overflow-x:auto;height:100%;min-width:600px}
+  html,body{overflow:hidden;height:100%;position:fixed;width:100%}
   .app{display:flex;flex-direction:column;height:100dvh}
   .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .metrics{flex-shrink:0}.toolbar{flex-shrink:0}
   .table-wrap{flex:1;overflow-y:scroll;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
-  .table-wrap table{min-width:600px}
+  #main-table{min-width:700px}
   .upload-view,.users-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,40px)}
   .pill:not(.live):not(.mgr){display:none}
   .topbar{padding:0 12px;gap:8px;flex-shrink:0}
