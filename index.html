@@ -85,15 +85,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;opacity:0;transition:opacity 0.25s;pointer-events:none}
 .drawer-overlay.open{opacity:1;pointer-events:auto}
  
-@media(max-width:700px){
+@media(max-width:700px),(max-height:500px) and (orientation:landscape){
   html,body{overflow:hidden;height:100%;position:fixed;width:100%}
   .app{display:flex;flex-direction:column;height:100dvh}
   .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .metrics{flex-shrink:0}.toolbar{flex-shrink:0}
-  .table-wrap{flex:1;overflow-y:scroll;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
-  #main-table{width:max-content;min-width:100%}
+  .table-wrap{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
+  #main-table{table-layout:fixed}
+  #thead-row th:nth-child(1){width:78px!important}
+  #thead-row th:nth-child(2){width:60px!important}
+  #thead-row th:nth-child(3){width:42px!important}
+  #thead-row th:nth-child(4){width:auto!important}
+  #thead-row th:nth-child(6){width:84px!important}
+  .approve-btn{font-size:10px;padding:3px 6px}
   .upload-view,.users-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,40px)}
   .pill:not(.live):not(.mgr){display:none}
   .topbar{padding:0 12px;gap:8px;flex-shrink:0}
@@ -132,7 +138,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .so-row td:nth-child(4){font-size:13px!important;max-width:100px}
 
   /* Photos tag */
-  .so-row .tag{font-size:12px;padding:2px 6px}
+  .so-row .tag{font-size:10px;padding:2px 5px}
 
   /* Via pill — mobile shows emoji icon only */
   .via-pill .via-label{display:none}
