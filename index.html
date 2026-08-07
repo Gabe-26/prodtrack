@@ -425,6 +425,18 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
   </div>
 </div>
  
+<!-- SO detail modal (mobile row tap) -->
+<div class="modal-overlay" id="so-modal">
+  <div class="modal-card" style="max-width:480px;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;text-align:left">
+    <div class="modal-title">
+      <span id="so-modal-title">SO</span>
+      <button class="modal-close" onclick="closeSOModal()">✕</button>
+    </div>
+    <div id="so-modal-summary" style="padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--border)"></div>
+    <div id="so-modal-body"></div>
+  </div>
+</div>
+ 
 <!-- Main app -->
 <div class="app" id="main-app" style="display:none">
   <div class="topbar">
@@ -907,6 +919,7 @@ async function postComment(so){
     document.getElementById('cwc-'+so).textContent='0 / 30 words';
     document.getElementById('cwc-'+so).classList.remove('over');
     render();
+    refreshSOModalIfOpen();
   } catch(e){ toast('Error',e.message,'red'); }
 }
 async function deleteComment(id, so){
@@ -915,6 +928,7 @@ async function deleteComment(id, so){
     await sbDelete('so_comments', id);
     if(soComments[so]) soComments[so] = soComments[so].filter(c=>c.id!==id);
     render();
+    refreshSOModalIfOpen();
     toast('Comment deleted','','green');
   } catch(e){ toast('Error',e.message,'red'); }
 }
@@ -1431,7 +1445,7 @@ function render(){
          </td>`
       : `<td><span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span></td>`;
  
-    html+=`<tr class="so-row ${hasPic?'done':'pending'}" onclick="toggleSO('${so}')">
+    html+=`<tr class="so-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
@@ -1449,85 +1463,93 @@ function render(){
     </tr>`;
  
     if(isOpen){
-      for(const o of travelers){
-        const isApproved = !!approvals[o.traveler];
-        const approvalInfo = approvals[o.traveler];
-        const approveBtn = isMgr
-          ? isApproved
-            ? `<button class="approve-btn approved" onclick="event.stopPropagation();unapproveTraveler('${o.traveler}')" title="Approved by ${approvalInfo.approved_by} · Click to undo">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                Approved
-              </button>`
-            : `<button class="approve-btn" onclick="event.stopPropagation();approveTraveler('${o.traveler}','${so}')">
-                Approve
-              </button>`
-          : isApproved
-            ? `<span class="tag tg" title="Approved by ${approvalInfo.approved_by}">✓ Approved</span>`
-            : `<span class="tag td">Pending</span>`;
- 
-        html+=`<tr class="tr-row${isApproved?' approved-row':''}">
-          <td style="font-size:12px;font-family:var(--mono)"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text);font-weight:600">${o.traveler}</span></td>
-          <td style="color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${o.desc}</td>
-          <td><span class="mono" style="${isCus(o)?'color:var(--amber)':'color:var(--text)'};font-weight:600">${o.item}</span></td>
-          <td style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
-          <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${o.line}</td>
-          <td>${approveBtn}</td>
-        </tr>`;
-      }
-      const thumbs=soPhotos.map(p=>`
-        <div class="photo-thumb-wrap">
-          <img class="photo-thumb" src="${p.url}" loading="lazy"
-            title="${p.filename} · ${p.uploaded_by} · ${new Date(p.uploaded_at).toLocaleString()}"
-            onclick="openLB('${p.url}','${p.filename}','${p.uploaded_by||''}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}','${so}')">
-          <div class="photo-del" onclick="event.stopPropagation();askDelPhoto('${p.id}','${p.storage_path||''}','${so}','${(p.filename||'').replace(/'/g,"\\'")}')">✕</div>
-        </div>`).join('');
-      html+=`<tr class="photo-row"><td colspan="6">
-        <div class="photo-section">
-          ${soPhotos.length?`<div class="photo-thumbs">${thumbs}</div>`:''}
-          <div class="photo-bar">
-            <label class="upload-zone" id="uz-${so}">
-              <input type="file" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              ${soPhotos.length?'Add more':'Add photo'}
-            </label>
-            <span style="font-size:11px;font-family:var(--mono);color:${soPhotos.length?'var(--green)':'var(--text3)'}">
-              ${soPhotos.length?soPhotos.length+' photo'+(soPhotos.length>1?'s':'')+' uploaded':'No photos yet'}
-            </span>
-          </div>
-          ${soPhotos.length?`<div class="photo-meta">Last upload by ${soPhotos[0].uploaded_by||'worker'} · ${new Date(soPhotos[0].uploaded_at).toLocaleString()}</div>`:''}
-        </div>
-        <div class="comments-section">
-          <div class="comments-label">Comments</div>
-          <div class="comment-thread" id="ct-${so}">
-            ${(soComments[so]||[]).map(c=>{
-              const canDel = currentProfile?.role==='manager'||currentProfile?.role==='production';
-              return `<div class="comment-item">
-                <div class="comment-avatar">${c.actor_initials}</div>
-                <div class="comment-bubble">
-                  <div class="comment-meta">
-                    <span style="color:var(--text2);font-weight:600">${c.actor}</span>
-                    <span>${new Date(c.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
-                    ${canDel?`<button class="comment-del" onclick="deleteComment('${c.id}','${so}')">✕</button>`:''}
-                  </div>
-                  <div class="comment-body">${c.body}</div>
-                </div>
-              </div>`;
-            }).join('')}
-            ${!(soComments[so]||[]).length?'<div style="font-size:12px;font-family:var(--mono);color:var(--text3)">No comments yet</div>':''}
-          </div>
-          ${(currentProfile?.role==='manager'||currentProfile?.role==='production')?`
-          <div class="comment-input-row">
-            <textarea class="comment-input" id="ci-${so}" placeholder="Add a comment…" rows="1"
-              oninput="onCommentInput('${so}')"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postComment('${so}')}"></textarea>
-            <button class="btn primary" onclick="postComment('${so}')" style="padding:7px 12px;flex-shrink:0">Post</button>
-          </div>
-          <div class="comment-word-count" id="cwc-${so}">0 / 30 words</div>`:''}
-        </div>
-      </td></tr>`;
+      html+=buildSODetailRows(so, travelers, soPhotos, isMgr);
     }
   }
   tbody.innerHTML=html;
+}
+ 
+// Builds the traveler rows + photo/comments section for one SO. Shared by the
+// desktop expand-in-place row and the mobile SO detail modal.
+function buildSODetailRows(so, travelers, soPhotos, isMgr){
+  let html='';
+  for(const o of travelers){
+    const isApproved = !!approvals[o.traveler];
+    const approvalInfo = approvals[o.traveler];
+    const approveBtn = isMgr
+      ? isApproved
+        ? `<button class="approve-btn approved" onclick="event.stopPropagation();unapproveTraveler('${o.traveler}')" title="Approved by ${approvalInfo.approved_by} · Click to undo">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Approved
+          </button>`
+        : `<button class="approve-btn" onclick="event.stopPropagation();approveTraveler('${o.traveler}','${so}')">
+            Approve
+          </button>`
+      : isApproved
+        ? `<span class="tag tg" title="Approved by ${approvalInfo.approved_by}">✓ Approved</span>`
+        : `<span class="tag td">Pending</span>`;
+ 
+    html+=`<tr class="tr-row${isApproved?' approved-row':''}">
+      <td style="font-size:12px;font-family:var(--mono)"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text);font-weight:600">${o.traveler}</span></td>
+      <td style="color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${o.desc}</td>
+      <td><span class="mono" style="${isCus(o)?'color:var(--amber)':'color:var(--text)'};font-weight:600">${o.item}</span></td>
+      <td style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${o.line}</td>
+      <td>${approveBtn}</td>
+    </tr>`;
+  }
+  const thumbs=soPhotos.map(p=>`
+    <div class="photo-thumb-wrap">
+      <img class="photo-thumb" src="${p.url}" loading="lazy"
+        title="${p.filename} · ${p.uploaded_by} · ${new Date(p.uploaded_at).toLocaleString()}"
+        onclick="openLB('${p.url}','${p.filename}','${p.uploaded_by||''}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}','${so}')">
+      <div class="photo-del" onclick="event.stopPropagation();askDelPhoto('${p.id}','${p.storage_path||''}','${so}','${(p.filename||'').replace(/'/g,"\\'")}')">✕</div>
+    </div>`).join('');
+  html+=`<tr class="photo-row"><td colspan="6">
+    <div class="photo-section">
+      ${soPhotos.length?`<div class="photo-thumbs">${thumbs}</div>`:''}
+      <div class="photo-bar">
+        <label class="upload-zone" id="uz-${so}">
+          <input type="file" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          ${soPhotos.length?'Add more':'Add photo'}
+        </label>
+        <span style="font-size:11px;font-family:var(--mono);color:${soPhotos.length?'var(--green)':'var(--text3)'}">
+          ${soPhotos.length?soPhotos.length+' photo'+(soPhotos.length>1?'s':'')+' uploaded':'No photos yet'}
+        </span>
+      </div>
+      ${soPhotos.length?`<div class="photo-meta">Last upload by ${soPhotos[0].uploaded_by||'worker'} · ${new Date(soPhotos[0].uploaded_at).toLocaleString()}</div>`:''}
+    </div>
+    <div class="comments-section">
+      <div class="comments-label">Comments</div>
+      <div class="comment-thread" id="ct-${so}">
+        ${(soComments[so]||[]).map(c=>{
+          const canDel = currentProfile?.role==='manager'||currentProfile?.role==='production';
+          return `<div class="comment-item">
+            <div class="comment-avatar">${c.actor_initials}</div>
+            <div class="comment-bubble">
+              <div class="comment-meta">
+                <span style="color:var(--text2);font-weight:600">${c.actor}</span>
+                <span>${new Date(c.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                ${canDel?`<button class="comment-del" onclick="deleteComment('${c.id}','${so}')">✕</button>`:''}
+              </div>
+              <div class="comment-body">${c.body}</div>
+            </div>
+          </div>`;
+        }).join('')}
+        ${!(soComments[so]||[]).length?'<div style="font-size:12px;font-family:var(--mono);color:var(--text3)">No comments yet</div>':''}
+      </div>
+      ${(currentProfile?.role==='manager'||currentProfile?.role==='production')?`
+      <div class="comment-input-row">
+        <textarea class="comment-input" id="ci-${so}" placeholder="Add a comment…" rows="1"
+          oninput="onCommentInput('${so}')"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();postComment('${so}')}"></textarea>
+        <button class="btn primary" onclick="postComment('${so}')" style="padding:7px 12px;flex-shrink:0">Post</button>
+      </div>
+      <div class="comment-word-count" id="cwc-${so}">0 / 30 words</div>`:''}
+    </div>
+  </td></tr>`;
+  return html;
 }
  
 // ── Approvals ─────────────────────────────────────────────────────────────────
@@ -1542,6 +1564,7 @@ async function approveTraveler(traveler, so){
     approvals[traveler] = {approved_by: currentProfile.full_name, approved_at: new Date().toISOString()};
     await logActivity('approved', so, `Approved traveler T-${traveler}`);
     render();
+    refreshSOModalIfOpen();
     toast('Traveler approved', `T-${traveler} marked as approved ✓`, 'green');
   } catch(e){ toast('Error', e.message, 'red'); }
 }
@@ -1552,6 +1575,7 @@ async function unapproveTraveler(traveler){
     delete approvals[traveler];
     await logActivity('unapproved', null, `Removed approval for T-${traveler}`);
     render();
+    refreshSOModalIfOpen();
     toast('Approval removed', `T-${traveler} approval undone.`, 'amber');
   } catch(e){ toast('Error', e.message, 'red'); }
 }
@@ -1573,11 +1597,56 @@ async function approveAllTravelers(so){
     }
     await logActivity('approved', so, `Approved all ${unapproved.length} traveler${unapproved.length>1?'s':''} for SO ${so}`);
     render();
+    refreshSOModalIfOpen();
     toast('All approved', `SO ${so} — ${unapproved.length} traveler${unapproved.length>1?'s':''} approved ✓`, 'green');
   } catch(e){ toast('Error', e.message, 'red'); }
 }
 
 function toggleSO(so){ if(expanded.has(so)) expanded.delete(so); else expanded.add(so); render(); }
+ 
+// ── SO detail modal (mobile) ───────────────────────────────────────────────────
+function isMobileLayout(){
+  return window.matchMedia('(max-width:700px), (max-height:500px) and (orientation:landscape)').matches;
+}
+function handleSORowClick(so){
+  if(isMobileLayout()) openSOModal(so); else toggleSO(so);
+}
+let currentModalSO = null;
+function openSOModal(so){
+  const travelers = orders.filter(o=>o.so===so);
+  if(!travelers.length) return;
+  currentModalSO = so;
+  const soPhotos = photos[so]||[];
+  const isMgr = currentProfile?.role === 'manager';
+  const t0 = travelers[0];
+  const viaTag = makeViaTag(t0.via, t0.location);
+  const approvedTravelers = travelers.filter(o => approvals[o.traveler]);
+  const allApproved = travelers.length > 0 && approvedTravelers.length === travelers.length;
+  const someApproved = approvedTravelers.length > 0 && !allApproved;
+  const approvalBadge = allApproved
+    ? `<span class="tag tg">✓ Approved</span>`
+    : someApproved
+    ? `<span class="tag td">${approvedTravelers.length}/${travelers.length} approved</span>`
+    : '';
+  document.getElementById('so-modal-title').textContent = 'SO '+so;
+  document.getElementById('so-modal-summary').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      ${viaTag}
+      <span style="font-size:13px;color:var(--text)">${t0.customer}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="mono" style="font-size:13px;font-weight:600;color:var(--text)">${fmtDate(t0.soShipRaw)}</span>
+      ${approvalBadge}
+      ${isMgr && !allApproved ? `<button class="approve-btn" onclick="approveAllTravelers('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
+    </div>`;
+  document.getElementById('so-modal-body').innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${buildSODetailRows(so, travelers, soPhotos, isMgr)}</tbody></table>`;
+  document.getElementById('so-modal').classList.add('open');
+}
+function closeSOModal(){
+  currentModalSO = null;
+  document.getElementById('so-modal').classList.remove('open');
+}
+function refreshSOModalIfOpen(){ if(currentModalSO) openSOModal(currentModalSO); }
  
 // ── Ship date editing ──────────────────────────────────────────────────────────
 function openDatePicker(so, currentRaw, tdEl){
@@ -1822,6 +1891,7 @@ async function handlePhotoUpload(so, input){
       if(savedKB > 50) console.log(`Compressed ${file.name}: saved ${savedKB}KB`);
     }
     updateAll(); render();
+    refreshSOModalIfOpen();
     toast('Photo uploaded','SO '+so+' marked as done ✓','green');
   } catch(err){ toast('Upload failed',err.message,'red'); }
   if(uz) uz.classList.remove('uploading');
@@ -1844,6 +1914,7 @@ async function doDeletePhoto(){
     await logActivity('photo_delete', pendingDelSO, `Deleted "${pendingDelFilename||'photo'}"`);
     for(const so of Object.keys(photos)) photos[so]=photos[so].filter(p=>p.id!==pendingDelPhotoId);
     closeConfirmPhoto(); closeLB(); updateAll(); render();
+    refreshSOModalIfOpen();
     toast('Photo deleted','Removed successfully.','green');
   } catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false; btn.textContent='Delete';
@@ -2163,7 +2234,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();
   }
 });
  
