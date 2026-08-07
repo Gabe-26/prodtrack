@@ -92,7 +92,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .metrics{flex-shrink:0}.toolbar{flex-shrink:0}
-  .table-wrap{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
+  .table-wrap{flex:1;overflow-y:scroll;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
+  #main-table{width:max-content;min-width:100%}
   .upload-view,.users-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,40px)}
   .pill:not(.live):not(.mgr){display:none}
   .topbar{padding:0 12px;gap:8px;flex-shrink:0}
@@ -116,31 +117,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   thead th:nth-child(5){display:none}
   .so-row td:nth-child(5){display:none}
   .tr-row td:nth-child(5){display:none}
- 
+
   /* SO row sizing */
   .so-row td{padding:10px 6px;font-size:13px}
   .so-row td:first-child{padding-left:8px}
- 
+
   /* SO number */
   .so-row td:first-child span[style*="font-size:13px"]{font-size:13px!important}
- 
+
   /* Ship date */
   .so-row td:nth-child(2) span{font-size:13px!important}
- 
+
   /* Customer */
   .so-row td:nth-child(4){font-size:13px!important;max-width:100px}
- 
+
   /* Photos tag */
   .so-row .tag{font-size:12px;padding:2px 6px}
- 
+
   /* Via pill — mobile shows emoji icon only */
   .via-pill .via-label{display:none}
   .via-pill{padding:5px 7px;font-size:14px;gap:0;min-width:28px;justify-content:center}
- 
+
   /* Approval badge — mobile shows ✓ only */
   .appr-full{display:none!important}
   .appr-check{display:inline-flex!important}
- 
+
   /* Traveler rows */
   .tr-row td{padding:8px 6px 8px 18px;font-size:13px}
   .photo-row td{padding:12px 10px 14px 18px}
@@ -1569,7 +1570,7 @@ async function approveAllTravelers(so){
     toast('All approved', `SO ${so} — ${unapproved.length} traveler${unapproved.length>1?'s':''} approved ✓`, 'green');
   } catch(e){ toast('Error', e.message, 'red'); }
 }
- 
+
 function toggleSO(so){ if(expanded.has(so)) expanded.delete(so); else expanded.add(so); render(); }
  
 // ── Ship date editing ──────────────────────────────────────────────────────────
