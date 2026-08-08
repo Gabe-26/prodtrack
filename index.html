@@ -332,6 +332,8 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .comment-input::placeholder{color:var(--text3)}
 .comment-word-count{font-size:10px;font-family:var(--mono);color:var(--text3);text-align:right;margin-top:3px}
 .comment-word-count.over{color:var(--red)}
+/* SO modal — let long descriptions wrap instead of truncating (desktop table keeps truncation) */
+#so-modal-body .tr-row td:nth-child(2){white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important}
 </style>
 </head>
 <body>
