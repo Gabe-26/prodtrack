@@ -326,6 +326,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .comment-body{font-size:13px;color:var(--text);line-height:1.4;word-break:break-word}
 .comment-del{background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;margin-left:auto;padding:0 2px;transition:color 0.12s;font-family:var(--mono)}
 .comment-del:hover{color:var(--red)}
+.comment-translate{background:none;border:none;cursor:pointer;color:var(--blue);font-size:10px;padding:0 2px;transition:color 0.12s;font-family:var(--mono)}
+.comment-translate:hover{color:var(--text)}
+.comment-translation{margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-size:13px;color:var(--text2);font-style:italic}
 .comment-input-row{display:flex;gap:8px;align-items:flex-end}
 .comment-input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 11px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;resize:none;min-height:38px;max-height:90px;line-height:1.4;transition:border-color 0.15s}
 .comment-input:focus{border-color:var(--accent)}
@@ -934,6 +937,41 @@ async function deleteComment(id, so){
     toast('Comment deleted','','green');
   } catch(e){ toast('Error',e.message,'red'); }
 }
+// ── Comment translation (Spanish ↔ English) ─────────────────────────────────
+const translationCache = {};
+function looksSpanish(text){
+  const t = ' '+text.toLowerCase()+' ';
+  if(/[áéíóúñ¿¡]/.test(t)) return true;
+  const esWords=[' el ',' la ',' de ',' que ',' y ',' en ',' un ',' una ',' es ',' no ',' se ',' para ',' con ',' por ',' los ',' las ',' su ',' esta ',' este ',' del ',' al '];
+  let hits=0;
+  esWords.forEach(w=>{ if(t.includes(w)) hits++; });
+  return hits>=2;
+}
+async function translateComment(so, id, btn){
+  const outEl = document.getElementById('trout-'+id);
+  if(!outEl) return;
+  if(outEl.style.display==='block'){ outEl.style.display='none'; btn.textContent='Translate'; return; }
+  if(translationCache[id]){ outEl.textContent=translationCache[id]; outEl.style.display='block'; btn.textContent='Show original'; return; }
+  const c = (soComments[so]||[]).find(x=>x.id==id);
+  if(!c) return;
+  const origLabel=btn.textContent;
+  btn.disabled=true; btn.textContent='Translating…';
+  try{
+    const pair = looksSpanish(c.body) ? 'es|en' : 'en|es';
+    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(c.body)}&langpair=${pair}`);
+    const data = await r.json();
+    const translated = data?.responseData?.translatedText;
+    if(!translated) throw new Error('No translation returned');
+    translationCache[id]=translated;
+    outEl.textContent=translated;
+    outEl.style.display='block';
+    btn.textContent='Show original';
+  } catch(e){
+    toast('Translation failed','Could not reach translation service.','red');
+    btn.textContent=origLabel;
+  }
+  btn.disabled=false;
+}
 function onCommentInput(so){
   const input = document.getElementById('ci-'+so);
   const wc = document.getElementById('cwc-'+so);
@@ -1533,9 +1571,11 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
               <div class="comment-meta">
                 <span style="color:var(--text2);font-weight:600">${c.actor}</span>
                 <span>${new Date(c.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                <button class="comment-translate" id="trbtn-${c.id}" onclick="event.stopPropagation();translateComment('${so}','${c.id}',this)">Translate</button>
                 ${canDel?`<button class="comment-del" onclick="deleteComment('${c.id}','${so}')">✕</button>`:''}
               </div>
               <div class="comment-body">${c.body}</div>
+              <div class="comment-translation" id="trout-${c.id}" style="display:none"></div>
             </div>
           </div>`;
         }).join('')}
