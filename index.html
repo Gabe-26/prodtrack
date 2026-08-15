@@ -392,6 +392,19 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     </div>
   </div>
 </div>
+  
+<!-- Confirm color tag check -->
+<div class="confirm-overlay" id="confirm-color">
+  <div class="confirm-card">
+    <div class="confirm-title" id="cc-title">Confirm color tag</div>
+    <div class="confirm-body" id="cc-body">Does this order have the correct color tag?</div>
+    <div style="margin:14px 0;display:flex;justify-content:center" id="cc-via"></div>
+    <div class="confirm-btns">
+      <button class="btn" id="cc-no-btn" onclick="colorCheckRespond(false)">No</button>
+      <button class="btn primary" id="cc-yes-btn" onclick="colorCheckRespond(true)">Yes</button>
+    </div>
+  </div>
+</div>
  
 <!-- Add user modal -->
 <div class="modal-overlay" id="add-user-modal">
@@ -710,6 +723,7 @@ let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorro
 let missingFromCSV = [];
 let pendingDelPhotoId = null, pendingDelStoragePath = null, pendingDelSO = null, pendingDelFilename = null;
 let pendingDelUserId = null;
+let pendingColorCheckCallback = null;
  
 // ── Headers ───────────────────────────────────────────────────────────────────
 const H = (tok) => ({
@@ -1529,7 +1543,7 @@ function render(){
       <td style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${travelers.length}</td>
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${picTag}
-        ${isMgr && !allApproved ? `<button class="approve-btn" onclick="event.stopPropagation();approveAllTravelers('${so}')" style="font-size:10px;padding:3px 8px">Approve all</button>` : ''}
+        ${isMgr && !allApproved ? `<button class="approve-btn" onclick="event.stopPropagation();confirmColorThenApproveAll('${so}')" style="font-size:10px;padding:3px 8px">Approve all</button>` : ''}
       </div></td>
     </tr>`;
  
@@ -1555,7 +1569,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             Approved
           </button>`
-        : `<button class="approve-btn" onclick="event.stopPropagation();approveTraveler('${o.traveler}','${so}')">
+        : `<button class="approve-btn" onclick="event.stopPropagation();confirmColorThenApprove('${o.traveler}','${so}')">
             Approve
           </button>`
       : isApproved
@@ -1582,7 +1596,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
     <div class="photo-section">
       ${soPhotos.length?`<div class="photo-thumbs">${thumbs}</div>`:''}
       <div class="photo-bar">
-        <label class="upload-zone" id="uz-${so}">
+        <label class="upload-zone" id="uz-${so}" onclick="return handleAddPhotoClick(event,'${so}')">
           <input type="file" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           ${soPhotos.length?'Add more':'Add photo'}
@@ -1625,6 +1639,45 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
     </div>
   </td></tr>`;
   return html;
+}
+ 
+// ── Color tag check modal ────────────────────────────────────────────────────
+const COLOR_CHECK_TEXT = {
+  en: { title:'Confirm color tag', body:'Does this order have the correct color tag?', yes:'Yes, correct', no:'No, wrong tag' },
+  es: { title:'Confirmar etiqueta de color', body:'¿Este pedido tiene la etiqueta de color correcta?', yes:'Sí, correcta', no:'No, incorrecta' }
+};
+function ccLang(){ return currentProfile?.pref_lang==='es' ? 'es' : 'en'; }
+function showColorCheckModal(so, onConfirm){
+  const t = COLOR_CHECK_TEXT[ccLang()];
+  const ord = orders.find(o=>o.so===so);
+  document.getElementById('cc-title').textContent = t.title+' — SO '+so;
+  document.getElementById('cc-body').textContent = t.body;
+  document.getElementById('cc-via').innerHTML = ord ? makeViaTag(ord.via, ord.location) : '';
+  document.getElementById('cc-yes-btn').textContent = t.yes;
+  document.getElementById('cc-no-btn').textContent = t.no;
+  pendingColorCheckCallback = onConfirm;
+  document.getElementById('confirm-color').classList.add('open');
+}
+function colorCheckRespond(confirmed){
+  document.getElementById('confirm-color').classList.remove('open');
+  const cb = pendingColorCheckCallback;
+  pendingColorCheckCallback = null;
+  if(confirmed && cb) cb();
+}
+function handleAddPhotoClick(e, so){
+  e.preventDefault();
+  showColorCheckModal(so, ()=>{
+    const uz = document.getElementById('uz-'+so);
+    const input = uz ? uz.querySelector('input[type=file]') : null;
+    if(input) input.click();
+  });
+  return false;
+}
+function confirmColorThenApprove(traveler, so){
+  showColorCheckModal(so, ()=>approveTraveler(traveler, so));
+}
+function confirmColorThenApproveAll(so){
+  showColorCheckModal(so, ()=>approveAllTravelers(so));
 }
  
 // ── Approvals ─────────────────────────────────────────────────────────────────
@@ -1712,7 +1765,7 @@ function openSOModal(so){
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span class="mono" style="font-size:13px;font-weight:600;color:var(--text)">${fmtDate(t0.soShipRaw)}</span>
       ${approvalBadge}
-      ${isMgr && !allApproved ? `<button class="approve-btn" onclick="approveAllTravelers('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
+      ${isMgr && !allApproved ? `<button class="approve-btn" onclick="confirmColorThenApproveAll('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
     </div>`;
   document.getElementById('so-modal-body').innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${buildSODetailRows(so, travelers, soPhotos, isMgr)}</tbody></table>`;
   document.getElementById('so-modal').classList.add('open');
@@ -2310,7 +2363,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();colorCheckRespond(false);
   }
 });
  
