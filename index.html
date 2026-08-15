@@ -516,6 +516,12 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <div style="flex:1;overflow:hidden">
           <div class="u-name" id="u-name">—</div>
           <div class="u-role" id="u-role-label">—</div>
+          <select id="pref-lang-select" onchange="updatePrefLang(this.value)" title="Auto-translate comments"
+            style="margin-top:4px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px 5px;color:var(--text2);font-family:var(--mono);font-size:10px;outline:none;cursor:pointer;max-width:100%">
+            <option value="none">No auto-translate</option>
+            <option value="en">Comments → English</option>
+            <option value="es">Comments → Spanish</option>
+          </select>
         </div>
         <button class="logout-btn" onclick="doLogout()" title="Sign out">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -767,7 +773,8 @@ async function loadProfile(){
   currentProfile = {
     full_name: p.full_name || fromEmail(currentUser.email),
     role: p.role || 'worker',
-    username: p.username || fromEmail(currentUser.email)
+    username: p.username || fromEmail(currentUser.email),
+    pref_lang: p.pref_lang || 'none'
   };
 }
  
@@ -783,6 +790,7 @@ function showApp(){
   document.getElementById('u-name').textContent = name;
   document.getElementById('u-role-label').textContent = isMgr ? 'Manager' : isViewer ? 'Viewer' : isProd ? 'Production' : 'Worker';
   document.getElementById('u-avatar').textContent = name.charAt(0);
+  document.getElementById('pref-lang-select').value = currentProfile?.pref_lang || 'none';
   document.getElementById('mgr-pill').style.display   = isMgr  ? 'inline-flex' : 'none';
   document.getElementById('viewer-pill').style.display = isViewer ? 'inline-flex' : 'none';
   document.getElementById('prod-pill').style.display   = isProd ? 'inline-flex' : 'none';
@@ -971,6 +979,28 @@ async function translateComment(so, id, btn){
     btn.textContent=origLabel;
   }
   btn.disabled=false;
+}
+// ── Per-user auto-translate preference ──────────────────────────────────────
+async function updatePrefLang(val){
+  if(!currentProfile) return;
+  currentProfile.pref_lang = val;
+  try{ await sbUpdate('profiles', currentUser.id, {pref_lang: val}); }
+  catch(e){ toast('Error saving preference', e.message, 'red'); }
+  render();
+  refreshSOModalIfOpen();
+}
+// Auto-shows translations for comments that don't match the user's preferred language
+function autoTranslateComments(so){
+  const target = currentProfile?.pref_lang;
+  if(!target || target==='none') return;
+  (soComments[so]||[]).forEach(c=>{
+    const commentLang = looksSpanish(c.body) ? 'es' : 'en';
+    if(commentLang===target) return;
+    const btn = document.getElementById('trbtn-'+c.id);
+    const outEl = document.getElementById('trout-'+c.id);
+    if(!btn||!outEl||outEl.style.display==='block') return;
+    translateComment(so, c.id, btn);
+  });
 }
 function onCommentInput(so){
   const input = document.getElementById('ci-'+so);
@@ -1457,6 +1487,7 @@ function render(){
     :`<th style="width:130px">SO #</th><th style="width:105px">Ship date</th><th style="width:86px">Ship via</th><th>Customer</th><th style="width:72px;text-align:right">Travelers</th><th style="width:120px">Photos</th>`;
  
   let html='';
+  const openedSOs=[];
   for(const {so,travelers} of groups){
     const soPhotos=photos[so]||[], hasPic=soPhotos.length>0;
     const isOpen=allExp||expanded.has(so);
@@ -1504,9 +1535,11 @@ function render(){
  
     if(isOpen){
       html+=buildSODetailRows(so, travelers, soPhotos, isMgr);
+      openedSOs.push(so);
     }
   }
   tbody.innerHTML=html;
+  openedSOs.forEach(autoTranslateComments);
 }
  
 // Builds the traveler rows + photo/comments section for one SO. Shared by the
@@ -1683,6 +1716,7 @@ function openSOModal(so){
     </div>`;
   document.getElementById('so-modal-body').innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${buildSODetailRows(so, travelers, soPhotos, isMgr)}</tbody></table>`;
   document.getElementById('so-modal').classList.add('open');
+  autoTranslateComments(so);
 }
 function closeSOModal(){
   currentModalSO = null;
