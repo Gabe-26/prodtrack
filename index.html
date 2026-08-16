@@ -1596,11 +1596,11 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
     <div class="photo-section">
       ${soPhotos.length?`<div class="photo-thumbs">${thumbs}</div>`:''}
       <div class="photo-bar">
-        <label class="upload-zone" id="uz-${so}" onclick="return handleAddPhotoClick(event,'${so}')">
-          <input type="file" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)">
+        <div class="upload-zone" id="uz-${so}" onclick="handleAddPhotoClick('${so}')">
+          <input type="file" id="pi-${so}" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)" style="display:none">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           ${soPhotos.length?'Add more':'Add photo'}
-        </label>
+        </div>
         <span style="font-size:11px;font-family:var(--mono);color:${soPhotos.length?'var(--green)':'var(--text3)'}">
           ${soPhotos.length?soPhotos.length+' photo'+(soPhotos.length>1?'s':'')+' uploaded':'No photos yet'}
         </span>
@@ -1664,14 +1664,11 @@ function colorCheckRespond(confirmed){
   pendingColorCheckCallback = null;
   if(confirmed && cb) cb();
 }
-function handleAddPhotoClick(e, so){
-  e.preventDefault();
+function handleAddPhotoClick(so){
   showColorCheckModal(so, ()=>{
-    const uz = document.getElementById('uz-'+so);
-    const input = uz ? uz.querySelector('input[type=file]') : null;
+    const input = document.getElementById('pi-'+so);
     if(input) input.click();
   });
-  return false;
 }
 function confirmColorThenApprove(traveler, so){
   showColorCheckModal(so, ()=>approveTraveler(traveler, so));
