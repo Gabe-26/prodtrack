@@ -829,6 +829,9 @@ function deptPillsForTravelers(travelers){
 function isDeptVisible(department){
   return !department || activeDepts.has(department);
 }
+function visiblePhotosFor(so){
+  return (photos[so]||[]).filter(p=>isDeptVisible(p.department));
+}
 function renderDeptFilter(){
   const myDepts = (currentProfile?.departments||[]).filter(d=>DEPT_ORDER.includes(d));
   const sec = document.getElementById('dept-sec');
@@ -986,7 +989,7 @@ async function loadPhotos(){
   for(const r of rows){
     if(!photos[r.so]) photos[r.so]=[];
     photos[r.so].push({url:r.url, filename:r.filename, uploaded_at:r.uploaded_at,
-      id:r.id, uploaded_by:r.uploaded_by, storage_path:r.storage_path||''});
+      id:r.id, uploaded_by:r.uploaded_by, storage_path:r.storage_path||'', department:r.department});
   }
 }
 async function loadComments(){
@@ -1475,8 +1478,8 @@ function updateAll(){
   const sos=new Set(deptOrders.map(o=>o.so));
   const nextDays = getNextWorkingDays();
   const tomorrowSOs=new Set(deptOrders.filter(o=>o.soShipRaw&&nextDays.includes(o.soShipRaw)).map(o=>o.so));
-  const doneSOs=new Set([...sos].filter(so=>photos[so]?.length>0));
-  const pendingSOs=new Set([...sos].filter(so=>!photos[so]?.length));
+  const doneSOs=new Set([...sos].filter(so=>visiblePhotosFor(so).length>0));
+  const pendingSOs=new Set([...sos].filter(so=>!visiblePhotosFor(so).length));
  
   
   document.getElementById('b-total').textContent=sos.size;
@@ -1518,7 +1521,7 @@ function updateAll(){
           <span style="color:var(--red);text-decoration:line-through">${fmtDate(c.from)}</span>
           <span style="color:var(--text3)">→</span>
           <span style="color:var(--accent);font-weight:600">${fmtDate(c.to)}</span>
-          <span style="margin-left:auto;color:var(--text3)">${photos[c.so]?.length>0?'✓ '+photos[c.so].length+' photo':'No photo yet'}</span>
+          <span style="margin-left:auto;color:var(--text3)">${visiblePhotosFor(c.so).length>0?'✓ '+visiblePhotosFor(c.so).length+' photo':'No photo yet'}</span>
         </div>
       </div>`).join('');
     const missingCards=missingFromCSV.map(c=>`
@@ -1588,7 +1591,7 @@ function render(){
  
   const groups=groupBySO(filtered);
   groups.sort((a,b)=>{
-    const aP=photos[a.so]?.length>0,bP=photos[b.so]?.length>0;
+    const aP=visiblePhotosFor(a.so).length>0,bP=visiblePhotosFor(b.so).length>0;
     if(!aP&&bP) return -1; if(aP&&!bP) return 1;
     return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
   });
@@ -1606,7 +1609,7 @@ function render(){
   let html='';
   const openedSOs=[];
   for(const {so,travelers} of groups){
-    const soPhotos=photos[so]||[], hasPic=soPhotos.length>0;
+    const soPhotos=visiblePhotosFor(so), hasPic=soPhotos.length>0;
     const isOpen=allExp||expanded.has(so);
     const via0=travelers[0].via, customer=travelers[0].customer, soShipRaw=travelers[0].soShipRaw;
     const viaTag=makeViaTag(via0, travelers[0].location);
@@ -1689,27 +1692,38 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
       <td>${approveBtn}</td>
     </tr>`;
   }
-  const thumbs=soPhotos.map(p=>`
+  const visiblePhotos = (soPhotos||[]).filter(p=>isDeptVisible(p.department));
+  const deptsPresent = [...new Set(travelers.map(t=>t.department).filter(Boolean))];
+  const zoneDepts = deptsPresent.length ? deptsPresent : [null];
+  const thumbs=visiblePhotos.map(p=>`
     <div class="photo-thumb-wrap">
       <img class="photo-thumb" src="${p.url}" loading="lazy"
         title="${p.filename} · ${p.uploaded_by} · ${new Date(p.uploaded_at).toLocaleString()}"
         onclick="openLB('${p.url}','${p.filename}','${p.uploaded_by||''}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}','${so}')">
+      ${p.department?`<div style="position:absolute;bottom:-6px;left:-6px">${makeDeptPill(p.department)}</div>`:''}
       <div class="photo-del" onclick="event.stopPropagation();askDelPhoto('${p.id}','${p.storage_path||''}','${so}','${(p.filename||'').replace(/'/g,"\\'")}')">✕</div>
     </div>`).join('');
   html+=`<tr class="photo-row"><td colspan="6">
     <div class="photo-section">
-      ${soPhotos.length?`<div class="photo-thumbs">${thumbs}</div>`:''}
-      <div class="photo-bar">
-        <div class="upload-zone" id="uz-${so}" onclick="handleAddPhotoClick('${so}')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          ${soPhotos.length?'Add more':'Add photo'}
-        </div>
-        <input type="file" id="pi-${so}" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this)" style="display:none">
-        <span style="font-size:11px;font-family:var(--mono);color:${soPhotos.length?'var(--green)':'var(--text3)'}">
-          ${soPhotos.length?soPhotos.length+' photo'+(soPhotos.length>1?'s':'')+' uploaded':'No photos yet'}
-        </span>
+      ${visiblePhotos.length?`<div class="photo-thumbs">${thumbs}</div>`:''}
+      <div class="photo-bar" style="flex-direction:column;align-items:flex-start;gap:8px">
+        ${zoneDepts.map(d=>{
+          const idSuffix = d?('-'+d):'';
+          const cnt = visiblePhotos.filter(p=>(p.department||null)===d).length;
+          const label = d ? DEPT_META[d].label : '';
+          return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div class="upload-zone" id="uz-${so}${idSuffix}" onclick="handleAddPhotoClick('${so}'${d?`,'${d}'`:''})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              ${d?`Add ${label} photo`:(cnt?'Add more':'Add photo')}
+            </div>
+            <input type="file" id="pi-${so}${idSuffix}" accept="image/*" multiple onchange="handlePhotoUpload('${so}',this${d?`,'${d}'`:''})" style="display:none">
+            <span style="font-size:11px;font-family:var(--mono);color:${cnt?'var(--green)':'var(--text3)'}">
+              ${cnt?cnt+' photo'+(cnt>1?'s':'')+' uploaded':'No photos yet'}${d?' · '+label:''}
+            </span>
+          </div>`;
+        }).join('')}
       </div>
-      ${soPhotos.length?`<div class="photo-meta">Last upload by ${soPhotos[0].uploaded_by||'worker'} · ${new Date(soPhotos[0].uploaded_at).toLocaleString()}</div>`:''}
+      ${visiblePhotos.length?`<div class="photo-meta">Last upload by ${visiblePhotos[0].uploaded_by||'worker'} · ${new Date(visiblePhotos[0].uploaded_at).toLocaleString()}</div>`:''}
     </div>
     <div class="comments-section">
       <div class="comments-label">Comments</div>
@@ -1768,9 +1782,10 @@ function colorCheckRespond(confirmed){
   pendingColorCheckCallback = null;
   if(confirmed && cb) cb();
 }
-function handleAddPhotoClick(so){
+function handleAddPhotoClick(so, dept){
+  const idSuffix = dept ? '-'+dept : '';
   showColorCheckModal(so, ()=>{
-    const input = document.getElementById('pi-'+so);
+    const input = document.getElementById('pi-'+so+idSuffix);
     if(input) input.click();
   });
 }
@@ -2099,10 +2114,11 @@ function compressPhoto(file, maxSizeKB=800, maxWidth=1920, maxHeight=1920){
   });
 }
  
-async function handlePhotoUpload(so, input){
+async function handlePhotoUpload(so, input, dept){
   const files=[...input.files]; if(!files.length) return;
   if(currentProfile?.role==='viewer'){ toast('Access denied','Viewers cannot upload photos.','red'); return; }
-  const uz=document.getElementById('uz-'+so);
+  const idSuffix = dept ? '-'+dept : '';
+  const uz=document.getElementById('uz-'+so+idSuffix);
   if(uz) uz.classList.add('uploading');
   try{
     for(const file of files){
@@ -2115,9 +2131,9 @@ async function handlePhotoUpload(so, input){
       });
       if(!r.ok) throw new Error(await r.text());
       const url=`${SUPA_URL}/storage/v1/object/public/${BUCKET}/${path}`;
-      const rows=await sbInsert('photos',{so,filename:file.name,url,uploaded_by:currentProfile?.full_name||'worker',storage_path:path});
+      const rows=await sbInsert('photos',{so,filename:file.name,url,uploaded_by:currentProfile?.full_name||'worker',storage_path:path,department:dept||null});
       if(!photos[so]) photos[so]=[];
-      photos[so].unshift({url,id:rows[0]?.id,storage_path:path,filename:file.name,uploaded_at:new Date().toISOString(),uploaded_by:currentProfile?.full_name||'worker'});
+      photos[so].unshift({url,id:rows[0]?.id,storage_path:path,filename:file.name,uploaded_at:new Date().toISOString(),uploaded_by:currentProfile?.full_name||'worker',department:dept||null});
       await logActivity('photo_upload', so, `Uploaded "${file.name}"`);
       if(savedKB > 50) console.log(`Compressed ${file.name}: saved ${savedKB}KB`);
     }
