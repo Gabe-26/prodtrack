@@ -15,8 +15,20 @@
   --amber:#ffb347;--amber-dim:rgba(255,179,71,0.12);
   --blue:#60b8f0;--blue-dim:rgba(96,184,240,0.12);
   --green:#60d08a;--green-dim:rgba(96,208,138,0.10);
+  --pink:#ff6fb0;--pink-dim:rgba(255,111,176,0.12);
   --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
 }
+.dept-pill{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-family:var(--mono);font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;letter-spacing:0.02em}
+.dept-wood{background:var(--green-dim);color:var(--green);border:1px solid rgba(96,208,138,0.3)}
+.dept-metal{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,184,240,0.3)}
+.dept-gate{background:var(--pink-dim);color:var(--pink);border:1px solid rgba(255,111,176,0.3)}
+.dept-gear{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,0.3)}
+.dept-check-row{display:flex;align-items:center;gap:8px;padding:5px 18px;cursor:pointer;user-select:none;font-size:12px;color:var(--text2)}
+.dept-check-row:hover{color:var(--text)}
+.dept-check-box{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dept-check-row.on .dept-check-box{background:var(--accent);border-color:var(--accent)}
+.dept-check-row.on .dept-check-box svg{display:block}
+.dept-check-box svg{display:none;width:9px;height:9px;color:#0f0f11}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden;font-variant-numeric:tabular-nums}
 .app{display:grid;grid-template-rows:auto 1fr;height:100dvh}
@@ -524,6 +536,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         Activity log
       </div>
+      <div class="sdiv" id="dept-divider" style="display:none"></div>
+      <div class="s-sec" id="dept-sec" style="display:none">Departments</div>
+      <div id="dept-filter-list"></div>
       <div class="sb-user">
         <div class="u-avatar" id="u-avatar">?</div>
         <div style="flex:1;overflow:hidden">
@@ -788,8 +803,57 @@ async function loadProfile(){
     full_name: p.full_name || fromEmail(currentUser.email),
     role: p.role || 'worker',
     username: p.username || fromEmail(currentUser.email),
-    pref_lang: p.pref_lang || 'none'
+    pref_lang: p.pref_lang || 'none',
+    departments: p.departments || []
   };
+}
+
+// ── Departments ────────────────────────────────────────────────────────────
+const DEPT_META = {
+  wood:  {label:'Wood',  cls:'dept-wood'},
+  metal: {label:'Metal', cls:'dept-metal'},
+  gate:  {label:'Gate',  cls:'dept-gate'},
+  gear:  {label:'Gear',  cls:'dept-gear'}
+};
+const DEPT_ORDER = ['wood','metal','gate','gear'];
+let activeDepts = new Set();
+function makeDeptPill(d){
+  const m = DEPT_META[d];
+  if(!m) return '';
+  return `<span class="dept-pill ${m.cls}">${m.label[0]}${d==='gate'?'T':''}</span>`;
+}
+function deptPillsForTravelers(travelers){
+  const present = [...new Set((travelers||[]).map(t=>t.department).filter(Boolean))];
+  return present.map(makeDeptPill).join('');
+}
+function isDeptVisible(department){
+  return !department || activeDepts.has(department);
+}
+function renderDeptFilter(){
+  const myDepts = (currentProfile?.departments||[]).filter(d=>DEPT_ORDER.includes(d));
+  const sec = document.getElementById('dept-sec');
+  const div = document.getElementById('dept-divider');
+  const list = document.getElementById('dept-filter-list');
+  if(myDepts.length <= 1){
+    sec.style.display='none'; div.style.display='none'; list.innerHTML='';
+    activeDepts = new Set(myDepts);
+    return;
+  }
+  sec.style.display='block'; div.style.display='block';
+  list.innerHTML = DEPT_ORDER.filter(d=>myDepts.includes(d)).map(d=>{
+    const m = DEPT_META[d];
+    const on = activeDepts.has(d);
+    return `<div class="dept-check-row${on?' on':''}" onclick="toggleDept('${d}')">
+      <span class="dept-check-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+      <span class="dept-pill ${m.cls}" style="pointer-events:none">${m.label[0]}${d==='gate'?'T':''}</span>
+      <span>${m.label}</span>
+    </div>`;
+  }).join('');
+}
+function toggleDept(d){
+  if(activeDepts.has(d)) activeDepts.delete(d); else activeDepts.add(d);
+  renderDeptFilter();
+  updateAll();
 }
  
 function showApp(){
@@ -818,6 +882,8 @@ function showApp(){
   document.body.classList.toggle('manager',    isMgr);
   document.body.classList.toggle('viewer',     isViewer || isProd); // production = no photo upload
   document.body.classList.toggle('can-edit-date', isProd || uname === 'zgta26');
+  activeDepts = new Set(currentProfile?.departments || []);
+  renderDeptFilter();
   loadAll();
 }
  
@@ -899,7 +965,8 @@ async function loadOrders(){
   orders = rows.map(r=>({
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
-    soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer
+    soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer,
+    department:r.department
   }));
   // Load archived separately
   const arch = await sbGet('orders','select=*&archived=eq.true&order=so_ship.desc,so.asc');
@@ -907,7 +974,7 @@ async function loadOrders(){
   arch.forEach(r=>{
     if(!archMap[r.so]) archMap[r.so]=[];
     archMap[r.so].push({traveler:r.traveler,so:r.so,item:r.item,desc:r.description,
-      qty:r.qty,line:r.line,soShip:r.so_ship?fmtDate(r.so_ship):'',soShipRaw:r.so_ship,via:r.via,location:r.location||'',customer:r.customer});
+      qty:r.qty,line:r.line,soShip:r.so_ship?fmtDate(r.so_ship):'',soShipRaw:r.so_ship,via:r.via,location:r.location||'',customer:r.customer,department:r.department});
   });
   archivedOrders = Object.keys(archMap).map(so=>({so, travelers:archMap[so],
     soShip: archMap[so][0].soShip, soShipRaw: archMap[so][0].soShipRaw,
@@ -1375,9 +1442,10 @@ function fmtDate(iso){
  
 // ── Update all ────────────────────────────────────────────────────────────────
 function updateAll(){
-  const sos=new Set(orders.map(o=>o.so));
+  const deptOrders = orders.filter(o=>isDeptVisible(o.department));
+  const sos=new Set(deptOrders.map(o=>o.so));
   const nextDays = getNextWorkingDays();
-  const tomorrowSOs=new Set(orders.filter(o=>o.soShipRaw&&nextDays.includes(o.soShipRaw)).map(o=>o.so));
+  const tomorrowSOs=new Set(deptOrders.filter(o=>o.soShipRaw&&nextDays.includes(o.soShipRaw)).map(o=>o.so));
   const doneSOs=new Set([...sos].filter(so=>photos[so]?.length>0));
   const pendingSOs=new Set([...sos].filter(so=>!photos[so]?.length));
  
@@ -1444,7 +1512,7 @@ function updateAll(){
   }
  
   // Date filter
-  const dates=[...new Set(orders.map(o=>o.soShipRaw).filter(Boolean))].sort();
+  const dates=[...new Set(deptOrders.map(o=>o.soShipRaw).filter(Boolean))].sort();
   const df=document.getElementById('f-date'),cur=df.value;
   df.innerHTML='<option value="">All ship dates</option>'+dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${fmtDate(d)}</option>`).join('');
  
@@ -1469,6 +1537,7 @@ function render(){
   const tomorrow = nextDays[0];
  
   let filtered=orders.filter(o=>{
+    if(!isDeptVisible(o.department)) return false;
     if(activeLine&&o.line!==activeLine) return false;
     if(via){
       const [viaType, viaLoc] = via.split('|');
@@ -1539,6 +1608,7 @@ function render(){
       <td><div style="display:flex;align-items:center;gap:8px">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
+        ${deptPillsForTravelers(travelers)}
         ${(soComments[so]||[]).length?`<span title="${soComments[so].length} comment${soComments[so].length>1?'s':''}" style="display:inline-flex;align-items:center;color:var(--blue);opacity:0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></span>`:''}
         ${approvalBadge}
       </div></td>
@@ -1743,7 +1813,7 @@ function handleSORowClick(so){
 }
 let currentModalSO = null;
 function openSOModal(so){
-  const travelers = orders.filter(o=>o.so===so);
+  const travelers = orders.filter(o=>o.so===so && isDeptVisible(o.department));
   if(!travelers.length) return;
   currentModalSO = so;
   const soPhotos = photos[so]||[];
@@ -1762,6 +1832,7 @@ function openSOModal(so){
   document.getElementById('so-modal-summary').innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       ${viaTag}
+      ${deptPillsForTravelers(travelers)}
       <span style="font-size:13px;color:var(--text)">${t0.customer}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
