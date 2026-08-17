@@ -1128,6 +1128,13 @@ function renderUsers(){
       <div class="uc-info">
         <div class="uc-name">${u.full_name||'—'} ${isMe?'<span class="tag td">you</span>':''}</div>
         <div class="uc-username">@${uname} · <span class="tag ${roleCls[role]||'td'}">${roleLabel[role]||role}</span></div>
+        <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+          ${DEPT_ORDER.map(d=>{
+            const m=DEPT_META[d];
+            const on=(u.departments||[]).includes(d);
+            return `<span class="dept-pill ${on?m.cls:'td'}" style="cursor:pointer;opacity:${on?'1':'0.45'}" title="${on?'Click to remove '+m.label:'Click to grant '+m.label}" onclick="toggleUserDept('${u.id}','${d}')">${m.label[0]}${d==='gate'?'T':''}</span>`;
+          }).join('')}
+        </div>
       </div>
       <div class="uc-actions">
         <button class="btn" onclick="toggleRole('${u.id}','${role}')" title="Change role to ${roleNext[role]}">
@@ -1137,6 +1144,28 @@ function renderUsers(){
       </div>
     </div>`;
   }).join('');
+}
+
+async function toggleUserDept(userId, dept){
+  const u = allUsers.find(x=>x.id===userId);
+  if(!u) return;
+  const cur = new Set(u.departments||[]);
+  if(cur.has(dept)) cur.delete(dept); else cur.add(dept);
+  const newDepts = [...cur];
+  u.departments = newDepts; // optimistic
+  renderUsers();
+  try{
+    await sbUpdate('profiles', userId, {departments: newDepts});
+    if(userId === currentUser?.id){
+      currentProfile.departments = newDepts;
+      activeDepts = new Set(newDepts);
+      renderDeptFilter();
+      updateAll();
+    }
+  } catch(e){
+    toast('Error', e.message, 'red');
+    await loadUsers();
+  }
 }
  
 async function toggleRole(userId, currentRole){
