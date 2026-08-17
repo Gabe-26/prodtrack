@@ -106,7 +106,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .menu-btn{display:flex}
   .topbar-right .btn:not(.primary){display:none}
   /* Keep Share report visible on mobile, compact */
-  #share-report-btn{display:inline-flex!important;padding:6px 8px;font-size:11px}
+  #share-report-btn{padding:6px 8px;font-size:11px}
   #share-report-btn svg{width:13px;height:13px}
   /* Hide refresh button on mobile to save space (auto-refresh still works) */
   #refresh-btn{display:none!important}
@@ -117,7 +117,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .toolbar{padding:8px 10px;gap:6px}
   .search{font-size:13px}
   select.filt{font-size:11px;padding:5px 6px}
-  .xbtn{display:inline-flex;font-size:11px;padding:6px 9px}
+  .xbtn{display:none}
  
   /* Show ship via col, hide travelers col on mobile */
   thead th:nth-child(5){display:none}
@@ -2063,6 +2063,7 @@ document.getElementById('lightbox').addEventListener('click',e=>{if(e.target===d
  
 // ── Share report ──────────────────────────────────────────────────────────────
 function generateReport(){
+  if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can share reports.','red'); return; }
   const nextDays = getNextWorkingDays();
   const tomorrowOrders = orders.filter(o => o.soShipRaw && nextDays.includes(o.soShipRaw));
   const groups = groupBySO(tomorrowOrders);
