@@ -1323,6 +1323,11 @@ async function handleCSV(file){
 }
  
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function escapeHtml(s){
+  const d=document.createElement('div');
+  d.textContent = s==null ? '' : String(s);
+  return d.innerHTML;
+}
 const isCus=o=>o.item.includes('-CUS')||o.item.endsWith('CUS');
 function makeViaTag(via, location){
   if(via==='OUR TRUCK') return `<span class="via-pill via-truck">🚚<span class="via-label"> Our Truck</span></span>`;
@@ -1621,7 +1626,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
                 <button class="comment-translate" id="trbtn-${c.id}" onclick="event.stopPropagation();translateComment('${so}','${c.id}',this)">Translate</button>
                 ${canDel?`<button class="comment-del" onclick="deleteComment('${c.id}','${so}')">✕</button>`:''}
               </div>
-              <div class="comment-body">${c.body}</div>
+              <div class="comment-body">${escapeHtml(c.body)}</div>
               <div class="comment-translation" id="trout-${c.id}" style="display:none"></div>
             </div>
           </div>`;
