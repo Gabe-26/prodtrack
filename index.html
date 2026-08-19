@@ -102,7 +102,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .app{display:flex;flex-direction:column;height:100dvh}
   .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;min-width:0}
   .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;min-width:0}
-  #view-main .toolbar{min-width:0}
+  #view-main .toolbar{min-width:0;width:100%;box-sizing:border-box;overflow-x:hidden}
   #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .metrics{flex-shrink:0}.toolbar{flex-shrink:0}
   .table-wrap{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
