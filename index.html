@@ -100,8 +100,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 @media(max-width:700px),(max-height:500px) and (orientation:landscape){
   html,body{overflow:hidden;height:100%;position:fixed;width:100%}
   .app{display:flex;flex-direction:column;height:100dvh}
-  .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
-  .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+  .main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;min-width:0}
+  .content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;min-width:0}
+  #view-main .toolbar{min-width:0}
   #view-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
   .metrics{flex-shrink:0}.toolbar{flex-shrink:0}
   .table-wrap{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0}
@@ -560,7 +561,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     <div class="content">
  
       <!-- Dashboard -->
-      <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+      <div id="view-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;min-width:0">
         <div class="dc-banner" id="dc-banner">
           <div class="dc-title">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
