@@ -2210,7 +2210,7 @@ document.getElementById('lightbox').addEventListener('click',e=>{if(e.target===d
 function generateReport(){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can share reports.','red'); return; }
   const nextDays = getNextWorkingDays();
-  const tomorrowOrders = orders.filter(o => o.soShipRaw && nextDays.includes(o.soShipRaw));
+  const tomorrowOrders = orders.filter(o => o.soShipRaw && nextDays.includes(o.soShipRaw) && isOrderVisible(o));
   const groups = groupBySO(tomorrowOrders);
   if(!groups.length){ toast('No orders','No orders found for tomorrow.','amber'); return; }
  
