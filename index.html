@@ -818,6 +818,7 @@ const DEPT_META = {
   gate:  {label:'Gate',  cls:'dept-gate'},
   gear:  {label:'Gear',  cls:'dept-gear'}
 };
+const DEPT_COLOR_VAR = {wood:'--green', metal:'--blue', gate:'--pink', gear:'--amber'};
 const DEPT_ORDER = ['wood','metal','gate','gear'];
 let activeDepts = new Set();
 function makeDeptPill(d){
@@ -1698,7 +1699,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
         : `<span class="tag td">Pending</span>`;
  
     html+=`<tr class="tr-row${isApproved?' approved-row':''}">
-      <td style="font-size:12px;font-family:var(--mono)"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text);font-weight:600">${o.traveler}</span></td>
+      <td style="font-size:12px;font-family:var(--mono)${o.department?`;box-shadow:inset 3px 0 4px -1px var(${DEPT_COLOR_VAR[o.department]})`:''}"><span style="opacity:0.35;margin-right:5px">└</span><span style="color:var(--text);font-weight:600">${o.traveler}</span></td>
       <td style="color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${o.desc}</td>
       <td><span class="mono" style="${isCus(o)?'color:var(--amber)':'color:var(--text)'};font-weight:600">${o.item}</span></td>
       <td style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
