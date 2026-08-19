@@ -833,7 +833,7 @@ function isDeptVisible(department){
   return !department || activeDepts.has(department);
 }
 function isOrderVisible(o){
-  return isDeptVisible(o.department) || isDeptVisible(o.deptExtra);
+  return isDeptVisible(o.department) || (!!o.deptExtra && activeDepts.has(o.deptExtra));
 }
 function visiblePhotosFor(so){
   return (photos[so]||[]).filter(p=>isDeptVisible(p.department));
