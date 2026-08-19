@@ -826,11 +826,14 @@ function makeDeptPill(d){
   return `<span class="dept-pill ${m.cls}">${m.label[0]}${d==='gate'?'T':''}</span>`;
 }
 function deptPillsForTravelers(travelers){
-  const present = [...new Set((travelers||[]).map(t=>t.department).filter(Boolean))];
+  const present = [...new Set((travelers||[]).flatMap(t=>[t.department,t.deptExtra]).filter(Boolean))];
   return present.map(makeDeptPill).join('');
 }
 function isDeptVisible(department){
   return !department || activeDepts.has(department);
+}
+function isOrderVisible(o){
+  return isDeptVisible(o.department) || isDeptVisible(o.deptExtra);
 }
 function visiblePhotosFor(so){
   return (photos[so]||[]).filter(p=>isDeptVisible(p.department));
@@ -975,7 +978,7 @@ async function loadOrders(){
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
     soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer,
-    department:r.department
+    department:r.department, deptExtra:r.department_extra
   }));
 }
 let archivedLoaded = false;
@@ -1485,7 +1488,7 @@ function fmtDate(iso){
  
 // ── Update all ────────────────────────────────────────────────────────────────
 function updateAll(){
-  const deptOrders = orders.filter(o=>isDeptVisible(o.department));
+  const deptOrders = orders.filter(o=>isOrderVisible(o));
   const sos=new Set(deptOrders.map(o=>o.so));
   const nextDays = getNextWorkingDays();
   const tomorrowSOs=new Set(deptOrders.filter(o=>o.soShipRaw&&nextDays.includes(o.soShipRaw)).map(o=>o.so));
@@ -1580,7 +1583,7 @@ function render(){
   const tomorrow = nextDays[0];
  
   let filtered=orders.filter(o=>{
-    if(!isDeptVisible(o.department)) return false;
+    if(!isOrderVisible(o)) return false;
     if(activeLine&&o.line!==activeLine) return false;
     if(via){
       const [viaType, viaLoc] = via.split('|');
@@ -1706,6 +1709,8 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
   const visiblePhotos = (soPhotos||[]).filter(p=>isDeptVisible(p.department));
   const deptsPresent = [...new Set(travelers.map(t=>t.department).filter(Boolean))];
   const zoneDepts = deptsPresent.length ? deptsPresent : [null];
+  const commentDeptsPresent = [...new Set(travelers.flatMap(t=>[t.department,t.deptExtra]).filter(Boolean))];
+  const commentZoneDepts = commentDeptsPresent.length ? commentDeptsPresent : [null];
   const thumbs=visiblePhotos.map(p=>`
     <div class="photo-thumb-wrap">
       <img class="photo-thumb" src="${p.url}" loading="lazy"
@@ -1738,7 +1743,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
     </div>
     <div class="comments-section">
       <div class="comments-label">Comments</div>
-      ${zoneDepts.map(d=>{
+      ${commentZoneDepts.map(d=>{
         const idSuffix = d?('-'+d):'';
         const canWrite = (currentProfile?.role==='manager'||currentProfile?.role==='production');
         const canDel = canWrite;
@@ -1875,7 +1880,7 @@ function handleSORowClick(so){
 }
 let currentModalSO = null;
 function openSOModal(so){
-  const travelers = orders.filter(o=>o.so===so && isDeptVisible(o.department));
+  const travelers = orders.filter(o=>o.so===so && isOrderVisible(o));
   if(!travelers.length) return;
   currentModalSO = so;
   const soPhotos = photos[so]||[];
