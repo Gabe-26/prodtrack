@@ -974,7 +974,9 @@ async function loadOrders(){
     soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer,
     department:r.department
   }));
-  // Load archived separately
+}
+let archivedLoaded = false;
+async function loadArchivedOrders(){
   const arch = await sbGet('orders','select=*&archived=eq.true&order=so_ship.desc,so.asc');
   const archMap = {};
   arch.forEach(r=>{
@@ -985,6 +987,7 @@ async function loadOrders(){
   archivedOrders = Object.keys(archMap).map(so=>({so, travelers:archMap[so],
     soShip: archMap[so][0].soShip, soShipRaw: archMap[so][0].soShipRaw,
     via: archMap[so][0].via, customer: archMap[so][0].customer}));
+  archivedLoaded = true;
 }
 async function loadPhotos(){
   const rows = await sbGet('photos','select=*&order=uploaded_at.desc');
@@ -2368,7 +2371,7 @@ async function archiveByDate(){
       method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
       body: JSON.stringify({archived:true})
     });
-    await loadOrders(); updateAll(); renderArchive();
+    await loadOrders(); await loadArchivedOrders(); updateAll(); renderArchive();
     toast(`${uniqueSOs.length} order${uniqueSOs.length>1?'s':''} archived`,`Moved to archive successfully.`,'green');
   } catch(e){toast('Error',e.message,'red');}
 }
@@ -2384,7 +2387,7 @@ async function archiveShipped(){
       method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
       body: JSON.stringify({archived:true})
     });
-    await loadOrders(); updateAll(); renderArchive();
+    await loadOrders(); await loadArchivedOrders(); updateAll(); renderArchive();
     toast(`${pastOrders.length} order${pastOrders.length>1?'s':''} archived`,'Moved to archive successfully.','green');
   } catch(e){toast('Error',e.message,'red');}
 }
@@ -2396,11 +2399,19 @@ async function restoreSO(so){
       method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
       body: JSON.stringify({archived:false})
     });
-    await loadOrders(); updateAll(); renderArchive();
+    await loadOrders(); await loadArchivedOrders(); updateAll(); renderArchive();
     toast('Order restored',`SO ${so} is back in the main dashboard.`,'green');
   } catch(e){toast('Error',e.message,'red');}
 }
  
+async function openArchiveView(){
+  if(!archivedLoaded){
+    showLoading('Loading archive…');
+    try{ await loadArchivedOrders(); } catch(e){ toast('Error',e.message,'red'); }
+    hideLoading();
+  }
+  renderArchive();
+}
 function renderArchive(){
   const q=(document.getElementById('archive-search')?.value||'').toLowerCase();
   const filtered = archivedOrders.filter(g=>{
@@ -2447,7 +2458,7 @@ function sv(v){
   });
   document.getElementById('nav-'+v)?.classList.add('active');
   if(v==='users') loadUsers();
-  if(v==='archive') renderArchive();
+  if(v==='archive') openArchiveView();
   if(v==='log') loadLog();
   closeDrawer(); render();
 }
