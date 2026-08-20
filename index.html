@@ -754,6 +754,8 @@ const BUCKET   = 'order-photos';
  
 // ── State ─────────────────────────────────────────────────────────────────────
 let accessToken = null;
+let refreshToken = null;
+let sessExpiresAt = 0;
 let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
 let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [], soComments = {};
@@ -807,6 +809,8 @@ async function doLogin(){
     const data = await r.json();
     if(!r.ok) throw new Error('Incorrect username or password.');
     accessToken = data.access_token;
+    refreshToken = data.refresh_token;
+    sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
     currentUser = data.user;
     saveSession(data);
     await loadProfile();
@@ -944,11 +948,30 @@ async function doLogout(){
 function saveSession(data){
   localStorage.setItem('pt_sess', JSON.stringify({
     access_token: data.access_token,
+    refresh_token: data.refresh_token,
     expires_at: data.expires_at || (Date.now()/1000+3600),
     user_id: data.user.id, email: data.user.email
   }));
 }
 function clearSession(){ localStorage.removeItem('pt_sess'); }
+
+async function refreshAuthToken(){
+  if(!refreshToken) return false;
+  try{
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':ANON_KEY},
+      body: JSON.stringify({refresh_token: refreshToken})
+    });
+    const data = await r.json();
+    if(!r.ok || !data.access_token) return false;
+    accessToken = data.access_token;
+    refreshToken = data.refresh_token || refreshToken;
+    sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
+    saveSession({access_token:accessToken, refresh_token:refreshToken, expires_at:sessExpiresAt, user:currentUser});
+    return true;
+  }catch(e){ return false; }
+}
  
 // ── Supabase helpers ──────────────────────────────────────────────────────────
 async function sbGet(table, params=''){
@@ -2540,7 +2563,10 @@ function startAutoRefresh(){
   countdownTimer=setInterval(()=>{refreshCountdown--;if(refreshCountdown<=0)refreshCountdown=60;},1000);
   refreshTimer=setInterval(async()=>{
     refreshCountdown=60;
-    try{await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]);updateAll();render();}catch(e){}
+    try{
+      if(sessExpiresAt && sessExpiresAt - Date.now()/1000 < 300) await refreshAuthToken();
+      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]);updateAll();render();
+    }catch(e){}
   },60000);
 }
  
@@ -2571,9 +2597,15 @@ document.addEventListener('keydown',e=>{
   if(stored){
     try{
       const sess=JSON.parse(stored);
-      if(sess.access_token&&sess.expires_at>Date.now()/1000){
+      if(sess.access_token){
         accessToken=sess.access_token;
+        refreshToken=sess.refresh_token||null;
+        sessExpiresAt=sess.expires_at||0;
         currentUser={id:sess.user_id,email:sess.email};
+        if(sessExpiresAt<=Date.now()/1000){
+          const ok = await refreshAuthToken();
+          if(!ok) return;
+        }
         await loadProfile();
         showApp();
         startAutoRefresh();
