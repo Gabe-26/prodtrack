@@ -18,6 +18,17 @@
   --pink:#ff6fb0;--pink-dim:rgba(255,111,176,0.12);
   --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
 }
+body.light-mode{
+  --bg:#f4f4f2;--surface:#ffffff;--surface2:#eeeeeb;--surface3:#e4e4e0;
+  --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.14);
+  --text:#1c1c1a;--text2:#6a6862;--text3:#98968e;
+  --accent-dim:rgba(140,180,40,0.14);--accent-dim2:rgba(140,180,40,0.07);
+  --red-dim:rgba(255,95,95,0.14);
+  --amber-dim:rgba(255,179,71,0.16);
+  --blue-dim:rgba(96,184,240,0.16);
+  --green-dim:rgba(96,208,138,0.14);
+  --pink-dim:rgba(255,111,176,0.16);
+}
 .dept-pill{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-family:var(--mono);font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;letter-spacing:0.02em}
 .dept-wood{background:var(--green-dim);color:var(--green);border:1px solid rgba(96,208,138,0.3)}
 .dept-metal{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(96,184,240,0.3)}
@@ -553,6 +564,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
             <option value="en">Comments → English</option>
             <option value="es">Comments → Spanish</option>
           </select>
+          <label style="display:flex;align-items:center;gap:5px;margin-top:5px;font-size:10px;font-family:var(--mono);color:var(--text3);cursor:pointer">
+            <input type="checkbox" id="theme-toggle" onchange="updateTheme(this.checked)" style="cursor:pointer">
+            Light mode
+          </label>
         </div>
         <button class="logout-btn" onclick="doLogout()" title="Sign out">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -812,6 +827,7 @@ async function loadProfile(){
     role: p.role || 'worker',
     username: p.username || fromEmail(currentUser.email),
     pref_lang: p.pref_lang || 'none',
+    theme: p.theme || 'dark',
     departments: p.departments || []
   };
 }
@@ -887,6 +903,9 @@ function showApp(){
   document.getElementById('u-role-label').textContent = isMgr ? 'Manager' : isViewer ? 'Viewer' : isProd ? 'Production' : 'Worker';
   document.getElementById('u-avatar').textContent = name.charAt(0);
   document.getElementById('pref-lang-select').value = currentProfile?.pref_lang || 'none';
+  document.body.classList.toggle('light-mode', currentProfile?.theme === 'light');
+  const themeToggle = document.getElementById('theme-toggle');
+  if(themeToggle) themeToggle.checked = currentProfile?.theme === 'light';
   document.getElementById('mgr-pill').style.display   = isMgr  ? 'inline-flex' : 'none';
   document.getElementById('viewer-pill').style.display = isViewer ? 'inline-flex' : 'none';
   document.getElementById('prod-pill').style.display   = isProd ? 'inline-flex' : 'none';
@@ -1091,6 +1110,14 @@ async function updatePrefLang(val){
   catch(e){ toast('Error saving preference', e.message, 'red'); }
   render();
   refreshSOModalIfOpen();
+}
+async function updateTheme(isLight){
+  if(!currentProfile) return;
+  const val = isLight ? 'light' : 'dark';
+  currentProfile.theme = val;
+  document.body.classList.toggle('light-mode', isLight);
+  try{ await sbUpdate('profiles', currentUser.id, {theme: val}); }
+  catch(e){ toast('Error saving preference', e.message, 'red'); }
 }
 // Auto-shows translations for comments that don't match the user's preferred language
 function autoTranslateComments(so){
@@ -1749,7 +1776,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
           const cnt = visiblePhotos.filter(p=>(p.department||null)===d).length;
           const label = d ? DEPT_META[d].label : '';
           return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <div class="upload-zone" id="uz-${so}${idSuffix}" onclick="handleAddPhotoClick('${so}'${d?`,'${d}'`:''})">
+            <div class="upload-zone" id="uz-${so}${idSuffix}" onclick="handleAddPhotoClick('${so}'${d?`,'${d}'`:''})"${d?` style="border-color:var(${DEPT_COLOR_VAR[d]})"`:''}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               ${d?`Add ${label} photo`:(cnt?'Add more':'Add photo')}
             </div>
