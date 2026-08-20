@@ -126,15 +126,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .approve-btn{font-size:10px;padding:3px 6px}
   .upload-view,.users-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,40px)}
   .pill:not(.live):not(.mgr){display:none}
-  .topbar{padding:0 12px;gap:8px;flex-shrink:0}
+  .topbar{padding:0 10px;gap:6px;flex-shrink:0}
+  .logo{font-size:14px}
+  .pill{padding:2px 7px;font-size:10px;gap:3px}
   .menu-btn{display:flex}
+  .topbar-right{gap:4px}
   .topbar-right .btn:not(.primary){display:none}
   /* Keep Share report visible on mobile, compact */
   #share-report-btn{padding:6px 8px;font-size:11px}
   #share-report-btn svg{width:13px;height:13px}
-  /* Hide refresh button on mobile to save space (auto-refresh still works) */
+  /* Refresh button: icon-only on mobile to save space, still renews the session + data */
   #refresh-btn{display:inline-flex!important;padding:6px 8px;font-size:11px}
   #refresh-btn svg{width:13px;height:13px}
+  #refresh-btn .refresh-label{display:none}
   .btn.primary{padding:6px 10px;font-size:11px}
   .sidebar{position:fixed;top:0;left:-290px;bottom:0;width:290px;z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
@@ -497,7 +501,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     <div class="topbar-right">
       <button class="btn" onclick="refreshData()" id="refresh-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-        Refresh
+        <span class="refresh-label">Refresh</span>
       </button>
       <button class="btn primary" id="top-upload-btn" onclick="sv('upload')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -1167,11 +1171,11 @@ function onCommentInput(so, dept){
 }
 async function refreshData(){
   const btn=document.getElementById('refresh-btn');
-  btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Refreshing';
+  btn.disabled=true; btn.innerHTML='<div class="spinner"></div> <span class="refresh-label">Refreshing</span>';
   try{ await refreshAuthToken(); await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
-  btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
+  btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> <span class="refresh-label">Refresh</span>';
 }
  
 // ── User management ───────────────────────────────────────────────────────────
