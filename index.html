@@ -1169,7 +1169,7 @@ async function syncNotifyToggleState(){
   toggle.checked = false;
   if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   try{
-    const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+    const reg = await navigator.serviceWorker.getRegistration();
     if(!reg) return;
     const sub = await reg.pushManager.getSubscription();
     toggle.checked = !!sub;
@@ -1190,7 +1190,7 @@ async function updateNotifyPref(enabled){
         if(toggle) toggle.checked = false;
         return;
       }
-      const reg = await navigator.serviceWorker.register('/sw.js');
+      const reg = await navigator.serviceWorker.register('sw.js');
       await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
       if(!sub){
@@ -1213,7 +1213,7 @@ async function updateNotifyPref(enabled){
   } else {
     try{
       if('serviceWorker' in navigator){
-        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+        const reg = await navigator.serviceWorker.getRegistration();
         if(reg){
           const sub = await reg.pushManager.getSubscription();
           if(sub){
