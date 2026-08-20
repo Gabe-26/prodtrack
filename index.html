@@ -583,6 +583,11 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           <select class="filt" id="f-date" onchange="render()">
             <option value="">All ship dates</option>
           </select>
+          <select class="filt" id="f-sort" onchange="render()">
+            <option value="">Sort: Default</option>
+            <option value="dept">Sort: Department</option>
+            <option value="customer">Sort: Customer A-Z</option>
+          </select>
           <button class="xbtn" id="xbtn" onclick="toggleExpandAll()">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
             Expand all
@@ -1605,7 +1610,22 @@ function render(){
   });
  
   const groups=groupBySO(filtered);
+  const sortMode=document.getElementById('f-sort').value;
+  function deptOrderIdx(g){
+    const depts=new Set();
+    g.travelers.forEach(t=>{ if(t.department) depts.add(t.department); if(t.deptExtra) depts.add(t.deptExtra); });
+    if(!depts.size) return DEPT_ORDER.length;
+    return Math.min(...[...depts].map(d=>DEPT_ORDER.indexOf(d)));
+  }
   groups.sort((a,b)=>{
+    if(sortMode==='dept'){
+      const di=deptOrderIdx(a)-deptOrderIdx(b);
+      if(di) return di;
+      return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
+    }
+    if(sortMode==='customer'){
+      return (a.travelers[0].customer||'').localeCompare(b.travelers[0].customer||'');
+    }
     const aP=visiblePhotosFor(a.so).length>0,bP=visiblePhotosFor(b.so).length>0;
     if(!aP&&bP) return -1; if(aP&&!bP) return 1;
     return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
