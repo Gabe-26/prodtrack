@@ -133,7 +133,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   #share-report-btn{padding:6px 8px;font-size:11px}
   #share-report-btn svg{width:13px;height:13px}
   /* Hide refresh button on mobile to save space (auto-refresh still works) */
-  #refresh-btn{display:none!important}
+  #refresh-btn{display:inline-flex!important;padding:6px 8px;font-size:11px}
+  #refresh-btn svg{width:13px;height:13px}
   .btn.primary{padding:6px 10px;font-size:11px}
   .sidebar{position:fixed;top:0;left:-290px;bottom:0;width:290px;z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
@@ -1167,7 +1168,7 @@ function onCommentInput(so, dept){
 async function refreshData(){
   const btn=document.getElementById('refresh-btn');
   btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Refreshing';
-  try{ await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
+  try{ await refreshAuthToken(); await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
   btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh';
