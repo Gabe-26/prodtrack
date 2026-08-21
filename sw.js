@@ -7,6 +7,7 @@ self.addEventListener('push', event => {
     body: data.body || 'A new photo was uploaded.',
     icon: data.icon || undefined,
     badge: data.badge || undefined,
+    subtitle: data.subtitle || undefined,
     data: { url: data.url || '/' }
   };
   event.waitUntil(self.registration.showNotification(title, options));
