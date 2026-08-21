@@ -938,6 +938,10 @@ function showApp(){
   loadAll();
 }
  
+async function forceReauth(msg){
+  await doLogout();
+  document.getElementById('login-err').textContent = msg || 'Session expired — please sign in again.';
+}
 async function doLogout(){
   clearSession();
   await fetch(`${SUPA_URL}/auth/v1/logout`,{method:'POST',headers:H()}).catch(()=>{});
@@ -965,22 +969,28 @@ function saveSession(data){
 }
 function clearSession(){ localStorage.removeItem('pt_sess'); }
 
+let refreshInFlight = null;
 async function refreshAuthToken(){
   if(!refreshToken) return false;
-  try{
-    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':ANON_KEY},
-      body: JSON.stringify({refresh_token: refreshToken})
-    });
-    const data = await r.json();
-    if(!r.ok || !data.access_token) return false;
-    accessToken = data.access_token;
-    refreshToken = data.refresh_token || refreshToken;
-    sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
-    saveSession({access_token:accessToken, refresh_token:refreshToken, expires_at:sessExpiresAt, user:currentUser});
-    return true;
-  }catch(e){ return false; }
+  if(refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async()=>{
+    try{
+      const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':ANON_KEY},
+        body: JSON.stringify({refresh_token: refreshToken})
+      });
+      const data = await r.json();
+      if(!r.ok || !data.access_token) return false;
+      accessToken = data.access_token;
+      refreshToken = data.refresh_token || refreshToken;
+      sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
+      saveSession({access_token:accessToken, refresh_token:refreshToken, expires_at:sessExpiresAt, user:currentUser});
+      return true;
+    }catch(e){ return false; }
+    finally{ refreshInFlight = null; }
+  })();
+  return refreshInFlight;
 }
  
 // ── Supabase helpers ──────────────────────────────────────────────────────────
@@ -1251,7 +1261,11 @@ function onCommentInput(so, dept){
 async function refreshData(){
   const btn=document.getElementById('refresh-btn');
   btn.disabled=true; btn.innerHTML='<div class="spinner"></div> <span class="refresh-label">Refreshing</span>';
-  try{ await refreshAuthToken(); await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh(); }
+  try{
+    const ok = await refreshAuthToken();
+    if(!ok){ await forceReauth('Session expired — please sign in again.'); btn.disabled=false; return; }
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
+  }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
   btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> <span class="refresh-label">Refresh</span>';
@@ -2648,7 +2662,10 @@ function startAutoRefresh(){
   refreshTimer=setInterval(async()=>{
     refreshCountdown=60;
     try{
-      if(sessExpiresAt && sessExpiresAt - Date.now()/1000 < 300) await refreshAuthToken();
+      if(sessExpiresAt && sessExpiresAt - Date.now()/1000 < 300){
+        const ok = await refreshAuthToken();
+        if(!ok){ await forceReauth('Session expired — please sign in again.'); return; }
+      }
       await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]);updateAll();render();
     }catch(e){}
   },60000);
@@ -2688,7 +2705,7 @@ document.addEventListener('keydown',e=>{
         currentUser={id:sess.user_id,email:sess.email};
         if(sessExpiresAt<=Date.now()/1000){
           const ok = await refreshAuthToken();
-          if(!ok) return;
+          if(!ok){ document.getElementById('login-err').textContent='Session expired — please sign in again.'; return; }
         }
         await loadProfile();
         showApp();
