@@ -1033,7 +1033,7 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments()]); updateAll(); sv('tomorrow'); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
@@ -1823,7 +1823,7 @@ function render(){
          </td>`
       : `<td><span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span></td>`;
  
-    html+=`<tr class="so-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')">
+    html+=`<tr id="so-row-${so}" class="so-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
@@ -2043,6 +2043,18 @@ async function approveAllTravelers(so){
 }
 
 function toggleSO(so){ if(expanded.has(so)) expanded.delete(so); else expanded.add(so); render(); }
+function openDeepLinkedSO(){
+  const so = new URLSearchParams(location.search).get('so');
+  if(!so) return;
+  history.replaceState({}, '', location.pathname);
+  if(!orders.some(o=>o.so===so)) return;
+  document.getElementById('search').value='';
+  document.getElementById('f-via').value='';
+  const df=document.getElementById('f-date'); if(df) df.value='';
+  sv('all');
+  handleSORowClick(so);
+  setTimeout(()=>{ document.getElementById('so-row-'+so)?.scrollIntoView({block:'center'}); },60);
+}
  
 // ── SO detail modal (mobile) ───────────────────────────────────────────────────
 function isMobileLayout(){
