@@ -621,7 +621,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
             Expand all
           </button>
         </div>
-        <div id="last-csv-line" style="display:none;margin:0 14px 10px;padding:6px 12px;font-size:14px;font-weight:600;color:var(--text);border-left:3px solid var(--accent)"></div>
+        <div id="last-csv-line" style="display:none;margin:0 14px 10px;padding:6px 12px;font-size:14px;font-weight:600;color:var(--text);text-align:center;border:3px solid var(--accent)"></div>
         <div class="table-wrap">
           <table id="main-table">
             <thead><tr id="thead-row">
@@ -1011,9 +1011,9 @@ async function loadLastCsvUpload(){
     if(!el) return;
     if(rows.length && rows[0].value){
       const d = new Date(rows[0].value);
-      el.textContent = 'Last CSV upload: '+d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      el.textContent = 'Last Updated: '+d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     } else {
-      el.textContent = 'Last CSV upload: never';
+      el.textContent = 'Last Updated: never';
     }
     el.style.display='block';
   } catch(e){}
