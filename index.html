@@ -621,6 +621,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
             Expand all
           </button>
         </div>
+        <div id="last-csv-line" style="display:none;padding:2px 14px 8px;font-size:11px;color:var(--text3)"></div>
         <div class="table-wrap">
           <table id="main-table">
             <thead><tr id="thead-row">
@@ -1003,6 +1004,20 @@ async function sbGet(table, params=''){
   if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
+async function loadLastCsvUpload(){
+  try{
+    const rows = await sbGet('app_meta','select=value&key=eq.last_csv_upload');
+    const el = document.getElementById('last-csv-line');
+    if(!el) return;
+    if(rows.length && rows[0].value){
+      const d = new Date(rows[0].value);
+      el.textContent = 'Last CSV upload: '+d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    } else {
+      el.textContent = 'Last CSV upload: never';
+    }
+    el.style.display='block';
+  } catch(e){}
+}
 async function sbUpsertOrders(rows){
   const r = await fetch(`${SUPA_URL}/rest/v1/orders?on_conflict=traveler`, {
     method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates'},
@@ -1033,7 +1048,7 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
@@ -1573,6 +1588,10 @@ async function handleCSV(file){
       const ts=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       document.getElementById('last-pill').textContent='Last upload: '+ts;
       document.getElementById('last-pill').style.display='inline-flex';
+      fetch(`${SUPA_URL}/rest/v1/app_meta?on_conflict=key`, {
+        method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates,return=minimal'},
+        body: JSON.stringify({key:'last_csv_upload', value:new Date().toISOString()})
+      }).then(()=>loadLastCsvUpload()).catch(()=>{});
       st.textContent='✓ '+parsed.length+' travelers at '+ts;
       await loadOrders(); updateAll();
       const hasIssues = dateChanges.length || missingFromCSV.length;
@@ -2640,6 +2659,7 @@ function sv(v){
   const showMain=['tomorrow','all','pending','done'].includes(v);
   const df=document.getElementById('f-date');
   if(df) df.style.display=v==='tomorrow'?'none':'inline-block';
+  if(df && v==='tomorrow') df.value='';
   document.getElementById('view-main').style.display=showMain?'flex':'none';
   document.getElementById('view-datechanges').style.display=v==='datechanges'?'flex':'none';
   document.getElementById('view-upload').style.display=v==='upload'?'flex':'none';
