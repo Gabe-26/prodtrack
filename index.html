@@ -143,6 +143,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   #refresh-btn{display:inline-flex!important;padding:6px 8px;font-size:11px;margin-left:25px}
   #refresh-btn svg{width:13px;height:13px}
   #top-upload-btn{display:none!important}
+  #print-report-btn{display:none!important}
   .btn.primary{padding:6px 10px;font-size:11px}
   .sidebar{position:fixed;top:0;left:-290px;bottom:0;width:290px;z-index:300;transition:left 0.28s cubic-bezier(0.4,0,0.2,1);padding-top:60px;box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
   .sidebar.open{left:0;box-shadow:4px 0 24px rgba(0,0,0,0.5)}
@@ -451,6 +452,57 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
   </div>
 </div>
  
+<!-- Print report modal -->
+<div class="modal-overlay" id="print-report-modal">
+  <div class="modal-card">
+    <div class="modal-title">
+      Print report
+      <button class="modal-close" onclick="closePrintReportModal()">✕</button>
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Start date</div>
+      <input class="modal-input" id="pr-start" type="date">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">End date</div>
+      <input class="modal-input" id="pr-end" type="date">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Departments</div>
+      <div id="pr-dept-list"></div>
+    </div>
+    <div class="modal-err" id="pr-err"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closePrintReportModal()">Cancel</button>
+      <button class="btn primary" id="pr-btn" onclick="doGeneratePrintReport()">Generate report</button>
+    </div>
+  </div>
+</div>
+ 
+<!-- Holidays modal (owner only) -->
+<div class="modal-overlay" id="holidays-modal">
+  <div class="modal-card">
+    <div class="modal-title">
+      Holidays
+      <button class="modal-close" onclick="closeHolidaysModal()">✕</button>
+    </div>
+    <div id="holidays-list" style="max-height:240px;overflow-y:auto;margin-bottom:14px"></div>
+    <div class="modal-field">
+      <div class="modal-label">Date</div>
+      <input class="modal-input" id="hol-date" type="date">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Name</div>
+      <input class="modal-input" id="hol-name" type="text" placeholder="e.g. Labor Day">
+    </div>
+    <div class="modal-err" id="hol-err"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeHolidaysModal()">Close</button>
+      <button class="btn primary" id="hol-add-btn" onclick="doAddHoliday()">Add holiday</button>
+    </div>
+  </div>
+</div>
+ 
 <!-- Add user modal -->
 <div class="modal-overlay" id="add-user-modal">
   <div class="modal-card">
@@ -525,6 +577,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         Share report
       </button>
+      <button class="btn" id="print-report-btn" onclick="openPrintReportModal()" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print report
+      </button>
     </div>
   </div>
  
@@ -564,6 +620,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div class="nav-item" id="nav-archive" onclick="sv('archive')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
         Archive<span class="nb" id="b-archive">0</span>
+      </div>
+      <div class="nav-item" id="nav-holidays" onclick="openHolidaysModal()" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Holidays
       </div>
       <div class="nav-item" id="nav-log" onclick="sv('log')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -782,7 +842,7 @@ let refreshToken = null;
 let sessExpiresAt = 0;
 let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
-let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [], soComments = {};
+let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [], soComments = {}, holidayList = [], holidayDates = new Set();
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
 let collapsedTravelers = new Set();
 let missingFromCSV = [];
@@ -942,9 +1002,11 @@ function showApp(){
   // Manager-only UI
   document.getElementById('top-upload-btn').style.display  = isMgr ? 'inline-flex' : 'none';
   document.getElementById('share-report-btn').style.display = isMgr ? 'inline-flex' : 'none';
+  document.getElementById('print-report-btn').style.display = isMgr ? 'inline-flex' : 'none';
   document.getElementById('nav-upload').style.display  = isMgr ? 'flex' : 'none';
   document.getElementById('nav-users').style.display   = isMgr ? 'flex' : 'none';
   document.getElementById('nav-archive').style.display = isMgr ? 'flex' : 'none';
+  document.getElementById('nav-holidays').style.display = uname === 'zgta26' ? 'flex' : 'none';
   // Body classes drive CSS permissions
   document.body.classList.toggle('manager',    isMgr);
   document.body.classList.toggle('viewer',     isViewer || isProd); // production = no photo upload
@@ -1029,6 +1091,13 @@ async function loadLastCsvUpload(){
     el.style.display='block';
   } catch(e){}
 }
+async function loadHolidays(){
+  try{
+    const rows = await sbGet('holidays','select=id,date,name&order=date.asc');
+    holidayList = rows;
+    holidayDates = new Set(rows.map(r=>r.date));
+  } catch(e){}
+}
 async function sbUpsertOrders(rows){
   const r = await fetch(`${SUPA_URL}/rest/v1/orders?on_conflict=traveler`, {
     method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates'},
@@ -1059,7 +1128,7 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload(), loadHolidays()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
@@ -1294,7 +1363,7 @@ async function refreshData(){
   try{
     const ok = await refreshAuthToken();
     if(!ok){ await forceReauth('Session expired — please sign in again.'); btn.disabled=false; return; }
-    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
   }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
@@ -1647,25 +1716,30 @@ function groupBySO(list){
 }
 function getNextWorkingDays(){
   // Returns array of ISO date strings to show in "Tomorrow's orders"
-  // If tomorrow is Saturday: show Sat + Sun + Mon
-  // If tomorrow is Sunday: show Sun + Mon
-  // Otherwise: just tomorrow
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const day = tomorrow.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
- 
+  // Walks forward from tomorrow, skipping any date in holidayDates entirely
+  // (never shown, matches the request that a holiday just gets bridged over).
+  // Once a non-holiday day is reached, it's added. If that day is Sat(6) or
+  // Sun(0), we keep walking so the view still bridges through to the next
+  // normal weekday — same behavior as before holidays existed, just with
+  // holiday dates skipped wherever they fall in the sequence.
   const toISO = d => d.toISOString().slice(0,10);
- 
-  if(day === 6){ // tomorrow is Saturday
-    const sun = new Date(tomorrow); sun.setDate(sun.getDate()+1);
-    const mon = new Date(tomorrow); mon.setDate(mon.getDate()+2);
-    return [toISO(tomorrow), toISO(sun), toISO(mon)];
-  } else if(day === 0){ // tomorrow is Sunday
-    const mon = new Date(tomorrow); mon.setDate(mon.getDate()+1);
-    return [toISO(tomorrow), toISO(mon)];
-  } else {
-    return [toISO(tomorrow)];
+  let cursor = new Date();
+  cursor.setDate(cursor.getDate() + 1);
+  const result = [];
+  for(let guard=0; guard<40; guard++){
+    if(holidayDates.has(toISO(cursor))){
+      cursor.setDate(cursor.getDate()+1);
+      continue;
+    }
+    result.push(toISO(cursor));
+    const day = cursor.getDay();
+    if(day === 6 || day === 0){
+      cursor.setDate(cursor.getDate()+1);
+      continue;
+    }
+    break;
   }
+  return result;
 }
 function getTomorrow(){ return getNextWorkingDays()[0]; }
 function fmtDate(iso){
@@ -1752,8 +1826,9 @@ function updateAll(){
  
   // Update tomorrow nav label based on day
   const nextDaysCheck = getNextWorkingDays();
-  const navLabel = nextDaysCheck.length === 3 ? "Fri · Sat · Mon orders" :
-                   nextDaysCheck.length === 2 ? "Weekend + Mon orders" : "Tomorrow's orders";
+  const dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const labelDays = nextDaysCheck.map(iso=>dayAbbr[new Date(iso+'T00:00:00').getDay()]);
+  const navLabel = labelDays.length > 1 ? labelDays.join(' · ')+' orders' : "Tomorrow's orders";
   const navTomEl = document.getElementById('nav-tomorrow-label');
   if(navTomEl) navTomEl.textContent = navLabel;
  
@@ -2611,6 +2686,278 @@ ${soData.map(s => {
   URL.revokeObjectURL(a.href);
   toast('Report downloaded', `${soData.length} orders · share the HTML file`, 'green');
 }
+
+// ── Print report (date range + department picker) ─────────────────────────────
+let printReportDepts = new Set();
+function openPrintReportModal(){
+  if(currentProfile?.role!=='manager') return;
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('pr-start').value = today;
+  document.getElementById('pr-end').value = today;
+  printReportDepts = new Set(DEPT_ORDER);
+  document.getElementById('pr-err').textContent = '';
+  renderPrintReportDepts();
+  document.getElementById('print-report-modal').classList.add('open');
+}
+function closePrintReportModal(){ document.getElementById('print-report-modal').classList.remove('open'); }
+function renderPrintReportDepts(){
+  const list = document.getElementById('pr-dept-list');
+  list.innerHTML = DEPT_ORDER.map(d=>{
+    const on = printReportDepts.has(d);
+    return `<div class="dept-check-row${on?' on':''}" onclick="togglePrintReportDept('${d}')">
+      <span class="dept-check-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>
+      ${DEPT_META[d].label}
+    </div>`;
+  }).join('');
+}
+function togglePrintReportDept(d){
+  if(printReportDepts.has(d)) printReportDepts.delete(d); else printReportDepts.add(d);
+  renderPrintReportDepts();
+}
+function doGeneratePrintReport(){
+  const start = document.getElementById('pr-start').value;
+  const end = document.getElementById('pr-end').value;
+  const err = document.getElementById('pr-err');
+  if(!start || !end){ err.textContent = 'Pick a start and end date.'; return; }
+  if(start > end){ err.textContent = 'Start date must be on or before end date.'; return; }
+  if(printReportDepts.size === 0){ err.textContent = 'Pick at least one department.'; return; }
+  err.textContent = '';
+  generatePrintReport(start, end, new Set(printReportDepts));
+  closePrintReportModal();
+}
+function generatePrintReport(startDate, endDate, deptSet){
+  if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
+
+  const filtered = orders.filter(o=>{
+    if(!o.soShipRaw || o.soShipRaw < startDate || o.soShipRaw > endDate) return false;
+    const primaryVisible = !o.department || deptSet.has(o.department);
+    const extraVisible = !!o.deptExtra && deptSet.has(o.deptExtra);
+    return primaryVisible || extraVisible;
+  });
+  const groups = groupBySO(filtered);
+  if(!groups.length){ toast('No orders','No orders found for that date range and department(s).','amber'); return; }
+
+  const soData = groups.map(({so, travelers}) => {
+    const soPhotos = (photos[so]||[]).filter(p=>!p.department || deptSet.has(p.department));
+    const t0 = travelers[0];
+    const loc = t0.location||'';
+    const viaEmoji  = t0.via==='OUR TRUCK' ? '🚚' : t0.via==='INSTALL/REPAIR' ? '🔧' : '📦';
+    const viaLabel  = t0.via==='OUR TRUCK' ? 'Our Truck' : t0.via==='INSTALL/REPAIR' ? 'Install/Repair'
+      : loc.toLowerCase().includes('amityville') ? 'Pick Up Amendolas' : 'Pick Up Interstate';
+    const viaCls    = t0.via==='OUR TRUCK' ? 'truck' : t0.via==='INSTALL/REPAIR' ? 'install'
+      : loc.toLowerCase().includes('amityville') ? 'amendolas' : 'interstate';
+    const approvedCount = travelers.filter(o => approvals[o.traveler]).length;
+    return { so, travelers, soPhotos, customer: t0.customer, soShip: t0.soShip, viaEmoji, viaLabel, viaCls, approvedCount };
+  });
+
+  const dateLabel = startDate===endDate ? fmtDate(startDate) : `${fmtDate(startDate)} – ${fmtDate(endDate)}`;
+  const deptLabel = DEPT_ORDER.filter(d=>deptSet.has(d)).map(d=>DEPT_META[d].label).join(', ');
+  const generatedAt = new Date().toLocaleString([], {weekday:'long', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  const totalTravelers = soData.reduce((a,s)=>a+s.travelers.length,0);
+  const totalPhotos    = soData.filter(s=>s.soPhotos.length>0).length;
+  const totalNone      = soData.filter(s=>s.soPhotos.length===0).length;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProdTrack — ${dateLabel} Print Report</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8e6e0;--text2:#8a8880;--text3:#5a5856;
+  --accent:#c8f060;--red:#ff5f5f;--amber:#ffb347;--green:#60d08a;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{font-size:18px;font-weight:700;letter-spacing:-0.02em}.logo span{color:var(--accent)}
+.report-meta{font-size:11px;font-family:var(--mono);color:var(--text3);margin-left:auto;text-align:right}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.sum-item{background:var(--surface);padding:7px 12px}
+.sum-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px}
+.sum-val{font-size:15px;font-weight:700;letter-spacing:-0.02em}
+.green{color:var(--green)}.red{color:var(--red)}.amber{color:var(--amber)}
+.container{max-width:1000px;margin:0 auto;padding:16px}
+details{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+details[open]{border-color:var(--border2)}
+summary{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent;flex-wrap:wrap;row-gap:6px;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::marker{display:none}
+summary:active{background:var(--surface2)}
+.chevron{width:16px;height:16px;flex-shrink:0;transition:transform 0.2s;color:var(--text3)}
+details[open] .chevron{transform:rotate(90deg)}
+.so-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text);flex-shrink:0}
+.so-date{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);flex-shrink:0}
+.so-customer{font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.so-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:5px;font-weight:600;white-space:nowrap}
+.tg{background:rgba(96,208,138,0.10);color:#60d08a;border:1px solid rgba(96,208,138,0.2)}
+.ta{background:rgba(255,179,71,0.12);color:#ffb347;border:1px solid rgba(255,179,71,0.2)}
+.td{background:#26262c;color:#5a5856;border:1px solid rgba(255,255,255,0.07)}
+.dept-pill{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-family:var(--mono);font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.dept-wood{background:rgba(96,208,138,0.12);color:#60d08a;border:1px solid rgba(96,208,138,0.25)}
+.dept-metal{background:rgba(96,184,240,0.12);color:#60b8f0;border:1px solid rgba(96,184,240,0.25)}
+.dept-gate{background:rgba(255,120,180,0.12);color:#ff78b4;border:1px solid rgba(255,120,180,0.25)}
+.dept-gear{background:rgba(255,179,71,0.12);color:#ffb347;border:1px solid rgba(255,179,71,0.25)}
+.via-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0}
+.via-truck{background:#0f2a1a;color:#60d08a;border:1px solid #1a4a2a}
+.via-interstate{background:#2a1800;color:#ffb347;border:1px solid #4a2e00}
+.via-amendolas{background:#0f1f3a;color:#60b8f0;border:1px solid #1a3060}
+.via-install{background:#1a1a1a;color:#c0b8b0;border:1px solid #333}
+.body{padding:0 16px 16px;border-top:1px solid var(--border2)}
+table{width:100%;border-collapse:collapse;margin-top:12px;margin-bottom:14px}
+th{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.07em;text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--border2);text-align:left}
+td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.footer{text-align:center;padding:28px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);border-top:1px solid var(--border);margin-top:10px}
+@media(max-width:600px){
+  .summary{grid-template-columns:repeat(2,1fr)}
+  .so-date{display:none}
+  table{font-size:12px}th,td{padding:6px 8px}
+}
+@media print{
+  body{background:#fff!important;color:#111!important}
+  .header{background:#fff!important;border-bottom:1px solid #ccc!important}
+  .summary{background:#fff!important;border-bottom:1px solid #ccc!important}
+  .sum-item{background:#fff!important}
+  .sum-label,.report-meta,th{color:#666!important}
+  .sum-val,.so-num,.so-date,.so-customer,td{color:#111!important}
+  .green{color:#1a7d42!important}.red{color:#c23030!important}.amber{color:#b06a00!important}
+  details{background:#fff!important;border:1px solid #ccc!important;break-inside:avoid;page-break-inside:avoid}
+  summary{background:#fff!important}
+  .chevron{display:none!important}
+  th{border-bottom:1px solid #ccc!important}
+  td{border-bottom:1px solid #eee!important}
+  .tag,.via-pill,.dept-pill{border:1px solid #999!important}
+  .tg{background:#e6f7ec!important;color:#1a7d42!important}
+  .ta{background:#fff3e0!important;color:#b06a00!important}
+  .td{background:#f2f2f2!important;color:#555!important}
+  .footer{color:#666!important;border-top:1px solid #ccc!important}
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">PROD<span>TRACK</span></div>
+  <div style="font-size:13px;font-family:var(--mono);color:var(--text3)">${dateLabel} · ${deptLabel} · ${soData.length} orders</div>
+  <div class="report-meta">Generated<br>${generatedAt}</div>
+</div>
+<div class="summary">
+  <div class="sum-item"><div class="sum-label">Orders</div><div class="sum-val amber">${soData.length}</div></div>
+  <div class="sum-item"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
+  <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
+  <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
+</div>
+<div class="container">
+${soData.map(s => {
+  const hasPic = s.soPhotos.length > 0;
+  const picTag = hasPic
+    ? `<span class="tag tg">✓ ${s.soPhotos.length} photo${s.soPhotos.length>1?'s':''}</span>`
+    : `<span class="tag ta">No photo</span>`;
+  const approvalTag = s.approvedCount===s.travelers.length && s.travelers.length>0
+    ? `<span class="tag tg">✓ Approved</span>` : `<span class="tag td">${s.approvedCount}/${s.travelers.length} approved</span>`;
+  const deptPills = deptPillsForTravelers(s.travelers);
+  const travelerRows = s.travelers.map(o=>{
+    const isApp=!!approvals[o.traveler];
+    const isCus=o.item.includes('-CUS')||o.item.endsWith('CUS');
+    return `<tr>
+      <td style="font-family:var(--mono);font-weight:700">${o.traveler}</td>
+      <td>${o.desc}</td>
+      <td style="font-family:var(--mono);font-weight:600;color:${isCus?'var(--amber)':'var(--text)'}">${o.item}</td>
+      <td style="text-align:right;font-family:var(--mono);font-weight:600">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
+      <td>${isApp?'<span class="tag tg">✓ Approved</span>':'<span class="tag td">Pending</span>'}</td>
+    </tr>`;
+  }).join('');
+  return `<details open>
+  <summary>
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="so-num">${s.so}</span>
+    <span class="so-date">${s.soShip}</span>
+    ${deptPills}
+    <span class="via-pill via-${s.viaCls}">${s.viaEmoji} ${s.viaLabel}</span>
+    <span class="so-customer">${s.customer}</span>
+    <span class="so-right">${approvalTag}${picTag}</span>
+  </summary>
+  <div class="body">
+    <table><thead><tr><th>Traveler</th><th>Description</th><th>Item</th><th style="text-align:right">Qty</th><th>Status</th></tr></thead>
+    <tbody>${travelerRows}</tbody></table>
+  </div>
+</details>`;
+}).join('\n')}
+</div>
+<div class="footer">ProdTrack · ${soData.length} orders · ${dateLabel} · ${deptLabel} · ${generatedAt}</div>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank');
+  if(!win){ toast('Popup blocked','Allow popups for this site, then try again.','red'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.onload = () => { win.print(); };
+}
+
+// ── Holidays (owner only) ───────────────────────────────────────────────────────
+function openHolidaysModal(){
+  if(currentProfile?.username !== 'zgta26') return;
+  document.getElementById('hol-date').value = '';
+  document.getElementById('hol-name').value = '';
+  document.getElementById('hol-err').textContent = '';
+  renderHolidaysList();
+  document.getElementById('holidays-modal').classList.add('open');
+}
+function closeHolidaysModal(){ document.getElementById('holidays-modal').classList.remove('open'); }
+function renderHolidaysList(){
+  const list = document.getElementById('holidays-list');
+  if(!holidayList.length){
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px">No holidays added yet.</div>';
+    return;
+  }
+  list.innerHTML = holidayList.map(h=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div><strong>${fmtDate(h.date)}</strong> — ${escapeHtml(h.name)}</div>
+      <button class="btn" onclick="doDeleteHoliday(${h.id})" style="padding:4px 8px;font-size:12px">Delete</button>
+    </div>`).join('');
+}
+async function doAddHoliday(){
+  const date = document.getElementById('hol-date').value;
+  const name = document.getElementById('hol-name').value.trim();
+  const err = document.getElementById('hol-err');
+  if(!date){ err.textContent = 'Pick a date.'; return; }
+  if(!name){ err.textContent = 'Enter a name.'; return; }
+  err.textContent = '';
+  const btn = document.getElementById('hol-add-btn');
+  btn.disabled = true;
+  try{
+    await sbInsert('holidays', {date, name});
+    await loadHolidays();
+    renderHolidaysList();
+    document.getElementById('hol-date').value = '';
+    document.getElementById('hol-name').value = '';
+    updateAll();
+    toast('Holiday added', `${name} — ${fmtDate(date)}`, 'green');
+  } catch(e){
+    err.textContent = (e.message||'').includes('duplicate') ? 'That date is already added.' : 'Could not add holiday.';
+  }
+  btn.disabled = false;
+}
+async function doDeleteHoliday(id){
+  try{
+    await sbDelete('holidays', id);
+    await loadHolidays();
+    renderHolidaysList();
+    updateAll();
+    toast('Holiday removed', 'It will no longer be skipped.', 'green');
+  } catch(e){
+    toast('Error', e.message, 'red');
+  }
+}
 // ── Archive ───────────────────────────────────────────────────────────────────
 async function archiveByDate(){
   if(currentProfile?.role!=='manager'){toast('Access denied','Only managers can archive.','red');return;}
@@ -2745,7 +3092,7 @@ function startAutoRefresh(){
         const ok = await refreshAuthToken();
         if(!ok){ await forceReauth('Session expired — please sign in again.'); return; }
       }
-      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments()]);updateAll();render();
+      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays()]);updateAll();render();
     }catch(e){}
   },60000);
 }
@@ -2767,7 +3114,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();colorCheckRespond(false);
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closeHolidaysModal();colorCheckRespond(false);
   }
 });
  
