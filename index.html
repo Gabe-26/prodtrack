@@ -317,6 +317,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .pl-preview-page{position:absolute;top:0;left:0;width:4in;height:6in;padding:0.22in;box-sizing:border-box;transform:scale(0.75);transform-origin:top left;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
 .pl-preview-page .lbl-so{font-size:60px;font-weight:800;border-bottom:3px solid #000;padding-bottom:calc(1px * var(--lbl-dept-scale,1));margin-bottom:calc(10px * var(--lbl-dept-scale,1));letter-spacing:1px;text-align:center}
 .pl-preview-page .lbl-line{font-size:calc(20px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:calc(6px * var(--lbl-dept-scale,1))}
+.pl-preview-page .lbl-divider{border-top:2px solid #000;margin:calc(4px * var(--lbl-dept-scale,1)) 0 calc(8px * var(--lbl-dept-scale,1))}
 .pl-preview-page .lbl-loc{font-size:18px;font-weight:700;margin:10px 0 4px}
 .pl-preview-page .lbl-item{margin-bottom:calc(14px * var(--lbl-scale,1) * var(--lbl-dept-scale,1))}
 .pl-preview-page .lbl-item-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
@@ -3107,6 +3108,7 @@ function renderPrintLabelPreview(){
       <div class="lbl-line">SHIP VIA: ${escapeHtml(t0.via||'')}</div>
       <div class="lbl-line">PO#: ${escapeHtml(po)}</div>
       <div class="lbl-line">SHIP DATE: ${shipDate}</div>
+      <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
         <div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>
@@ -3194,6 +3196,7 @@ function generateLabelDocument(so, cust, po, skids){
       <div class="lbl-line">SHIP VIA: ${t0.via||''}</div>
       <div class="lbl-line">PO#: ${escapeHtml(po)}</div>
       <div class="lbl-line">SHIP DATE: ${shipDate}</div>
+      <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
         <div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>
@@ -3210,6 +3213,7 @@ body{background:#fff;color:#000}
 .label{width:${cfg.widthIn}in;height:${cfg.heightIn}in;padding:0.22in;position:relative;page-break-after:always;overflow:hidden}
 .lbl-so{font-size:60px;font-weight:800;border-bottom:3px solid #000;padding-bottom:calc(1px * var(--lbl-dept-scale,1));margin-bottom:calc(10px * var(--lbl-dept-scale,1));letter-spacing:1px;text-align:center}
 .lbl-line{font-size:calc(20px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:calc(6px * var(--lbl-dept-scale,1))}
+.lbl-divider{border-top:2px solid #000;margin:calc(4px * var(--lbl-dept-scale,1)) 0 calc(8px * var(--lbl-dept-scale,1))}
 .lbl-item{margin-bottom:calc(14px * var(--lbl-scale,1) * var(--lbl-dept-scale,1))}
 .lbl-item-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .lbl-item-code{font-size:calc(30px * var(--lbl-scale,1) * var(--lbl-dept-scale,1));font-weight:800}
