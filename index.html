@@ -3326,12 +3326,16 @@ function closeCustomerListModal(){ document.getElementById('customer-list-modal'
 function parseCustomerCSV(txt){
   const lines = txt.split('\n').filter(l=>l.trim());
   if(!lines.length) return [];
-  const header = parseRow(lines[0]).map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]/g,''));
-  const noIdx = header.findIndex(h=>h.includes('customerno'));
-  const nameIdx = header.findIndex(h=>h==='name');
-  if(noIdx===-1 || nameIdx===-1) return null;
+  let headerRowIdx=-1, noIdx=-1, nameIdx=-1;
+  for(let i=0;i<Math.min(5,lines.length);i++){
+    const header = parseRow(lines[i]).map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]/g,''));
+    const n = header.findIndex(h=>h.includes('customerno'));
+    const nm = header.findIndex(h=>h==='name');
+    if(n!==-1 && nm!==-1){ headerRowIdx=i; noIdx=n; nameIdx=nm; break; }
+  }
+  if(headerRowIdx===-1) return null;
   const out = [];
-  for(let i=1;i<lines.length;i++){
+  for(let i=headerRowIdx+1;i<lines.length;i++){
     const c = parseRow(lines[i]);
     const customer_no = (c[noIdx]||'').trim();
     const name = (c[nameIdx]||'').trim();
