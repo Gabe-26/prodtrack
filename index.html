@@ -560,6 +560,25 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     </div>
   </div>
 </div>
+
+<!-- Customer list modal (manager only) — feeds Print Label's CUST code auto-fill -->
+<div class="modal-overlay" id="customer-list-modal">
+  <div class="modal-card">
+    <div class="modal-title">
+      Customer list
+      <button class="modal-close" onclick="closeCustomerListModal()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Used to auto-fill CUST code on Print Label. Upload a fresh CSV export any time customers are added or removed — this only adds/updates existing entries, it never deletes.</div>
+    <div class="modal-field">
+      <div class="modal-label">Customer CSV (needs "Customer No." and "Name" columns)</div>
+      <input type="file" accept=".csv" id="cl-file-input" onchange="handleCustomerCSVUpload(this.files[0])">
+    </div>
+    <div id="cl-status" style="font-size:12px;font-family:var(--mono);color:var(--text3);margin-top:6px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeCustomerListModal()">Close</button>
+    </div>
+  </div>
+</div>
  
 <!-- Add user modal -->
 <div class="modal-overlay" id="add-user-modal">
@@ -670,6 +689,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div class="nav-item" id="nav-upload" onclick="sv('upload')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Upload CSV
+      </div>
+      <div class="nav-item" id="nav-customer-list" onclick="openCustomerListModal()" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></svg>
+        Customer list
       </div>
       <div class="nav-item" id="nav-users" onclick="sv('users')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
@@ -1062,6 +1085,7 @@ function showApp(){
   document.getElementById('share-report-btn').style.display = isMgr ? 'inline-flex' : 'none';
   document.getElementById('print-report-btn').style.display = isMgr ? 'inline-flex' : 'none';
   document.getElementById('nav-upload').style.display  = isMgr ? 'flex' : 'none';
+  document.getElementById('nav-customer-list').style.display = isMgr ? 'flex' : 'none';
   document.getElementById('nav-users').style.display   = isMgr ? 'flex' : 'none';
   document.getElementById('nav-archive').style.display = isMgr ? 'flex' : 'none';
   document.getElementById('nav-holidays').style.display = uname === 'zgta26' ? 'flex' : 'none';
@@ -1156,6 +1180,16 @@ async function loadHolidays(){
     holidayDates = new Set(rows.map(r=>r.date));
   } catch(e){}
 }
+let customers = [];
+let customerNameMap = new Map();
+async function loadCustomers(){
+  try{
+    const rows = await sbGet('customers','select=customer_no,name');
+    customers = rows;
+    customerNameMap = new Map();
+    rows.forEach(c=>{ if(c.name) customerNameMap.set(c.name.trim().toUpperCase(), c.customer_no); });
+  } catch(e){}
+}
 async function sbUpsertOrders(rows){
   const r = await fetch(`${SUPA_URL}/rest/v1/orders?on_conflict=traveler`, {
     method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates'},
@@ -1186,7 +1220,7 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload(), loadHolidays()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload(), loadHolidays(), loadCustomers()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
@@ -1421,7 +1455,7 @@ async function refreshData(){
   try{
     const ok = await refreshAuthToken();
     if(!ok){ await forceReauth('Session expired — please sign in again.'); btn.disabled=false; return; }
-    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
   }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
@@ -3001,6 +3035,8 @@ function setPrintLabelDept(dept){
   document.getElementById('pl-dept-wood-btn')?.classList.toggle('primary', dept==='wood');
   document.getElementById('pl-dept-gate-btn')?.classList.toggle('primary', dept==='gate');
   labelEditingItems = new Set();
+  const custMatch = customerNameMap.get((labelDeptTravelers[0]?.customer||'').trim().toUpperCase());
+  document.getElementById('pl-cust').value = custMatch || '';
   const cap = LABEL_DEPT_CONFIG[dept].cap;
   labelSkids = [];
   labelDeptTravelers.forEach(t=>{
@@ -3279,6 +3315,59 @@ async function doAddHoliday(){
   }
   btn.disabled = false;
 }
+
+// ── Customer list (manager only) — feeds Print Label CUST code auto-fill ───────
+function openCustomerListModal(){
+  if(currentProfile?.role!=='manager') return;
+  document.getElementById('cl-status').textContent = `${customers.length} customers loaded.`;
+  document.getElementById('customer-list-modal').classList.add('open');
+}
+function closeCustomerListModal(){ document.getElementById('customer-list-modal').classList.remove('open'); }
+function parseCustomerCSV(txt){
+  const lines = txt.split('\n').filter(l=>l.trim());
+  if(!lines.length) return [];
+  const header = parseRow(lines[0]).map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]/g,''));
+  const noIdx = header.findIndex(h=>h.includes('customerno'));
+  const nameIdx = header.findIndex(h=>h==='name');
+  if(noIdx===-1 || nameIdx===-1) return null;
+  const out = [];
+  for(let i=1;i<lines.length;i++){
+    const c = parseRow(lines[i]);
+    const customer_no = (c[noIdx]||'').trim();
+    const name = (c[nameIdx]||'').trim();
+    if(!customer_no || !name) continue;
+    out.push({customer_no, name});
+  }
+  return out;
+}
+async function handleCustomerCSVUpload(file){
+  if(!file) return;
+  const status = document.getElementById('cl-status');
+  status.textContent = 'Reading file…';
+  try{
+    const txt = await file.text();
+    const rows = parseCustomerCSV(txt);
+    if(rows===null){ status.textContent = 'Could not find "Customer No." and "Name" columns in this file.'; return; }
+    if(!rows.length){ status.textContent = 'No customer rows found in this file.'; return; }
+    status.textContent = `Uploading ${rows.length} customers…`;
+    const BATCH = 500;
+    for(let i=0;i<rows.length;i+=BATCH){
+      const batch = rows.slice(i,i+BATCH);
+      const r = await fetch(`${SUPA_URL}/rest/v1/customers?on_conflict=customer_no`, {
+        method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify(batch)
+      });
+      if(!r.ok) throw new Error(await r.text());
+    }
+    await loadCustomers();
+    status.textContent = `Done — ${customers.length} customers loaded.`;
+    toast('Customer list updated', `${rows.length} customers added/updated.`, 'green');
+  } catch(e){
+    status.textContent = 'Error: '+e.message;
+    toast('Error', e.message, 'red');
+  }
+  document.getElementById('cl-file-input').value = '';
+}
 async function doDeleteHoliday(id){
   try{
     await sbDelete('holidays', id);
@@ -3424,7 +3513,7 @@ function startAutoRefresh(){
         const ok = await refreshAuthToken();
         if(!ok){ await forceReauth('Session expired — please sign in again.'); return; }
       }
-      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays()]);updateAll();render();
+      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers()]);updateAll();render();
     }catch(e){}
   },60000);
 }
@@ -3446,7 +3535,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();colorCheckRespond(false);
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();colorCheckRespond(false);
   }
 });
  
