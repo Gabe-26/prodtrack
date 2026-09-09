@@ -314,10 +314,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .modal-input:focus{border-color:var(--accent)}
 #print-label-modal .modal-card{max-width:820px}
 .pl-preview-wrap{width:288px;height:432px;overflow:hidden;position:relative;border:1px solid var(--border2);border-radius:4px;background:#fff;margin-bottom:12px;flex-shrink:0}
-.pl-preview-page{position:absolute;top:0;left:0;width:4in;height:6in;padding:calc(0.22in - 5px) 0.22in 0.22in 0.22in;box-sizing:border-box;transform:scale(0.75);transform-origin:top left;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
+.pl-preview-page{position:absolute;top:0;left:0;width:4in;height:6in;padding:calc(0.22in - var(--lbl-top-reduce,5px)) 0.22in 0.22in 0.22in;box-sizing:border-box;transform:scale(0.75);transform-origin:top left;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
 .pl-preview-page .lbl-so{font-size:65px;font-weight:800;margin-bottom:0;letter-spacing:1px;text-align:center}
-.pl-preview-page .lbl-line{font-size:calc(20px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:calc(6px * var(--lbl-dept-scale,1))}
-.pl-preview-page .lbl-ship-date{font-size:calc(22px * var(--lbl-dept-scale,1))}
+.pl-preview-page .lbl-line{font-size:calc(22px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:var(--lbl-line-gap,6px)}
 .pl-preview-page .lbl-divider{border-top:2px solid #000;margin:calc(4px * var(--lbl-dept-scale,1)) 0 calc(8px * var(--lbl-dept-scale,1))}
 .pl-preview-page .lbl-loc{font-size:18px;font-weight:700;margin:10px 0 4px}
 .pl-preview-page .lbl-item{margin-bottom:calc(14px * var(--lbl-scale,1) * var(--lbl-item-dept-scale,1))}
@@ -3005,8 +3004,8 @@ let labelDeptTravelers = [];
 let labelSkids = []; // [{ items: [{traveler,item,desc,qty}] }]
 let labelEditingItems = new Set(); // keys "si-ii" currently in wording-edit mode
 const LABEL_DEPT_CONFIG = {
-  wood: { cap: 20, allowCombine: true, widthIn: 4, heightIn: 6, previewScale: 1,   printScale: 1,   previewItemScale: 1,   printItemScale: 1 },
-  gate: { cap: 1,  allowCombine: false, widthIn: 4, heightIn: 3, previewScale: 0.5, printScale: 0.65, previewItemScale: 0.5, printItemScale: 0.5 }
+  wood: { cap: 20, allowCombine: true, widthIn: 4, heightIn: 6, previewScale: 1,   printScale: 1,   previewItemScale: 1,   printItemScale: 1,   topReducePx: 5,  lineGapPx: 6 },
+  gate: { cap: 1,  allowCombine: false, widthIn: 4, heightIn: 3, previewScale: 0.5, printScale: 0.65, previewItemScale: 0.5, printItemScale: 0.5, topReducePx: 18, lineGapPx: 2 }
 };
 
 function openPrintLabelModal(so){
@@ -3139,12 +3138,12 @@ function renderPrintLabelPreview(){
         </div>
         <div class="lbl-item-desc">${escapeHtml(it.desc)}</div>
       </div>`).join('');
-      html += `<div class="pl-preview-wrap" style="width:${wrapW}px;height:${wrapH}px"><div class="pl-preview-page" style="width:${cfg.widthIn}in;height:${cfg.heightIn}in;--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.previewScale};--lbl-item-dept-scale:${cfg.previewItemScale}">
+      html += `<div class="pl-preview-wrap" style="width:${wrapW}px;height:${wrapH}px"><div class="pl-preview-page" style="width:${cfg.widthIn}in;height:${cfg.heightIn}in;--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.previewScale};--lbl-item-dept-scale:${cfg.previewItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px">
       <div class="lbl-so">${escapeHtml(String(labelSO).padStart(7,'0'))}</div>
       <div class="lbl-line">CUST: ${escapeHtml(cust)}</div>
       <div class="lbl-line">SHIP VIA: ${escapeHtml(t0.via||'')}</div>
       <div class="lbl-line">PO#: ${escapeHtml(po)}</div>
-      <div class="lbl-line lbl-ship-date">SHIP DATE: ${shipDate}</div>
+      <div class="lbl-line">SHIP DATE: ${shipDate}</div>
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
@@ -3227,12 +3226,12 @@ function generateLabelDocument(so, cust, po, skids){
         </div>
         <div class="lbl-item-desc">${escapeHtml(it.desc)}</div>
       </div>`).join('');
-      pages += `<div class="label" style="--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.printScale};--lbl-item-dept-scale:${cfg.printItemScale}">
+      pages += `<div class="label" style="--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.printScale};--lbl-item-dept-scale:${cfg.printItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px">
       <div class="lbl-so">${escapeHtml(String(so).padStart(7,'0'))}</div>
       <div class="lbl-line">CUST: ${escapeHtml(cust)}</div>
       <div class="lbl-line">SHIP VIA: ${t0.via||''}</div>
       <div class="lbl-line">PO#: ${escapeHtml(po)}</div>
-      <div class="lbl-line lbl-ship-date">SHIP DATE: ${shipDate}</div>
+      <div class="lbl-line">SHIP DATE: ${shipDate}</div>
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
@@ -3247,10 +3246,9 @@ function generateLabelDocument(so, cust, po, skids){
 @page{size:${cfg.widthIn}in ${cfg.heightIn}in;margin:0}
 *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
 body{background:#fff;color:#000}
-.label{width:${cfg.widthIn}in;height:${cfg.heightIn}in;padding:calc(0.22in - 5px) 0.22in 0.22in 0.22in;position:relative;page-break-after:always;overflow:hidden}
+.label{width:${cfg.widthIn}in;height:${cfg.heightIn}in;padding:calc(0.22in - var(--lbl-top-reduce,5px)) 0.22in 0.22in 0.22in;position:relative;page-break-after:always;overflow:hidden}
 .lbl-so{font-size:65px;font-weight:800;margin-bottom:0;letter-spacing:1px;text-align:center}
-.lbl-line{font-size:calc(20px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:calc(6px * var(--lbl-dept-scale,1))}
-.lbl-ship-date{font-size:calc(22px * var(--lbl-dept-scale,1))}
+.lbl-line{font-size:calc(22px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:var(--lbl-line-gap,6px)}
 .lbl-divider{border-top:2px solid #000;margin:calc(4px * var(--lbl-dept-scale,1)) 0 calc(8px * var(--lbl-dept-scale,1))}
 .lbl-item{margin-bottom:calc(14px * var(--lbl-scale,1) * var(--lbl-item-dept-scale,1))}
 .lbl-item-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
