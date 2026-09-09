@@ -3066,17 +3066,6 @@ function labelScaleForItemCount(n){
   return table[n] || 0.37;
 }
 const MAX_ITEMS_PER_LABEL_PAGE = 7;
-function skidPageLabelHtml(skids, index, dept){
-  if(dept === 'gate'){
-    const trav = skids[index].items[0]?.traveler;
-    const groupIdx = [];
-    skids.forEach((s,idx)=>{ if(String(s.items[0]?.traveler)===String(trav)) groupIdx.push(idx); });
-    if(groupIdx.length <= 1) return '';
-    const pos = groupIdx.indexOf(index) + 1;
-    return `<div class="lbl-page">${pos} of ${groupIdx.length}</div>`;
-  }
-  return `<div class="lbl-page">${index+1} of ${skids.length}</div>`;
-}
 function viaColorHex(via, location){
   if(via==='OUR TRUCK') return '#2ea043';
   if(via==='INSTALL/REPAIR') return '#333333';
@@ -3124,7 +3113,7 @@ function renderPrintLabelPreview(){
       ${itemsHtml}
       <div class="lbl-bottom-row">
         <div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>
-        ${skidPageLabelHtml(validSkids, i, labelDept)}
+        <div class="lbl-page">${i+1} of ${total}</div>
       </div>
     </div></div>`;
     });
@@ -3212,7 +3201,7 @@ function generateLabelDocument(so, cust, po, skids){
       ${itemsHtml}
       <div class="lbl-bottom-row">
         <div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>
-        ${skidPageLabelHtml(skids, i, labelDept)}
+        <div class="lbl-page">${i+1} of ${total}</div>
       </div>
     </div>`;
     });
