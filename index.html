@@ -2819,6 +2819,20 @@ function doGeneratePrintReport(){
   generatePrintReport(start, end, new Set(printReportDepts));
   closePrintReportModal();
 }
+// Classifies a Wood traveler as 'gate','section', or 'post' for the Print Report daily breakdown.
+// ProdLine lookup first, item-code pattern as fallback (mirrors the classification rule Gabriel uses elsewhere).
+const WOOD_GATE_ONLY_LINES = new Set(['505','515','516']);
+const WOOD_SECTION_ONLY_LINES = new Set(['510','520']);
+const WOOD_POST_LINES = new Set(['530','535','565']);
+const WOOD_GATE_CODE_PATTERN = /[A-Z]G-?([0-9]|CUS)/i;
+function classifyWoodTraveler(line, itemCode){
+  const l = String(line||'').trim();
+  if(WOOD_GATE_ONLY_LINES.has(l)) return 'gate';
+  if(WOOD_SECTION_ONLY_LINES.has(l)) return 'section';
+  if(WOOD_POST_LINES.has(l)) return WOOD_GATE_CODE_PATTERN.test(itemCode||'') ? 'gate' : 'post';
+  // 525 (mixed) or unknown/no line info: pattern check, default section
+  return WOOD_GATE_CODE_PATTERN.test(itemCode||'') ? 'gate' : 'section';
+}
 function generatePrintReport(startDate, endDate, deptSet){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
 
@@ -2851,6 +2865,23 @@ function generatePrintReport(startDate, endDate, deptSet){
   const totalPhotos    = soData.filter(s=>s.soPhotos.length>0).length;
   const totalNone      = soData.filter(s=>s.soPhotos.length===0).length;
 
+  const woodByDay = {};
+  if(deptSet.has('wood')){
+    filtered.filter(o=>o.department==='wood').forEach(o=>{
+      const day = o.soShipRaw;
+      if(!woodByDay[day]) woodByDay[day] = {section:0, gate:0, post:0};
+      woodByDay[day][classifyWoodTraveler(o.line, o.item)] += Number(o.qty)||0;
+    });
+  }
+  const woodDays = Object.keys(woodByDay).sort();
+  const woodDailyHtml = woodDays.length ? `<div class="wood-daily">${woodDays.map(d=>`
+    <div class="wood-day-label">${fmtDate(d)} · Wood</div>
+    <div class="summary wood-summary">
+      <div class="sum-item"><div class="sum-label">Sections</div><div class="sum-val green">${woodByDay[d].section}</div></div>
+      <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val">${woodByDay[d].gate}</div></div>
+      <div class="sum-item"><div class="sum-label">Posts</div><div class="sum-val amber">${woodByDay[d].post}</div></div>
+    </div>`).join('')}</div>` : '';
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2872,6 +2903,10 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-si
 .logo{font-size:16px;font-weight:700;letter-spacing:-0.02em}.logo span{color:var(--accent)}
 .report-meta{font-size:10px;font-family:var(--mono);color:var(--text3);margin-left:auto;text-align:right}
 .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.wood-daily{border-bottom:1px solid var(--border2)}
+.wood-day-label{font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;padding:4px 10px 0}
+.wood-summary{grid-template-columns:repeat(3,1fr);border-bottom:none}
+.wood-summary .sum-item{padding:3px 10px 6px}
 .sum-item{background:var(--surface);padding:4px 10px}
 .sum-label{font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px}
 .sum-val{font-size:13px;font-weight:700;letter-spacing:-0.02em}
@@ -2885,7 +2920,7 @@ summary::marker{display:none}
 summary:active{background:var(--surface2)}
 .chevron{width:16px;height:16px;flex-shrink:0;transition:transform 0.2s;color:var(--text3)}
 details[open] .chevron{transform:rotate(90deg)}
-.so-num{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text);flex-shrink:0}
+.so-num{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);flex-shrink:0;text-decoration:underline}
 .so-date{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text);flex-shrink:0;margin-left:16px}
 .so-customer{font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .so-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
@@ -2947,6 +2982,7 @@ tr:last-child td{border-bottom:none}
   <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
   <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
 </div>
+${woodDailyHtml}
 <div class="container">
 ${soData.map(s => {
   const hasPic = s.soPhotos.length > 0;
