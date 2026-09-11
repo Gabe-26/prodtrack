@@ -2820,18 +2820,24 @@ function doGeneratePrintReport(){
   closePrintReportModal();
 }
 // Classifies a Wood traveler as 'gate','section', or 'post' for the Print Report daily breakdown.
-// ProdLine lookup first, item-code pattern as fallback (mirrors the classification rule Gabriel uses elsewhere).
+// ProdLine lookup first (Gabriel's explicit rules); description keywords as fallback — far more
+// reliable in practice than guessing from the item code, since every real gate/post description
+// says so directly ("GATE", or end-post/line-post language: "END"/"LINE"/"POST").
 const WOOD_GATE_ONLY_LINES = new Set(['505','515','516']);
 const WOOD_SECTION_ONLY_LINES = new Set(['510','520']);
 const WOOD_POST_LINES = new Set(['530','535','565']);
 const WOOD_GATE_CODE_PATTERN = /[A-Z]G-?([0-9]|CUS)/i;
-function classifyWoodTraveler(line, itemCode){
+function classifyWoodTraveler(line, itemCode, desc){
   const l = String(line||'').trim();
   if(WOOD_GATE_ONLY_LINES.has(l)) return 'gate';
   if(WOOD_SECTION_ONLY_LINES.has(l)) return 'section';
-  if(WOOD_POST_LINES.has(l)) return WOOD_GATE_CODE_PATTERN.test(itemCode||'') ? 'gate' : 'post';
-  // 525 (mixed) or unknown/no line info: pattern check, default section
-  return WOOD_GATE_CODE_PATTERN.test(itemCode||'') ? 'gate' : 'section';
+  if(WOOD_POST_LINES.has(l)) return 'post';
+  // 525 (mixed) or unknown/no line info: fall back to description text, plus the item-code
+  // pattern as a second signal (catches Sage description typos, e.g. "GAT" missing the E)
+  const d = String(desc||'').toUpperCase();
+  if(/\bGATE\b/.test(d) || WOOD_GATE_CODE_PATTERN.test(itemCode||'')) return 'gate';
+  if(/\bPOST\b|\bEND\b|\bLINE\b/.test(d)) return 'post';
+  return 'section';
 }
 function generatePrintReport(startDate, endDate, deptSet){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
@@ -2870,7 +2876,7 @@ function generatePrintReport(startDate, endDate, deptSet){
     filtered.filter(o=>o.department==='wood').forEach(o=>{
       const day = o.soShipRaw;
       if(!woodByDay[day]) woodByDay[day] = {section:0, gate:0, post:0};
-      woodByDay[day][classifyWoodTraveler(o.line, o.item)] += Number(o.qty)||0;
+      woodByDay[day][classifyWoodTraveler(o.line, o.item, o.desc)] += Number(o.qty)||0;
     });
   }
   const woodDays = Object.keys(woodByDay).sort();
@@ -3002,7 +3008,7 @@ ${soData.map(s => {
   const travelerRows = s.travelers.map(o=>{
     const isApp=!!approvals[o.traveler];
     const isCus=o.item.includes('-CUS')||o.item.endsWith('CUS');
-    const woodCls = o.department==='wood' ? `wt-${classifyWoodTraveler(o.line, o.item)}` : '';
+    const woodCls = o.department==='wood' ? `wt-${classifyWoodTraveler(o.line, o.item, o.desc)}` : '';
     return `<tr>
       <td style="font-family:var(--mono);font-weight:700">${o.traveler}</td>
       <td class="${woodCls}">${o.desc}</td>
