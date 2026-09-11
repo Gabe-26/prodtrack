@@ -3514,7 +3514,7 @@ function parseWoodCodesCSV(txt){
     const r = parseRow(lines[i]);
     const item_code = (r[codeIdx]||'').trim();
     const description = (r[descIdx]||'').trim();
-    if(!item_code || !description) continue;
+    if(!item_code) continue;
     const prod = prodIdx>=0 ? (r[prodIdx]||'').trim() : '';
     out.push({item_code, description, prod});
   }
