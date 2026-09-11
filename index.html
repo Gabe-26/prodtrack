@@ -3584,8 +3584,19 @@ async function applyTypeToSelected(type){
     toast('Updated', `${codes.length} codes set to ${type}.`, 'green');
   }catch(e){ toast('Error', e.message, 'red'); }
 }
-function toggleWoodCodeSelect(itemCode, checked){
-  if(checked) selectedWoodCodes.add(itemCode); else selectedWoodCodes.delete(itemCode);
+let wcLastClickIndex = null;
+function toggleWoodCodeSelect(itemCode, checked, evt){
+  const list = filteredWoodCodes();
+  const idx = list.findIndex(r=>r.item_code===itemCode);
+  if(evt && evt.shiftKey && wcLastClickIndex!==null && idx!==-1){
+    const [a,b] = [wcLastClickIndex, idx].sort((x,y)=>x-y);
+    for(let i=a;i<=b;i++){
+      if(checked) selectedWoodCodes.add(list[i].item_code); else selectedWoodCodes.delete(list[i].item_code);
+    }
+  } else {
+    if(checked) selectedWoodCodes.add(itemCode); else selectedWoodCodes.delete(itemCode);
+  }
+  if(idx!==-1) wcLastClickIndex = idx;
   renderWoodCodesList();
 }
 function toggleWoodCodeSelectAll(checked){
@@ -3603,22 +3614,22 @@ function filteredWoodCodes(){
     return true;
   });
 }
-function onWoodCodesProdFilterChange(v){ woodCodesProdFilter=v; renderWoodCodesList(); }
+function onWoodCodesProdFilterChange(v){ woodCodesProdFilter=v; wcLastClickIndex=null; renderWoodCodesList(); }
 function renderWoodCodesProdOptions(){
   const sel = document.getElementById('wc-prod-filter');
   const prods = [...new Set(woodCodes.map(r=>r.prod).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">All Prod lines</option>' + prods.map(p=>`<option value="${p}">${p}</option>`).join('');
   sel.value = woodCodesProdFilter;
 }
-function onWoodCodesSearch(v){ woodCodesSearch=v; renderWoodCodesList(); }
-function onWoodCodesFilterChange(v){ woodCodesFilter=v; renderWoodCodesList(); }
+function onWoodCodesSearch(v){ woodCodesSearch=v; wcLastClickIndex=null; renderWoodCodesList(); }
+function onWoodCodesFilterChange(v){ woodCodesFilter=v; wcLastClickIndex=null; renderWoodCodesList(); }
 function renderWoodCodesList(){
   const list = filteredWoodCodes();
   const body = document.getElementById('wc-tbody');
   const typeBtn = (row,t,label,cls)=>`<button class="wc-type-btn ${cls}${row.type===t?' active':''}" onclick="applyTypeToRow('${row.item_code}','${t}')">${label}</button>`;
   body.innerHTML = list.map(r=>`
     <tr>
-      <td><input type="checkbox" ${selectedWoodCodes.has(r.item_code)?'checked':''} onchange="toggleWoodCodeSelect('${r.item_code}', this.checked)"></td>
+      <td><input type="checkbox" ${selectedWoodCodes.has(r.item_code)?'checked':''} onclick="toggleWoodCodeSelect('${r.item_code}', this.checked, event)"></td>
       <td style="font-family:var(--mono)">${escapeHtml(r.item_code)}</td>
       <td>${escapeHtml(r.description)}</td>
       <td style="font-family:var(--mono);color:var(--text3)">${escapeHtml(r.prod||'')}</td>
@@ -3631,6 +3642,7 @@ function renderWoodCodesList(){
 function openWoodCodesModal(){
   if(currentProfile?.username !== 'zgta26') return;
   selectedWoodCodes.clear();
+  wcLastClickIndex = null;
   woodCodesSearch = '';
   woodCodesFilter = 'all';
   woodCodesProdFilter = '';
