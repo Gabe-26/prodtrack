@@ -2939,7 +2939,7 @@ function generatePrintReport(startDate, endDate, deptSet){
     const viaCls    = t0.via==='OUR TRUCK' ? 'truck' : t0.via==='INSTALL/REPAIR' ? 'install'
       : loc.toLowerCase().includes('amityville') ? 'amendolas' : 'interstate';
     const approvedCount = travelers.filter(o => approvals[o.traveler]).length;
-    return { so, travelers, soPhotos, customer: t0.customer, soShip: t0.soShip, viaEmoji, viaLabel, viaCls, approvedCount };
+    return { so, travelers, soPhotos, customer: t0.customer, soShip: t0.soShip, soShipRaw: t0.soShipRaw, viaEmoji, viaLabel, viaCls, approvedCount };
   });
 
   const dateLabel = startDate===endDate ? fmtDate(startDate) : `${fmtDate(startDate)} – ${fmtDate(endDate)}`;
