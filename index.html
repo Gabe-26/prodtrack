@@ -339,6 +339,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .pl-preview-page .lbl-page{position:absolute;bottom:0.22in;right:0.22in;border:2px solid #000;padding:4px 10px;font-size:16px;font-weight:700}
 .pl-preview-page .lbl-bottom-row{position:absolute;bottom:0.22in;left:0.22in;right:0.22in;display:flex;align-items:stretch;gap:8px;height:32px}
 .pl-preview-page .lbl-color-tag{flex:1;border:2px solid #000;border-radius:2px}
+.pl-preview-page .lbl-color-tag-text{display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;letter-spacing:1px;color:#000;background:transparent}
 .pl-preview-page .lbl-bottom-row .lbl-page{position:static;display:flex;align-items:center;justify-content:center;white-space:nowrap}
 .modal-select{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;cursor:pointer}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
@@ -3244,6 +3245,16 @@ function viaColorHex(via, location){
   }
   return '#999999';
 }
+function viaColorWord(via, location){
+  if(via==='OUR TRUCK') return 'GREEN';
+  if(via==='INSTALL/REPAIR') return 'BLACK';
+  if(via==='PICK UP'){
+    const loc=(location||'').toLowerCase();
+    if(loc.includes('amityville')) return 'BLUE';
+    return 'ORANGE';
+  }
+  return '';
+}
 function chunkSkidItems(items){
   const chunks = [];
   for(let i=0;i<items.length;i+=MAX_ITEMS_PER_LABEL_PAGE) chunks.push(items.slice(i,i+MAX_ITEMS_PER_LABEL_PAGE));
@@ -3280,7 +3291,9 @@ function renderPrintLabelPreview(){
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
-        <div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>
+        ${labelDept==='gate'
+          ? `<div class="lbl-color-tag lbl-color-tag-text" style="color:${viaColorHex(t0.via, t0.location)}">${viaColorWord(t0.via, t0.location)}</div>`
+          : `<div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>`}
         <div class="lbl-page">${i+1} of ${total}</div>
       </div>
     </div></div>`;
@@ -3368,7 +3381,9 @@ function generateLabelDocument(so, cust, po, skids){
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
-        <div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>
+        ${labelDept==='gate'
+          ? `<div class="lbl-color-tag lbl-color-tag-text" style="color:${viaColorHex(t0.via, t0.location)}">${viaColorWord(t0.via, t0.location)}</div>`
+          : `<div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>`}
         <div class="lbl-page">${i+1} of ${total}</div>
       </div>
     </div>`;
@@ -3391,6 +3406,7 @@ body{background:#fff;color:#000}
 .lbl-page{border:2px solid #000;padding:4px 10px;font-size:16px;font-weight:700}
 .lbl-bottom-row{position:absolute;bottom:0.22in;left:0.22in;right:0.22in;display:flex;align-items:stretch;gap:8px;height:32px}
 .lbl-color-tag{flex:1;border:2px solid #000;border-radius:2px}
+.lbl-color-tag-text{display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;letter-spacing:1px;color:#000;background:transparent}
 .lbl-bottom-row .lbl-page{display:flex;align-items:center;justify-content:center;white-space:nowrap}
 </style></head><body>${pages}</body></html>`;
   const win = window.open('', '_blank');
