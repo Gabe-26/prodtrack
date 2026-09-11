@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CUS Traveler Match — ProdTrack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#26262b;
+  --border:#2a2a2f;--border2:#34343a;
+  --text:#f0f0f0;--text2:#a8a8b0;--text3:#6e6e78;
+  --accent:#c6ff2f;--red:#ff4757;--amber:#f0a020;--blue:#3477eb;--green:#2ea043;--pink:#ff5fa2;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--sans)}
+body{background:var(--bg);color:var(--text);min-height:100vh}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 20px 60px}
+h1{font-size:20px;font-weight:800;letter-spacing:.3px}
+.sub{color:var(--text3);font-size:13px;margin-top:2px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-top:18px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=text],input[type=password]{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:9px 11px;font-family:var(--mono);font-size:14px}
+input[type=file]{color:var(--text2);font-size:13px}
+button{background:var(--accent);color:#0f0f11;border:none;border-radius:6px;padding:9px 16px;font-weight:700;font-size:13px;cursor:pointer;font-family:var(--sans)}
+button:disabled{opacity:.5;cursor:default}
+button.secondary{background:var(--surface3);color:var(--text)}
+.err{color:var(--red);font-size:13px;margin-top:8px}
+.upload-slot{flex:1;min-width:220px;background:var(--surface2);border:1px dashed var(--border2);border-radius:8px;padding:14px}
+.upload-slot label{display:block;font-size:12px;color:var(--text2);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.filelist{margin-top:8px;font-size:12px;color:var(--text3)}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border)}
+th{color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+td{font-family:var(--mono)}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-ok{background:rgba(46,160,67,.18);color:var(--green)}
+.badge-warn{background:rgba(240,160,32,.18);color:var(--amber)}
+.section-title{font-size:14px;font-weight:800;margin-bottom:2px}
+.section-count{font-size:12px;color:var(--text3);margin-bottom:6px}
+.tabs{display:flex;gap:4px;margin-top:20px;border-bottom:1px solid var(--border)}
+.tab{padding:9px 16px;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent}
+.tab.active{color:var(--accent);border-color:var(--accent)}
+.hidden{display:none!important}
+.empty-note{color:var(--text3);font-size:13px;padding:10px 0}
+.topbar{display:flex;justify-content:space-between;align-items:center}
+.logout-link{color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div id="login-view">
+    <h1>CUS Traveler Match</h1>
+    <div class="sub">ProdTrack — Production tool</div>
+    <div class="card" style="max-width:340px">
+      <div class="row" style="flex-direction:column;align-items:stretch;gap:10px">
+        <input type="text" id="li-user" placeholder="Username">
+        <input type="password" id="li-pass" placeholder="Password">
+        <button id="login-btn" onclick="doLogin()">Sign in</button>
+        <div class="err" id="login-err"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="denied-view" class="hidden">
+    <h1>CUS Traveler Match</h1>
+    <div class="card">This tool is for Production accounts only.</div>
+  </div>
+
+  <div id="app-view" class="hidden">
+    <div class="topbar">
+      <div>
+        <h1>CUS Traveler Match</h1>
+        <div class="sub" id="who-line"></div>
+      </div>
+      <div class="logout-link" onclick="doLogout()">Sign out</div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" id="tab-match" onclick="switchTab('match')">Match</div>
+      <div class="tab" id="tab-history" onclick="switchTab('history')">History</div>
+    </div>
+
+    <div id="view-match">
+      <div class="card">
+        <div class="row" style="align-items:flex-start">
+          <div class="upload-slot">
+            <label>Production Order PDFs</label>
+            <input type="file" id="f-orders" accept=".pdf" multiple onchange="onFilesChosen('orders')">
+            <div class="filelist" id="fl-orders">No files chosen</div>
+          </div>
+          <div class="upload-slot">
+            <label>Work Ticket Traveler PDFs</label>
+            <input type="file" id="f-travelers" accept=".pdf" multiple onchange="onFilesChosen('travelers')">
+            <div class="filelist" id="fl-travelers">No files chosen</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:16px">
+          <button id="run-btn" onclick="runBatch()">Run Match</button>
+          <button class="secondary" onclick="resetBatch()">Clear</button>
+        </div>
+        <div class="err" id="run-err"></div>
+      </div>
+
+      <div id="results-wrap" class="hidden">
+        <div class="card">
+          <div class="section-title">Matched <span class="badge badge-ok" id="count-matched"></span></div>
+          <table id="tbl-matched"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th></tr></thead><tbody></tbody></table>
+          <div class="empty-note hidden" id="empty-matched">None matched this run.</div>
+        </div>
+        <div class="card">
+          <div class="section-title">Unmatched order lines <span class="badge badge-warn" id="count-unord"></span></div>
+          <div class="section-count">CUS lines from the order PDFs with no matching traveler ticket uploaded</div>
+          <table id="tbl-unord"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Source file</th></tr></thead><tbody></tbody></table>
+          <div class="empty-note hidden" id="empty-unord">None — every CUS line found a match.</div>
+        </div>
+        <div class="card">
+          <div class="section-title">Unmatched traveler tickets <span class="badge badge-warn" id="count-untrav"></span></div>
+          <div class="section-count">Traveler tickets with no matching order line uploaded</div>
+          <table id="tbl-untrav"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Traveler #</th><th>Source file</th></tr></thead><tbody></tbody></table>
+          <div class="empty-note hidden" id="empty-untrav">None — every ticket found a match.</div>
+        </div>
+        <div class="card hidden" id="unrecognized-card">
+          <div class="section-title">Unrecognized pages <span class="badge badge-warn" id="count-unrec"></span></div>
+          <div class="section-count">Pages in the traveler PDFs that didn't match the expected ticket layout — check the file.</div>
+          <table id="tbl-unrec"><thead><tr><th>File</th><th>Page</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-history" class="hidden">
+      <div class="card">
+        <input type="text" id="history-search" placeholder="Search by SO / item code / traveler #" style="width:100%" oninput="debouncedHistorySearch()">
+        <table id="tbl-history"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th><th>Matched By</th><th>When</th></tr></thead><tbody></tbody></table>
+        <div class="empty-note hidden" id="empty-history">No matches logged yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── Config ────────────────────────────────────────────────────────────────
+const SUPA_URL = 'https://hfzqxxfmaqnraxadztoc.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmenF4eGZtYXFucmF4YWR6dG9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MjY0MzcsImV4cCI6MjA5NDIwMjQzN30.MI7iVdsydhD9uX0X53SU57yx-pI5_SLcTysBAotUflA';
+const DOMAIN = 'prodtrack.local';
+const SESS_KEY = 'ctm_sess';
+
+// ── State ─────────────────────────────────────────────────────────────────
+let accessToken = null, refreshToken = null, sessExpiresAt = 0;
+let currentUser = null, currentProfile = null;
+let ordersFiles = [], travelersFiles = [];
+let historyTimer = null;
+
+const H = () => ({'Content-Type':'application/json','apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY)});
+
+function escapeHtml(s){
+  const d=document.createElement('div');
+  d.textContent = s==null ? '' : String(s);
+  return d.innerHTML;
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+document.getElementById('li-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('li-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('li-pass').focus(); });
+
+async function getUserEmail(username){
+  try{
+    const r = await fetch(`${SUPA_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(username.trim().toLowerCase())}&select=email`,
+      {headers:{'Content-Type':'application/json','apikey':ANON_KEY}});
+    const rows = await r.json();
+    if(rows.length && rows[0].email) return rows[0].email;
+  }catch(e){}
+  return `${username.trim().toLowerCase()}@${DOMAIN}`;
+}
+
+async function doLogin(){
+  const username = document.getElementById('li-user').value.trim();
+  const pass = document.getElementById('li-pass').value;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-err');
+  if(!username||!pass){ err.textContent='Please enter username and password.'; return; }
+  btn.disabled=true; btn.textContent='Signing in…'; err.textContent='';
+  try{
+    const email = await getUserEmail(username);
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST', headers:{'Content-Type':'application/json','apikey':ANON_KEY},
+      body:JSON.stringify({email, password:pass})
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error('Incorrect username or password.');
+    accessToken = data.access_token; refreshToken = data.refresh_token;
+    sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
+    currentUser = data.user;
+    localStorage.setItem(SESS_KEY, JSON.stringify({accessToken, refreshToken, sessExpiresAt, user:currentUser}));
+    await afterLogin();
+  }catch(e){
+    err.textContent = e.message;
+    btn.disabled=false; btn.textContent='Sign in';
+  }
+}
+
+async function refreshAuthToken(){
+  if(!refreshToken) return false;
+  try{
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`,{
+      method:'POST', headers:{'Content-Type':'application/json','apikey':ANON_KEY},
+      body:JSON.stringify({refresh_token:refreshToken})
+    });
+    const data = await r.json();
+    if(!r.ok) return false;
+    accessToken = data.access_token; refreshToken = data.refresh_token;
+    sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
+    localStorage.setItem(SESS_KEY, JSON.stringify({accessToken, refreshToken, sessExpiresAt, user:currentUser}));
+    return true;
+  }catch(e){ return false; }
+}
+
+function doLogout(){
+  localStorage.removeItem(SESS_KEY);
+  location.reload();
+}
+
+async function afterLogin(){
+  const r = await fetch(`${SUPA_URL}/rest/v1/profiles?id=eq.${currentUser.id}&select=*`, {headers:H()});
+  const rows = await r.json();
+  const p = rows[0] || {};
+  currentProfile = {full_name:p.full_name||'', role:p.role||'worker', username:p.username||''};
+  const allowed = currentProfile.role === 'production' || currentProfile.username === 'zgta26';
+  document.getElementById('login-view').classList.add('hidden');
+  if(!allowed){
+    document.getElementById('denied-view').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('app-view').classList.remove('hidden');
+  document.getElementById('who-line').textContent = `${currentProfile.full_name||currentProfile.username} · ${currentProfile.role}`;
+  loadHistory('');
+}
+
+async function tryRestoreSession(){
+  const raw = localStorage.getItem(SESS_KEY);
+  if(!raw) return;
+  try{
+    const s = JSON.parse(raw);
+    accessToken=s.accessToken; refreshToken=s.refreshToken; sessExpiresAt=s.sessExpiresAt; currentUser=s.user;
+    if(Date.now()/1000 > sessExpiresAt - 60){
+      const ok = await refreshAuthToken();
+      if(!ok){ localStorage.removeItem(SESS_KEY); return; }
+    }
+    await afterLogin();
+  }catch(e){ localStorage.removeItem(SESS_KEY); }
+}
+tryRestoreSession();
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(name){
+  document.getElementById('tab-match').classList.toggle('active', name==='match');
+  document.getElementById('tab-history').classList.toggle('active', name==='history');
+  document.getElementById('view-match').classList.toggle('hidden', name!=='match');
+  document.getElementById('view-history').classList.toggle('hidden', name!=='history');
+}
+
+// ── File selection ────────────────────────────────────────────────────────
+function onFilesChosen(kind){
+  const input = document.getElementById(kind==='orders'?'f-orders':'f-travelers');
+  const files = Array.from(input.files);
+  if(kind==='orders') ordersFiles = files; else travelersFiles = files;
+  document.getElementById(kind==='orders'?'fl-orders':'fl-travelers').textContent =
+    files.length ? files.map(f=>f.name).join(', ') : 'No files chosen';
+}
+
+function resetBatch(){
+  ordersFiles = []; travelersFiles = [];
+  document.getElementById('f-orders').value = '';
+  document.getElementById('f-travelers').value = '';
+  document.getElementById('fl-orders').textContent = 'No files chosen';
+  document.getElementById('fl-travelers').textContent = 'No files chosen';
+  document.getElementById('results-wrap').classList.add('hidden');
+  document.getElementById('run-err').textContent = '';
+}
+
+// ── PDF text extraction (line reconstruction by position) ────────────────
+async function pdfPagesToLines(file){
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  const pages = [];
+  for(let p=1;p<=doc.numPages;p++){
+    const page = await doc.getPage(p);
+    const content = await page.getTextContent();
+    const pts = content.items.map(it=>({str:it.str,x:it.transform[4],y:it.transform[5]})).filter(o=>o.str.trim()!=='');
+    pts.sort((a,b)=>b.y-a.y || a.x-b.x);
+    const lines=[];
+    const TOL=3;
+    pts.forEach(pt=>{
+      let line=lines.find(l=>Math.abs(l.y-pt.y)<=TOL);
+      if(!line){ line={y:pt.y,items:[]}; lines.push(line); }
+      line.items.push(pt);
+    });
+    lines.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
+    pages.push(lines.map(l=>l.items.map(i=>i.str).join(' ')));
+  }
+  return pages;
+}
+
+function normText(s){ return (s||'').replace(/\s+/g,' ').trim().toUpperCase(); }
+
+// ── Production Order PDF parsing ──────────────────────────────────────────
+function parseOrderPDF(pagesLines, fileName){
+  const allLines = [].concat(...pagesLines);
+  let so = '';
+  for(let i=0;i<allLines.length;i++){
+    if(allLines[i].trim()==='Order Number:'){ so = (allLines[i+1]||'').trim(); break; }
+  }
+  const itemLineRe = /^(\S+)\s+([A-Z]{1,4})\s+([\d,]+\.\d{1,2})\s+([\d,]+\.\d{1,2})$/;
+  const prodLineRe = /^(\d{4})$/;
+  const items = [];
+  let currentProdLine = '';
+  let cur = null;
+  const flush = () => {
+    if(cur){ cur.description = normText(cur.descLines.join(' ')); delete cur.descLines; items.push(cur); }
+    cur = null;
+  };
+  for(const raw of allLines){
+    const line = raw.trim();
+    const mProd = line.match(prodLineRe);
+    const mItem = line.match(itemLineRe);
+    if(mProd){ flush(); currentProdLine = mProd[1]; continue; }
+    if(mItem){ flush(); cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine, descLines:[]}; continue; }
+    if(cur){
+      if(/^Printed:/i.test(line)){ flush(); continue; }
+      cur.descLines.push(line);
+    }
+  }
+  flush();
+  const cusItems = items.filter(it=>/-CUS$/i.test(it.itemCode));
+  return {so, cusItems, skippedCount: items.length - cusItems.length, fileName};
+}
+
+// ── Work Ticket Traveler PDF parsing ──────────────────────────────────────
+function parseTravelerPDF(pagesLines, fileName){
+  const tickets = [], unrecognized = [];
+  pagesLines.forEach((lines, idx) => {
+    const joined = lines.join('\n');
+    if(!/Work Ticket Traveler/i.test(joined)){ unrecognized.push({page:idx+1, fileName}); return; }
+    const mTicket = joined.match(/Work Ticket No\.:\s*(\d+)/);
+    const mItem = joined.match(/Item Code:\s*(\S+)/);
+    const mSO = joined.match(/S\/O\s+(\d+)/);
+    const mQty = joined.match(/Quantity:\s*([\d,]+\.\d+)/);
+    let mProd = joined.match(/(\d{4})\s+Work Ticket Traveler/);
+    if(!mProd) mProd = joined.match(/Prod Line:[\s\S]*?(\d{4})/);
+    const mDesc = joined.match(/Description:\s*([\s\S]*?)\n\s*Quantity:/);
+    if(!mTicket || !mItem || !mSO){ unrecognized.push({page:idx+1, fileName}); return; }
+    tickets.push({
+      travelerNo:String(parseInt(mTicket[1],10)),
+      itemCode:mItem[1], so:mSO[1],
+      qty:mQty?parseFloat(mQty[1].replace(/,/g,'')):null,
+      prodLine:mProd?mProd[1]:'',
+      description:normText(mDesc?mDesc[1]:''),
+      fileName, page:idx+1
+    });
+  });
+  return {tickets, unrecognized};
+}
+
+// ── Matching ───────────────────────────────────────────────────────────────
+function runMatchLogic(orderResults, travelerResults){
+  const allCus = [];
+  orderResults.forEach(r => r.cusItems.forEach(it => allCus.push(it)));
+  const allTickets = [];
+  travelerResults.forEach(r => r.tickets.forEach(t => allTickets.push(t)));
+  const ticketPool = allTickets.slice();
+  const matched = [], unmatchedOrders = [];
+  allCus.forEach(it => {
+    const idx = ticketPool.findIndex(t =>
+      t.so === it.so &&
+      t.itemCode.toUpperCase() === it.itemCode.toUpperCase() &&
+      normText(t.description) === normText(it.description)
+    );
+    if(idx === -1) unmatchedOrders.push(it);
+    else { const t = ticketPool.splice(idx,1)[0]; matched.push({...it, travelerNo:t.travelerNo}); }
+  });
+  return {matched, unmatchedOrders, unmatchedTickets: ticketPool};
+}
+
+// ── Batch run ──────────────────────────────────────────────────────────────
+async function runBatch(){
+  const err = document.getElementById('run-err');
+  const btn = document.getElementById('run-btn');
+  err.textContent = '';
+  if(!ordersFiles.length || !travelersFiles.length){
+    err.textContent = 'Choose at least one Production Order PDF and one Work Ticket Traveler PDF.';
+    return;
+  }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Parsing…';
+  try{
+    const orderResults = [];
+    for(const f of ordersFiles){
+      const pages = await pdfPagesToLines(f);
+      orderResults.push(parseOrderPDF(pages, f.name));
+    }
+    const travelerResults = [];
+    const unrecognizedAll = [];
+    for(const f of travelersFiles){
+      const pages = await pdfPagesToLines(f);
+      const res = parseTravelerPDF(pages, f.name);
+      travelerResults.push(res);
+      unrecognizedAll.push(...res.unrecognized);
+    }
+    const {matched, unmatchedOrders, unmatchedTickets} = runMatchLogic(orderResults, travelerResults);
+
+    if(matched.length){
+      const matchedBy = currentProfile.full_name || currentProfile.username || 'unknown';
+      const payload = matched.map(m => ({
+        so:m.so, item_code:m.itemCode, description:m.description, qty:m.qty,
+        prod_line:m.prodLine, traveler_no:m.travelerNo, matched_by:matchedBy
+      }));
+      const r = await fetch(`${SUPA_URL}/rest/v1/cus_traveler_matches`,{
+        method:'POST', headers:{...H(), 'Prefer':'return=minimal'}, body:JSON.stringify(payload)
+      });
+      if(!r.ok){ throw new Error('Matched, but saving to the log failed. Nothing else was affected — try Run Match again.'); }
+    }
+
+    renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognizedAll);
+    if(document.getElementById('view-history') && !document.getElementById('view-history').classList.contains('hidden')) loadHistory(document.getElementById('history-search').value);
+  }catch(e){
+    err.textContent = e.message || 'Something went wrong parsing these files.';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Run Match';
+  }
+}
+
+function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized){
+  document.getElementById('results-wrap').classList.remove('hidden');
+
+  document.getElementById('count-matched').textContent = matched.length;
+  const mBody = document.querySelector('#tbl-matched tbody'); mBody.innerHTML = '';
+  matched.forEach(m => {
+    mBody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.prodLine)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`);
+  });
+  document.getElementById('empty-matched').classList.toggle('hidden', matched.length>0);
+
+  document.getElementById('count-unord').textContent = unmatchedOrders.length;
+  const uoBody = document.querySelector('#tbl-unord tbody'); uoBody.innerHTML = '';
+  unmatchedOrders.forEach(m => {
+    uoBody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.fileName)}</td></tr>`);
+  });
+  document.getElementById('empty-unord').classList.toggle('hidden', unmatchedOrders.length>0);
+
+  document.getElementById('count-untrav').textContent = unmatchedTickets.length;
+  const utBody = document.querySelector('#tbl-untrav tbody'); utBody.innerHTML = '';
+  unmatchedTickets.forEach(t => {
+    utBody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(t.so)}</td><td>${escapeHtml(t.itemCode)}</td><td>${escapeHtml(t.description)}</td><td>${escapeHtml(t.travelerNo)}</td><td>${escapeHtml(t.fileName)}</td></tr>`);
+  });
+  document.getElementById('empty-untrav').classList.toggle('hidden', unmatchedTickets.length>0);
+
+  const unrecCard = document.getElementById('unrecognized-card');
+  if(unrecognized.length){
+    unrecCard.classList.remove('hidden');
+    document.getElementById('count-unrec').textContent = unrecognized.length;
+    const urBody = document.querySelector('#tbl-unrec tbody'); urBody.innerHTML = '';
+    unrecognized.forEach(u => {
+      urBody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(u.fileName)}</td><td>${u.page}</td></tr>`);
+    });
+  } else {
+    unrecCard.classList.add('hidden');
+  }
+}
+
+// ── History ──────────────────────────────────────────────────────────────
+function debouncedHistorySearch(){
+  clearTimeout(historyTimer);
+  historyTimer = setTimeout(() => loadHistory(document.getElementById('history-search').value), 300);
+}
+
+async function loadHistory(q){
+  q = (q||'').trim();
+  let url = `${SUPA_URL}/rest/v1/cus_traveler_matches?order=matched_at.desc&limit=200`;
+  if(q){
+    const esc = q.replace(/[,()]/g,'');
+    url += `&or=(so.ilike.*${encodeURIComponent(esc)}*,item_code.ilike.*${encodeURIComponent(esc)}*,traveler_no.ilike.*${encodeURIComponent(esc)}*)`;
+  }
+  try{
+    const r = await fetch(url, {headers:H()});
+    const rows = await r.json();
+    const body = document.querySelector('#tbl-history tbody'); body.innerHTML = '';
+    (rows||[]).forEach(row => {
+      const when = row.matched_at ? new Date(row.matched_at).toLocaleString() : '';
+      body.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(row.so)}</td><td>${escapeHtml(row.item_code)}</td><td>${escapeHtml(row.description)}</td><td>${row.qty!=null?Number(row.qty).toFixed(2):''}</td><td>${escapeHtml(row.prod_line)}</td><td>${escapeHtml(row.traveler_no)}</td><td>${escapeHtml(row.matched_by)}</td><td>${escapeHtml(when)}</td></tr>`);
+    });
+    document.getElementById('empty-history').classList.toggle('hidden', (rows||[]).length>0);
+  }catch(e){}
+}
+</script>
+</body>
+</html>
