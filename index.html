@@ -2957,15 +2957,6 @@ function generatePrintReport(startDate, endDate, deptSet){
       woodByDay[day][classifyWoodTraveler(o.line, o.item, o.desc)] += Number(o.qty)||0;
     });
   }
-  const woodDays = Object.keys(woodByDay).sort();
-  const woodDailyHtml = woodDays.length ? `<div class="wood-daily">${woodDays.map(d=>`
-    <div class="wood-day-label">${fmtDate(d)} · Wood</div>
-    <div class="summary wood-summary">
-      <div class="sum-item"><div class="sum-label">Sections</div><div class="sum-val green">${woodByDay[d].section}</div></div>
-      <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val">${woodByDay[d].gate}</div></div>
-      <div class="sum-item"><div class="sum-label">Posts</div><div class="sum-val amber">${woodByDay[d].post}</div></div>
-      <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${woodByDay[d].misc}</div></div>
-    </div>`).join('')}</div>` : '';
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -3074,9 +3065,8 @@ tr:last-child td{border-bottom:none}
   <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
   <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
 </div>
-${woodDailyHtml}
 <div class="container">
-${soData.map(s => {
+${(() => { let lastWoodDayShown = null; return soData.map(s => {
   const hasPic = s.soPhotos.length > 0;
   const picTag = hasPic
     ? `<span class="tag tg">✓ ${s.soPhotos.length} photo${s.soPhotos.length>1?'s':''}</span>`
@@ -3084,6 +3074,19 @@ ${soData.map(s => {
   const approvalTag = s.approvedCount===s.travelers.length && s.travelers.length>0
     ? `<span class="tag tg">✓ Approved</span>` : `<span class="tag td">${s.approvedCount}/${s.travelers.length} approved</span>`;
   const deptPills = deptPillsForTravelers(s.travelers);
+  const dayHeaderHtml = (woodByDay[s.soShipRaw] && s.soShipRaw !== lastWoodDayShown) ? (() => {
+    lastWoodDayShown = s.soShipRaw;
+    const c = woodByDay[s.soShipRaw];
+    return `<div class="wood-daily">
+    <div class="wood-day-label">${fmtDate(s.soShipRaw)} · Wood</div>
+    <div class="summary wood-summary">
+      <div class="sum-item"><div class="sum-label">Sections</div><div class="sum-val green">${c.section}</div></div>
+      <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val">${c.gate}</div></div>
+      <div class="sum-item"><div class="sum-label">Posts</div><div class="sum-val amber">${c.post}</div></div>
+      <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${c.misc}</div></div>
+    </div>
+  </div>`;
+  })() : '';
   const travelerRows = s.travelers.map(o=>{
     const isApp=!!approvals[o.traveler];
     const isCus=o.item.includes('-CUS')||o.item.endsWith('CUS');
@@ -3097,7 +3100,7 @@ ${soData.map(s => {
       <td>${isApp?'<span class="tag tg">✓ Approved</span>':'<span class="tag td">Pending</span>'}</td>
     </tr>`;
   }).join('');
-  return `<details open>
+  return dayHeaderHtml + `<details open>
   <summary>
     <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
     <span class="so-num">${s.so}</span>
@@ -3112,7 +3115,7 @@ ${soData.map(s => {
     <tbody>${travelerRows}</tbody></table>
   </div>
 </details>`;
-}).join('\n')}
+}).join('\n'); })()}
 </div>
 <div class="footer">ProdTrack · ${soData.length} orders · ${dateLabel} · ${deptLabel} · ${generatedAt}</div>
 </body>
