@@ -609,6 +609,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <option value="all">All codes</option>
         <option value="unclassified">Unclassified only</option>
       </select>
+      <select class="modal-input" style="max-width:140px" id="wc-prod-filter" onchange="onWoodCodesProdFilterChange(this.value)">
+        <option value="">All Prod lines</option>
+      </select>
       <span id="wc-count" style="font-size:11px;font-family:var(--mono);color:var(--text3)"></span>
     </div>
     <div class="wc-bulkbar">
@@ -1251,6 +1254,7 @@ let woodCodesMap = {}; // item_code (uppercase, trimmed) -> 'section'|'gate'|'po
 let selectedWoodCodes = new Set();
 let woodCodesFilter = 'all';
 let woodCodesSearch = '';
+let woodCodesProdFilter = '';
 async function loadWoodItemTypes(){
   try{
     const rows = await sbGet('wood_item_types','select=item_code,description,prod,type&order=prod.asc,item_code.asc');
@@ -3536,6 +3540,7 @@ async function handleWoodCodesCSVUpload(file){
       if(!r.ok) throw new Error(await r.text());
     }
     await loadWoodItemTypes();
+    renderWoodCodesProdOptions();
     renderWoodCodesList();
     status.textContent = `Done — ${woodCodes.length} codes loaded.`;
     toast('Wood codes updated', `${rows.length} codes added/updated.`, 'green');
@@ -3593,9 +3598,17 @@ function filteredWoodCodes(){
   const q = woodCodesSearch.trim().toUpperCase();
   return woodCodes.filter(r=>{
     if(woodCodesFilter==='unclassified' && r.type) return false;
+    if(woodCodesProdFilter && r.prod!==woodCodesProdFilter) return false;
     if(q && !r.item_code.toUpperCase().includes(q) && !r.description.toUpperCase().includes(q)) return false;
     return true;
   });
+}
+function onWoodCodesProdFilterChange(v){ woodCodesProdFilter=v; renderWoodCodesList(); }
+function renderWoodCodesProdOptions(){
+  const sel = document.getElementById('wc-prod-filter');
+  const prods = [...new Set(woodCodes.map(r=>r.prod).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All Prod lines</option>' + prods.map(p=>`<option value="${p}">${p}</option>`).join('');
+  sel.value = woodCodesProdFilter;
 }
 function onWoodCodesSearch(v){ woodCodesSearch=v; renderWoodCodesList(); }
 function onWoodCodesFilterChange(v){ woodCodesFilter=v; renderWoodCodesList(); }
@@ -3620,7 +3633,9 @@ function openWoodCodesModal(){
   selectedWoodCodes.clear();
   woodCodesSearch = '';
   woodCodesFilter = 'all';
+  woodCodesProdFilter = '';
   document.getElementById('wc-status').textContent = '';
+  renderWoodCodesProdOptions();
   renderWoodCodesList();
   document.getElementById('wood-codes-modal').classList.add('open');
 }
