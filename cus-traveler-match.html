@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
 :root{
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#26262b;
@@ -109,7 +110,10 @@ td{font-family:var(--mono)}
 
       <div id="results-wrap" class="hidden">
         <div class="card">
-          <div class="section-title">Matched <span class="badge badge-ok" id="count-matched"></span></div>
+          <div class="row" style="justify-content:space-between">
+            <div class="section-title">Matched <span class="badge badge-ok" id="count-matched"></span></div>
+            <button class="secondary hidden" id="download-stamped-btn" onclick="downloadStampedPdf()">Download stamped order PDF</button>
+          </div>
           <table id="tbl-matched"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th></tr></thead><tbody></tbody></table>
           <div class="empty-note hidden" id="empty-matched">None matched this run.</div>
         </div>
@@ -157,6 +161,7 @@ let accessToken = null, refreshToken = null, sessExpiresAt = 0;
 let currentUser = null, currentProfile = null;
 let ordersFiles = [], travelersFiles = [];
 let historyTimer = null;
+let lastMatched = [], lastOrderBytesByFile = {};
 
 const H = () => ({'Content-Type':'application/json','apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY)});
 
@@ -277,18 +282,65 @@ function onFilesChosen(kind){
 
 function resetBatch(){
   ordersFiles = []; travelersFiles = [];
+  lastMatched = []; lastOrderBytesByFile = {};
   document.getElementById('f-orders').value = '';
   document.getElementById('f-travelers').value = '';
   document.getElementById('fl-orders').textContent = 'No files chosen';
   document.getElementById('fl-travelers').textContent = 'No files chosen';
   document.getElementById('results-wrap').classList.add('hidden');
+  document.getElementById('download-stamped-btn').classList.add('hidden');
   document.getElementById('run-err').textContent = '';
 }
 
+// ── Stamped PDF output ─────────────────────────────────────────────────────
+// Rebuilds the uploaded Production Order PDF(s) with each matched traveler
+// number drawn at the item line's original position — same spot it's
+// currently handwritten. Purely client-side; nothing is sent anywhere.
+async function downloadStampedPdf(){
+  if(!lastMatched.length) return;
+  const btn = document.getElementById('download-stamped-btn');
+  btn.disabled = true; const origLabel = btn.textContent; btn.textContent = 'Building…';
+  try{
+    const { PDFDocument, StandardFonts, rgb } = PDFLib;
+    const outDoc = await PDFDocument.create();
+    const font = await outDoc.embedFont(StandardFonts.HelveticaBold);
+    const byFile = {};
+    lastMatched.forEach(m => {
+      byFile[m.fileName] = byFile[m.fileName] || {};
+      byFile[m.fileName][m.page] = byFile[m.fileName][m.page] || [];
+      byFile[m.fileName][m.page].push(m);
+    });
+    for(const fileName of Object.keys(lastOrderBytesByFile)){
+      const srcDoc = await PDFDocument.load(lastOrderBytesByFile[fileName]);
+      const idxs = srcDoc.getPageIndices();
+      const copied = await outDoc.copyPages(srcDoc, idxs);
+      copied.forEach((p, idx) => {
+        outDoc.addPage(p);
+        const stamps = (byFile[fileName]||{})[idx] || [];
+        stamps.forEach(s => p.drawText(s.travelerNo, {x:170, y:s.y, size:11, font, color:rgb(0,0,0)}));
+      });
+    }
+    const bytes = await outDoc.save();
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'production-order-stamped.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }catch(e){
+    document.getElementById('run-err').textContent = 'Could not build the stamped PDF: ' + (e.message||e);
+  }finally{
+    btn.disabled = false; btn.textContent = origLabel;
+  }
+}
+
 // ── PDF text extraction (line reconstruction by position) ────────────────
-async function pdfPagesToLines(file){
+// Returns {pages, bytes}: pages is an array (per PDF page) of {text, y} lines,
+// bytes is the raw file bytes (kept so the order PDF can be re-loaded and
+// stamped later by pdf-lib without re-reading the file).
+async function pdfFileToPagesWithPos(file){
   const buf = await file.arrayBuffer();
-  const doc = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  const doc = await pdfjsLib.getDocument({data:new Uint8Array(buf.slice(0))}).promise;
   const pages = [];
   for(let p=1;p<=doc.numPages;p++){
     const page = await doc.getPage(p);
@@ -303,19 +355,22 @@ async function pdfPagesToLines(file){
       line.items.push(pt);
     });
     lines.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
-    pages.push(lines.map(l=>l.items.map(i=>i.str).join(' ')));
+    pages.push(lines.map(l=>({text:l.items.map(i=>i.str).join(' '), y:l.y})));
   }
-  return pages;
+  return {pages, bytes: buf};
 }
 
 function normText(s){ return (s||'').replace(/\s+/g,' ').trim().toUpperCase(); }
 
 // ── Production Order PDF parsing ──────────────────────────────────────────
-function parseOrderPDF(pagesLines, fileName){
-  const allLines = [].concat(...pagesLines);
+// Each returned CUS item carries page + y (the item line's PDF coordinate)
+// so a matched traveler number can later be stamped back onto that exact spot.
+function parseOrderPDF(pages, fileName){
+  const allLines = [];
+  pages.forEach((linesArr, pageIdx) => linesArr.forEach(l => allLines.push({text:l.text, y:l.y, page:pageIdx})));
   let so = '';
   for(let i=0;i<allLines.length;i++){
-    if(allLines[i].trim()==='Order Number:'){ so = (allLines[i+1]||'').trim(); break; }
+    if(allLines[i].text.trim()==='Order Number:'){ so = (allLines[i+1]?.text||'').trim(); break; }
   }
   const itemLineRe = /^(\S+)\s+([A-Z]{1,4})\s+([\d,]+\.\d{1,2})\s+([\d,]+\.\d{1,2})$/;
   const prodLineRe = /^(\d{4})$/;
@@ -326,12 +381,12 @@ function parseOrderPDF(pagesLines, fileName){
     if(cur){ cur.description = normText(cur.descLines.join(' ')); delete cur.descLines; items.push(cur); }
     cur = null;
   };
-  for(const raw of allLines){
-    const line = raw.trim();
+  for(const ln of allLines){
+    const line = ln.text.trim();
     const mProd = line.match(prodLineRe);
     const mItem = line.match(itemLineRe);
     if(mProd){ flush(); currentProdLine = mProd[1]; continue; }
-    if(mItem){ flush(); cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine, descLines:[]}; continue; }
+    if(mItem){ flush(); cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine, descLines:[], page:ln.page, y:ln.y, fileName}; continue; }
     if(cur){
       if(/^Printed:/i.test(line)){ flush(); continue; }
       cur.descLines.push(line);
@@ -343,10 +398,10 @@ function parseOrderPDF(pagesLines, fileName){
 }
 
 // ── Work Ticket Traveler PDF parsing ──────────────────────────────────────
-function parseTravelerPDF(pagesLines, fileName){
+function parseTravelerPDF(pages, fileName){
   const tickets = [], unrecognized = [];
-  pagesLines.forEach((lines, idx) => {
-    const joined = lines.join('\n');
+  pages.forEach((lines, idx) => {
+    const joined = lines.map(l=>l.text).join('\n');
     if(!/Work Ticket Traveler/i.test(joined)){ unrecognized.push({page:idx+1, fileName}); return; }
     const mTicket = joined.match(/Work Ticket No\.:\s*(\d+)/);
     const mItem = joined.match(/Item Code:\s*(\S+)/);
@@ -400,19 +455,24 @@ async function runBatch(){
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Parsing…';
   try{
     const orderResults = [];
+    const orderBytesByFile = {};
     for(const f of ordersFiles){
-      const pages = await pdfPagesToLines(f);
+      const {pages, bytes} = await pdfFileToPagesWithPos(f);
+      orderBytesByFile[f.name] = bytes;
       orderResults.push(parseOrderPDF(pages, f.name));
     }
     const travelerResults = [];
     const unrecognizedAll = [];
     for(const f of travelersFiles){
-      const pages = await pdfPagesToLines(f);
+      const {pages} = await pdfFileToPagesWithPos(f);
       const res = parseTravelerPDF(pages, f.name);
       travelerResults.push(res);
       unrecognizedAll.push(...res.unrecognized);
     }
     const {matched, unmatchedOrders, unmatchedTickets} = runMatchLogic(orderResults, travelerResults);
+    lastMatched = matched;
+    lastOrderBytesByFile = orderBytesByFile;
+    document.getElementById('download-stamped-btn').classList.toggle('hidden', matched.length===0);
 
     if(matched.length){
       const matchedBy = currentProfile.full_name || currentProfile.username || 'unknown';
