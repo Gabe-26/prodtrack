@@ -324,6 +324,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .wc-type-btn.active.wc-section{background:var(--green-dim);color:var(--green);border-color:var(--green)}
 .wc-type-btn.active.wc-gate{background:var(--pink-dim);color:var(--pink);border-color:var(--pink)}
 .wc-type-btn.active.wc-post{background:var(--amber-dim);color:var(--amber);border-color:var(--amber)}
+.wc-type-btn.active.wc-misc{background:var(--surface3);color:var(--text);border-color:var(--border2)}
 .pl-preview-wrap{width:288px;height:432px;overflow:hidden;position:relative;border:1px solid var(--border2);border-radius:4px;background:#fff;margin-bottom:12px;flex-shrink:0}
 .pl-preview-page{position:absolute;top:0;left:0;width:4in;height:6in;padding:calc(0.22in - var(--lbl-top-reduce,5px)) 0.22in 0.22in 0.22in;box-sizing:border-box;transform:scale(0.75);transform-origin:top left;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
 .pl-preview-page .lbl-so{font-size:65px;font-weight:800;margin-bottom:0;letter-spacing:1px;text-align:center}
@@ -621,6 +622,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <button class="wc-type-btn wc-section" onclick="applyTypeToSelected('section')">Section</button>
       <button class="wc-type-btn wc-gate" onclick="applyTypeToSelected('gate')">Gate</button>
       <button class="wc-type-btn wc-post" onclick="applyTypeToSelected('post')">Post</button>
+      <button class="wc-type-btn wc-misc" onclick="applyTypeToSelected('misc')">Misc</button>
     </div>
     <div class="wc-table-wrap">
       <table class="wc-table">
@@ -3551,21 +3553,24 @@ async function handleWoodCodesCSVUpload(file){
   document.getElementById('wc-file-input').value = '';
 }
 async function setWoodCodeTypes(codes, type){
+  const dbType = type==='misc' ? null : type;
   const filter = codes.length===1
     ? `item_code=eq.${encodeURIComponent(codes[0])}`
     : `item_code=in.(${codes.map(c=>encodeURIComponent(c)).join(',')})`;
   const r = await fetch(`${SUPA_URL}/rest/v1/wood_item_types?${filter}`, {
     method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
-    body: JSON.stringify({type})
+    body: JSON.stringify({type: dbType})
   });
   if(!r.ok) throw new Error(await r.text());
 }
 async function applyTypeToRow(itemCode, type){
   try{
     await setWoodCodeTypes([itemCode], type);
+    const dbType = type==='misc' ? null : type;
     const row = woodCodes.find(r=>r.item_code===itemCode);
-    if(row) row.type = type;
-    woodCodesMap[itemCode.trim().toUpperCase()] = type;
+    if(row) row.type = dbType;
+    const key = itemCode.trim().toUpperCase();
+    if(dbType) woodCodesMap[key] = dbType; else delete woodCodesMap[key];
     renderWoodCodesList();
   }catch(e){ toast('Error', e.message, 'red'); }
 }
@@ -3574,10 +3579,12 @@ async function applyTypeToSelected(type){
   const codes = [...selectedWoodCodes];
   try{
     await setWoodCodeTypes(codes, type);
+    const dbType = type==='misc' ? null : type;
     codes.forEach(code=>{
       const row = woodCodes.find(r=>r.item_code===code);
-      if(row) row.type = type;
-      woodCodesMap[code.trim().toUpperCase()] = type;
+      if(row) row.type = dbType;
+      const key = code.trim().toUpperCase();
+      if(dbType) woodCodesMap[key] = dbType; else delete woodCodesMap[key];
     });
     selectedWoodCodes.clear();
     renderWoodCodesList();
@@ -3626,14 +3633,17 @@ function onWoodCodesFilterChange(v){ woodCodesFilter=v; wcLastClickIndex=null; r
 function renderWoodCodesList(){
   const list = filteredWoodCodes();
   const body = document.getElementById('wc-tbody');
-  const typeBtn = (row,t,label,cls)=>`<button class="wc-type-btn ${cls}${row.type===t?' active':''}" onclick="applyTypeToRow('${row.item_code}','${t}')">${label}</button>`;
+  const typeBtn = (row,t,label,cls)=>{
+    const isActive = t==='misc' ? !row.type : row.type===t;
+    return `<button class="wc-type-btn ${cls}${isActive?' active':''}" onclick="applyTypeToRow('${row.item_code}','${t}')">${label}</button>`;
+  };
   body.innerHTML = list.map(r=>`
     <tr>
       <td><input type="checkbox" ${selectedWoodCodes.has(r.item_code)?'checked':''} onclick="toggleWoodCodeSelect('${r.item_code}', this.checked, event)"></td>
       <td style="font-family:var(--mono)">${escapeHtml(r.item_code)}</td>
       <td>${escapeHtml(r.description)}</td>
       <td style="font-family:var(--mono);color:var(--text3)">${escapeHtml(r.prod||'')}</td>
-      <td>${typeBtn(r,'section','Section','wc-section')}${typeBtn(r,'gate','Gate','wc-gate')}${typeBtn(r,'post','Post','wc-post')}</td>
+      <td>${typeBtn(r,'section','Section','wc-section')}${typeBtn(r,'gate','Gate','wc-gate')}${typeBtn(r,'post','Post','wc-post')}${typeBtn(r,'misc','Misc','wc-misc')}</td>
     </tr>`).join('');
   document.getElementById('wc-count').textContent = `${list.length} of ${woodCodes.length} codes`;
   document.getElementById('wc-selected-count').textContent = `${selectedWoodCodes.size} selected`;
