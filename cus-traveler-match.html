@@ -154,7 +154,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 const SUPA_URL = 'https://hfzqxxfmaqnraxadztoc.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmenF4eGZtYXFucmF4YWR6dG9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MjY0MzcsImV4cCI6MjA5NDIwMjQzN30.MI7iVdsydhD9uX0X53SU57yx-pI5_SLcTysBAotUflA';
 const DOMAIN = 'prodtrack.local';
-const SESS_KEY = 'ctm_sess';
+const SESS_KEY = 'pt_sess';
 
 // ── State ─────────────────────────────────────────────────────────────────
 let accessToken = null, refreshToken = null, sessExpiresAt = 0;
@@ -203,7 +203,10 @@ async function doLogin(){
     accessToken = data.access_token; refreshToken = data.refresh_token;
     sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
     currentUser = data.user;
-    localStorage.setItem(SESS_KEY, JSON.stringify({accessToken, refreshToken, sessExpiresAt, user:currentUser}));
+    localStorage.setItem(SESS_KEY, JSON.stringify({
+      access_token: accessToken, refresh_token: refreshToken, expires_at: sessExpiresAt,
+      user_id: currentUser.id, email: currentUser.email
+    }));
     await afterLogin();
   }catch(e){
     err.textContent = e.message;
@@ -222,7 +225,10 @@ async function refreshAuthToken(){
     if(!r.ok) return false;
     accessToken = data.access_token; refreshToken = data.refresh_token;
     sessExpiresAt = data.expires_at || (Date.now()/1000+3600);
-    localStorage.setItem(SESS_KEY, JSON.stringify({accessToken, refreshToken, sessExpiresAt, user:currentUser}));
+    localStorage.setItem(SESS_KEY, JSON.stringify({
+      access_token: accessToken, refresh_token: refreshToken, expires_at: sessExpiresAt,
+      user_id: currentUser.id, email: currentUser.email
+    }));
     return true;
   }catch(e){ return false; }
 }
@@ -253,7 +259,8 @@ async function tryRestoreSession(){
   if(!raw) return;
   try{
     const s = JSON.parse(raw);
-    accessToken=s.accessToken; refreshToken=s.refreshToken; sessExpiresAt=s.sessExpiresAt; currentUser=s.user;
+    accessToken=s.access_token; refreshToken=s.refresh_token; sessExpiresAt=s.expires_at;
+    currentUser={id:s.user_id, email:s.email};
     if(Date.now()/1000 > sessExpiresAt - 60){
       const ok = await refreshAuthToken();
       if(!ok){ localStorage.removeItem(SESS_KEY); return; }
