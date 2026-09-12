@@ -583,7 +583,7 @@ async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
     copied.forEach((p, idx) => {
       outDoc.addPage(p);
       const stamps = (stampsByFile[fileName]||{})[idx] || [];
-      stamps.forEach(s => p.drawText(s.travelerNo, {x:170, y:s.y, size:11, font, color:rgb(0,0,0)}));
+      stamps.forEach(s => p.drawText(s.travelerNo, {x:215, y:s.y, size:13, font, color:rgb(0,0,0)}));
       pageMap.push({fileName, page: idx});
     });
   }
