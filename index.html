@@ -743,6 +743,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Date changes<span class="nb amber" id="b-dc">0</span>
       </div>
+      <div class="nav-item" id="nav-inbox" onclick="sv('inbox')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+        Inbox<span class="nb red" id="b-inbox">0</span>
+      </div>
       <div class="nav-item" id="nav-upload" onclick="sv('upload')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Upload CSV
@@ -965,6 +969,17 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           <div class="empty"><div class="spinner"></div></div>
         </div>
       </div>
+
+      <!-- Inbox (all roles, department-scoped) -->
+      <div id="view-inbox" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">Inbox</span>
+          <span style="margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text3)" id="inbox-count"></span>
+        </div>
+        <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch" id="inbox-body">
+          <div class="empty"><div class="spinner"></div></div>
+        </div>
+      </div>
  
     </div>
   </div>
@@ -989,6 +1004,7 @@ let sessExpiresAt = 0;
 let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
 let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [], soComments = {}, holidayList = [], holidayDates = new Set();
+let departmentBatches = [], readBatchIds = new Set();
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
 let collapsedTravelers = new Set();
 let missingFromCSV = [];
@@ -1271,6 +1287,17 @@ async function loadWoodItemTypes(){
     rows.forEach(r=>{ if(r.type) woodCodesMap[r.item_code.trim().toUpperCase()] = r.type; });
   } catch(e){}
 }
+async function loadDepartmentBatches(){
+  try{ departmentBatches = await sbGet('department_batches','select=*&order=created_at.desc'); }
+  catch(e){}
+}
+async function loadBatchReads(){
+  if(!currentUser?.id) return;
+  try{
+    const rows = await sbGet('batch_reads', `select=batch_id&user_id=eq.${currentUser.id}`);
+    readBatchIds = new Set(rows.map(r=>r.batch_id));
+  } catch(e){}
+}
 async function sbUpsertOrders(rows){
   const r = await fetch(`${SUPA_URL}/rest/v1/orders?on_conflict=traveler`, {
     method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates'},
@@ -1301,7 +1328,7 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload(), loadHolidays(), loadCustomers(), loadWoodItemTypes()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload(), loadHolidays(), loadCustomers(), loadWoodItemTypes(), loadDepartmentBatches(), loadBatchReads()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
@@ -1536,7 +1563,7 @@ async function refreshData(){
   try{
     const ok = await refreshAuthToken();
     if(!ok){ await forceReauth('Session expired — please sign in again.'); btn.disabled=false; return; }
-    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadDepartmentBatches(),loadBatchReads()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
   }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
@@ -1938,6 +1965,8 @@ function updateAll(){
   document.getElementById('b-dc').textContent=dateChanges.length+missingFromCSV.length;
   const archBadge=document.getElementById('b-archive');
   if(archBadge) archBadge.textContent=archivedOrders.length;
+  const inboxBadge=document.getElementById('b-inbox');
+  if(inboxBadge) inboxBadge.textContent=departmentBatches.filter(b=>!readBatchIds.has(b.id)).length;
  
   // DC banner
   const banner=document.getElementById('dc-banner');
@@ -2571,6 +2600,88 @@ function renderLog(){
   body.innerHTML=html;
 }
  
+// ── Inbox ─────────────────────────────────────────────────────────────────────
+function formatTravelerRanges(travelers){
+  const nums = (travelers||[]).map(t=>parseInt(t,10)).filter(Number.isFinite).sort((a,b)=>a-b);
+  if(!nums.length) return '';
+  const ranges = [];
+  let start = nums[0], prev = nums[0];
+  for(let i=1;i<nums.length;i++){
+    if(nums[i] === prev+1){ prev = nums[i]; continue; }
+    ranges.push(start===prev ? `${start}` : `${start}-${prev}`);
+    start = prev = nums[i];
+  }
+  ranges.push(start===prev ? `${start}` : `${start}-${prev}`);
+  return ranges.map(r=>'WO '+r).join(', ');
+}
+
+function renderInbox(){
+  const body=document.getElementById('inbox-body');
+  const cnt=document.getElementById('inbox-count');
+  if(!body) return;
+  if(cnt) cnt.textContent = `${departmentBatches.length} batch${departmentBatches.length!==1?'es':''}`;
+
+  if(!departmentBatches.length){
+    body.innerHTML='<div class="empty"><div class="empty-icon">✉</div><div class="empty-title">No batches yet</div><div class="empty-sub">Uploaded CUS traveler batches for your departments will appear here</div></div>';
+    return;
+  }
+
+  const byDate={};
+  for(const b of departmentBatches){
+    const day=b.created_at.slice(0,10);
+    if(!byDate[day]) byDate[day]=[];
+    byDate[day].push(b);
+  }
+
+  let html='';
+  for(const day of Object.keys(byDate)){
+    const d=new Date(day+'T12:00:00');
+    const label=d.toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'});
+    html+=`<div style="padding:10px 20px 4px;font-size:10px;font-family:var(--mono);letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface)">${label}</div>`;
+    for(const b of byDate[day]){
+      const isUnread = !readBatchIds.has(b.id);
+      const time=new Date(b.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const entries = b.entries || [];
+      const soRows = entries.map(e=>
+        `<div style="display:flex;gap:10px;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--text2);padding:2px 0">
+          <span style="color:var(--text)">SO ${escapeHtml(e.so)}</span>
+          <span>${escapeHtml(formatTravelerRanges(e.travelers))}</span>
+          ${e.ship_date?`<span style="color:var(--text3)">Ship ${escapeHtml(e.ship_date)}</span>`:''}
+        </div>`
+      ).join('');
+      const restBg = isUnread ? 'var(--surface2)' : 'transparent';
+      html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);transition:background 0.1s;cursor:pointer;background:${restBg}" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${restBg}'" onclick="markBatchRead(${b.id})">
+        ${isUnread?'<span style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:6px"></span>':'<span style="width:8px;flex-shrink:0"></span>'}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            ${makeDeptPill(b.department)}
+            <span style="font-size:13px;font-weight:600;color:var(--text)">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${escapeHtml(b.uploaded_by||'')}</span>
+          </div>
+          ${soRows}
+          ${b.pdf_url?`<a href="${b.pdf_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-block;margin-top:6px;font-size:12px;color:var(--accent)">Open stamped PDF ↗</a>`:''}
+        </div>
+        <span style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;margin-top:2px">${time}</span>
+      </div>`;
+    }
+  }
+  body.innerHTML=html;
+}
+
+async function markBatchRead(batchId){
+  if(readBatchIds.has(batchId)) return;
+  readBatchIds.add(batchId);
+  renderInbox();
+  const inboxBadge=document.getElementById('b-inbox');
+  if(inboxBadge) inboxBadge.textContent=departmentBatches.filter(b=>!readBatchIds.has(b.id)).length;
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/batch_reads`,{
+      method:'POST', headers:{...H(),'Prefer':'resolution=ignore-duplicates,return=minimal'},
+      body: JSON.stringify({batch_id:batchId, user_id:currentUser.id})
+    });
+  }catch(e){}
+}
+
 // ── Photo upload ──────────────────────────────────────────────────────────────
 // ── Photo compression ─────────────────────────────────────────────────────────
 function compressPhoto(file, maxSizeKB=800, maxWidth=1920, maxHeight=1920){
@@ -3795,13 +3906,15 @@ function sv(v){
   document.getElementById('view-users').style.display=v==='users'?'flex':'none';
   document.getElementById('view-archive').style.display=v==='archive'?'flex':'none';
   document.getElementById('view-log').style.display=v==='log'?'flex':'none';
-  ['tomorrow','all','pending','done','datechanges','upload','users','archive','log'].forEach(n=>{
+  document.getElementById('view-inbox').style.display=v==='inbox'?'flex':'none';
+  ['tomorrow','all','pending','done','datechanges','upload','users','archive','log','inbox'].forEach(n=>{
     document.getElementById('nav-'+n)?.classList.remove('active');
   });
   document.getElementById('nav-'+v)?.classList.add('active');
   if(v==='users') loadUsers();
   if(v==='archive') openArchiveView();
   if(v==='log') loadLog();
+  if(v==='inbox') renderInbox();
   closeDrawer(); render();
 }
  
@@ -3831,7 +3944,7 @@ function startAutoRefresh(){
         const ok = await refreshAuthToken();
         if(!ok){ await forceReauth('Session expired — please sign in again.'); return; }
       }
-      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes()]);updateAll();render();
+      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadDepartmentBatches(),loadBatchReads()]);updateAll();render();
     }catch(e){}
   },60000);
 }
