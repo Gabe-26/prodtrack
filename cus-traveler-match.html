@@ -347,7 +347,7 @@ async function pdfFileToPagesWithPos(file){
   for(let p=1;p<=doc.numPages;p++){
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
-    const pts = content.items.map(it=>({str:it.str,x:it.transform[4],y:it.transform[5]})).filter(o=>o.str.trim()!=='');
+    const pts = content.items.map(it=>({str:it.str,x:it.transform[4],y:it.transform[5],width:it.width||0})).filter(o=>o.str.trim()!=='');
     pts.sort((a,b)=>b.y-a.y || a.x-b.x);
     const lines=[];
     const TOL=3;
@@ -357,7 +357,7 @@ async function pdfFileToPagesWithPos(file){
       line.items.push(pt);
     });
     lines.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
-    pages.push(lines.map(l=>({text:l.items.map(i=>i.str).join(' '), y:l.y})));
+    pages.push(lines.map(l=>({text:l.items.map(i=>i.str).join(' '), y:l.y, tokens:l.items})));
   }
   return {pages, bytes: buf};
 }
@@ -394,11 +394,14 @@ const DEPT_META = {
 // ── Production Order PDF parsing ──────────────────────────────────────────
 // Every item (not just CUS) carries: dept (from its prod line), lineYs (the
 // y-position of its item-code line AND every wrapped description line — used
-// to recolor the matching highlight rectangle back in the source PDF), and
-// page/y (the item-code line's own position — used to stamp the traveler #).
+// to find/erase the matching highlight rectangle on description lines), and
+// codeBox/qtyBox (exact x-bounds of the item-code and Ordered-qty text on the
+// item-code line — used to draw two narrow highlight boxes instead of the
+// original full-row one). page/y is the item-code line's position, used to
+// stamp the traveler #.
 function parseOrderPDF(pages, fileName){
   const allLines = [];
-  pages.forEach((linesArr, pageIdx) => linesArr.forEach(l => allLines.push({text:l.text, y:l.y, page:pageIdx})));
+  pages.forEach((linesArr, pageIdx) => linesArr.forEach(l => allLines.push({text:l.text, y:l.y, page:pageIdx, tokens:l.tokens})));
   let so = '';
   for(let i=0;i<allLines.length;i++){
     if(allLines[i].text.trim()==='Order Number:'){ so = (allLines[i+1]?.text||'').trim(); break; }
@@ -419,8 +422,12 @@ function parseOrderPDF(pages, fileName){
     if(mProd){ flush(); currentProdLine = mProd[1]; continue; }
     if(mItem){
       flush();
+      const toks = ln.tokens || []; // [itemCode, unit, orderedQty, backOrderQty] left-to-right
+      const codeBox = toks[0] ? {x0:toks[0].x, x1:toks[0].x+toks[0].width} : null;
+      const qtyBox  = toks[2] ? {x0:toks[2].x, x1:toks[2].x+toks[2].width} : null;
       cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine,
-             descLines:[], page:ln.page, y:ln.y, lineYs:[ln.y], fileName, dept:classifyDept(currentProdLine)};
+             descLines:[], page:ln.page, y:ln.y, lineYs:[ln.y], fileName, dept:classifyDept(currentProdLine),
+             codeBox, qtyBox};
       continue;
     }
     if(cur){
@@ -513,10 +520,15 @@ async function recolorPageHighlightsInPlace(doc, page, itemsForPage){
     const yTop = ty + rectY, yBottom = yTop + rectH;
     const loY = Math.min(yTop,yBottom) - 2, hiY = Math.max(yTop,yBottom) + 2;
     const owner = itemsForPage.find(it => it.lineYs.some(ly => ly >= loY && ly <= hiY));
-    if(!owner || !owner.dept || !owner.dept.primary) return whole;
+    if(!owner || !owner.dept || !owner.dept.primary) return whole; // unclassified/unowned — leave original yellow
+    const isPrimaryLine = owner.lineYs[0] >= loY && owner.lineYs[0] <= hiY;
+    if(!isPrimaryLine) return gap; // description line — erase the highlight, keep ET so the stream stays valid
+    if(!owner.codeBox || !owner.qtyBox) return whole; // couldn't find token bounds — leave original rect alone
     const c = DEPT_META[owner.dept.primary].pdfColor;
-    if(!c) return whole;
-    return `${c[0].toFixed(3)} ${c[1].toFixed(3)} ${c[2].toFixed(3)} ${op}${gap}${x} ${y} ${w} ${h} re\nf`;
+    const pad = 2;
+    const cx = (owner.codeBox.x0-pad).toFixed(2), cw = (owner.codeBox.x1-owner.codeBox.x0+pad*2).toFixed(2);
+    const qx = (owner.qtyBox.x0-pad).toFixed(2), qw = (owner.qtyBox.x1-owner.qtyBox.x0+pad*2).toFixed(2);
+    return `${c[0].toFixed(3)} ${c[1].toFixed(3)} ${c[2].toFixed(3)} ${op}${gap}${cx} ${y} ${cw} ${h} re\nf\n${qx} ${y} ${qw} ${h} re\nf`;
   });
   if(newText === text) return;
 
