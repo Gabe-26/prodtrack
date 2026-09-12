@@ -18,7 +18,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;font-family:var(--sans)}
 body{background:var(--bg);color:var(--text);min-height:100vh}
-.wrap{max-width:1000px;margin:0 auto;padding:24px 20px 60px}
+.wrap{max-width:1600px;margin:0 auto;padding:24px 28px 60px}
 h1{font-size:20px;font-weight:800;letter-spacing:.3px}
 .sub{color:var(--text3);font-size:13px;margin-top:2px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-top:18px}
@@ -46,11 +46,16 @@ td{font-family:var(--mono)}
 .tab.active{color:var(--accent);border-color:var(--accent)}
 .hidden{display:none!important}
 .empty-note{color:var(--text3);font-size:13px;padding:10px 0}
-.dept-box{border-left:4px solid var(--border2);background:var(--surface2);border-radius:6px;padding:12px 14px;margin-top:12px;cursor:pointer;transition:box-shadow .12s}
+.dept-box{border-left:4px solid var(--border2);background:var(--surface2);border-radius:6px;padding:12px 14px;margin-top:12px;transition:box-shadow .12s}
 .dept-box:hover{box-shadow:0 0 0 1px var(--border2) inset}
 .dept-box.active{box-shadow:0 0 0 2px var(--accent) inset}
+.dept-box-title{cursor:pointer}
+.dept-box.collapsed .dept-box-body{display:none}
+.dept-box table{font-size:11px}
+.dept-box th,.dept-box td{padding:5px 8px}
 .results-columns{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .results-columns > .card{margin-top:18px}
+#preview-card{position:sticky;top:16px}
 #preview-pages{max-height:900px;overflow-y:auto}
 .dept-box-title{font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px}
 .dept-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -591,7 +596,9 @@ let activeDeptFilter = null;
 function selectDeptFilter(dept){
   activeDeptFilter = (activeDeptFilter === dept) ? null : dept;
   document.querySelectorAll('.dept-box').forEach(el => {
-    el.classList.toggle('active', el.dataset.dept === activeDeptFilter);
+    const isActive = el.dataset.dept === activeDeptFilter;
+    el.classList.toggle('active', isActive);
+    el.classList.toggle('collapsed', !!activeDeptFilter && !isActive);
   });
   applyPreviewFilter();
 }
@@ -719,12 +726,14 @@ function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized)
     (byDept[d] = byDept[d] || []).push(m);
   });
   const rowsHtml = list => list.map(m =>
-    `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.prodLine)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`
+    `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`
   ).join('');
   const boxHtml = (label, css, list, deptKey) => `
-    <div class="dept-box" style="border-left-color:${css}" data-dept="${deptKey}" onclick="selectDeptFilter('${deptKey}')">
-      <div class="dept-box-title"><span class="dept-swatch" style="background:${css}"></span>${escapeHtml(label)} <span class="badge badge-ok">${list.length}</span></div>
-      ${list.length ? `<table><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th></tr></thead><tbody>${rowsHtml(list)}</tbody></table>` : `<div class="empty-note">None matched this run.</div>`}
+    <div class="dept-box" style="border-left-color:${css}" data-dept="${deptKey}">
+      <div class="dept-box-title" onclick="selectDeptFilter('${deptKey}')"><span class="dept-swatch" style="background:${css}"></span>${escapeHtml(label)} <span class="badge badge-ok">${list.length}</span></div>
+      <div class="dept-box-body">
+        ${list.length ? `<table><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Traveler #</th></tr></thead><tbody>${rowsHtml(list)}</tbody></table>` : `<div class="empty-note">None matched this run.</div>`}
+      </div>
     </div>`;
   DEPT_ORDER.forEach(d => {
     boxesWrap.insertAdjacentHTML('beforeend', boxHtml(DEPT_META[d].label, DEPT_META[d].css, byDept[d]||[], d));
