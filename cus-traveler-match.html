@@ -124,7 +124,9 @@ td{font-family:var(--mono)}
       </div>
 
       <div id="results-wrap" class="hidden">
-        <div class="row" style="justify-content:flex-end">
+        <div class="row" style="justify-content:flex-end;align-items:center">
+          <div class="sub" id="upload-batch-status" style="margin-top:0"></div>
+          <button class="secondary hidden" id="upload-batch-btn" onclick="uploadBatch()">Upload Batch</button>
           <button class="secondary hidden" id="download-stamped-btn" onclick="downloadStampedPdf()">Download stamped order PDF</button>
         </div>
         <div class="results-columns">
@@ -322,6 +324,8 @@ function resetBatch(){
   document.getElementById('results-wrap').classList.add('hidden');
   document.getElementById('preview-card').classList.add('hidden');
   document.getElementById('download-stamped-btn').classList.add('hidden');
+  document.getElementById('upload-batch-btn').classList.add('hidden');
+  document.getElementById('upload-batch-status').textContent = '';
   document.getElementById('run-err').textContent = '';
 }
 
@@ -347,6 +351,92 @@ async function downloadStampedPdf(){
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }catch(e){
     document.getElementById('run-err').textContent = 'Could not build the stamped PDF: ' + (e.message||e);
+  }finally{
+    btn.disabled = false; btn.textContent = origLabel;
+  }
+}
+
+// ── Upload Batch — sends one Inbox entry per department to Supabase ───────
+const BATCH_BUCKET = 'batch-pdfs';
+
+// Groups this run's matched items into { wood:[{so,ship_date,travelers:[...]}], ... }.
+// Unclassified items (no resolved department) have nowhere to send, so they're
+// skipped here — they still show under "Unclassified" in the on-screen results.
+function buildDeptBatchEntries(){
+  const byDept = {};
+  lastMatched.forEach(m => {
+    const d = m.dept && m.dept.primary;
+    if(!d) return;
+    byDept[d] = byDept[d] || {};
+    byDept[d][m.so] = byDept[d][m.so] || {so:m.so, ship_date:m.shipDate||'', travelers:[]};
+    byDept[d][m.so].travelers.push(m.travelerNo);
+  });
+  const out = {};
+  Object.keys(byDept).forEach(d => { out[d] = Object.values(byDept[d]); });
+  return out;
+}
+
+// Extracts just the stamped pages relevant to one department out of the
+// already-built merged PDF, using the same fileName+page lookup the preview
+// filter uses. Returns null if that department has no pages.
+async function buildDeptPdfSubset(dept){
+  const { PDFDocument } = PDFLib;
+  const pageIndices = [];
+  lastStampedPageMap.forEach((src, idx) => {
+    const onThisPage = lastMatched.some(m => m.fileName===src.fileName && m.page===src.page && m.dept && m.dept.primary===dept);
+    if(onThisPage) pageIndices.push(idx);
+  });
+  if(!pageIndices.length) return null;
+  const srcDoc = await PDFDocument.load(lastStampedPdfBytes);
+  const outDoc = await PDFDocument.create();
+  const copied = await outDoc.copyPages(srcDoc, pageIndices);
+  copied.forEach(p => outDoc.addPage(p));
+  return await outDoc.save();
+}
+
+async function uploadBatch(){
+  if(!lastMatched.length) return;
+  const btn = document.getElementById('upload-batch-btn');
+  const status = document.getElementById('upload-batch-status');
+  const err = document.getElementById('run-err');
+  err.textContent = ''; status.textContent = '';
+  btn.disabled = true; const origLabel = btn.textContent; btn.textContent = 'Uploading…';
+  try{
+    if(!lastStampedPdfBytes){
+      const built = await buildStampedPdf(lastOrderBytesByFile, lastMatched, lastAllItemsByFile);
+      lastStampedPdfBytes = built.bytes;
+      lastStampedPageMap = built.pageMap;
+    }
+    const byDept = buildDeptBatchEntries();
+    const depts = Object.keys(byDept);
+    if(!depts.length){ status.textContent = 'Nothing to upload — no classified matches this run.'; return; }
+
+    const uploadedBy = currentProfile.full_name || currentProfile.username || 'unknown';
+    const summary = [];
+    for(const dept of depts){
+      const entries = byDept[dept];
+      const pdfBytes = await buildDeptPdfSubset(dept);
+      let pdfUrl = null;
+      if(pdfBytes){
+        const path = `${dept}/${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`;
+        const r = await fetch(`${SUPA_URL}/storage/v1/object/${BATCH_BUCKET}/${path}`,{
+          method:'POST',
+          headers:{'apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY),'Content-Type':'application/pdf'},
+          body: pdfBytes
+        });
+        if(!r.ok) throw new Error(`Upload failed for ${DEPT_META[dept].label}: ${await r.text()}`);
+        pdfUrl = `${SUPA_URL}/storage/v1/object/public/${BATCH_BUCKET}/${path}`;
+      }
+      const insertRes = await fetch(`${SUPA_URL}/rest/v1/department_batches`,{
+        method:'POST', headers:{...H(), 'Prefer':'return=minimal'},
+        body: JSON.stringify({department:dept, entries, pdf_url:pdfUrl, uploaded_by:uploadedBy})
+      });
+      if(!insertRes.ok) throw new Error(`Saving batch failed for ${DEPT_META[dept].label}: ${await insertRes.text()}`);
+      summary.push(`${DEPT_META[dept].label} (${entries.length} SO${entries.length===1?'':'s'})`);
+    }
+    status.textContent = `Uploaded: ${summary.join(', ')}`;
+  }catch(e){
+    err.textContent = e.message || 'Upload failed.';
   }finally{
     btn.disabled = false; btn.textContent = origLabel;
   }
@@ -422,6 +512,11 @@ function parseOrderPDF(pages, fileName){
   for(let i=0;i<allLines.length;i++){
     if(allLines[i].text.trim()==='Order Number:'){ so = (allLines[i+1]?.text||'').trim(); break; }
   }
+  let shipDate = '';
+  for(const ln of allLines){
+    const m = ln.text.match(/Ship\/PU Date:\s*([\d\/]+)/);
+    if(m){ shipDate = m[1]; break; }
+  }
   const itemLineRe = /^(\S+)\s+([A-Z]{1,4})\s+([\d,]+\.\d{1,2})\s+([\d,]+\.\d{1,2})$/;
   const prodLineRe = /^(\d{4})$/;
   const items = [];
@@ -443,7 +538,7 @@ function parseOrderPDF(pages, fileName){
       const qtyBox  = toks[2] ? {x0:toks[2].x, x1:toks[2].x+toks[2].width} : null;
       cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine,
              descLines:[], page:ln.page, y:ln.y, lineYs:[ln.y], fileName, dept:classifyDept(currentProdLine),
-             codeBox, qtyBox};
+             codeBox, qtyBox, shipDate};
       continue;
     }
     if(cur){
@@ -681,6 +776,8 @@ async function runBatch(){
     lastStampedPageMap = null;
     activeDeptFilter = null;
     document.getElementById('download-stamped-btn').classList.toggle('hidden', matched.length===0);
+    document.getElementById('upload-batch-btn').classList.toggle('hidden', matched.length===0);
+    document.getElementById('upload-batch-status').textContent = '';
     document.getElementById('preview-card').classList.add('hidden');
 
     if(matched.length){
