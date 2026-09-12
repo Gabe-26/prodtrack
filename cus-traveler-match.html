@@ -46,7 +46,12 @@ td{font-family:var(--mono)}
 .tab.active{color:var(--accent);border-color:var(--accent)}
 .hidden{display:none!important}
 .empty-note{color:var(--text3);font-size:13px;padding:10px 0}
-.dept-box{border-left:4px solid var(--border2);background:var(--surface2);border-radius:6px;padding:12px 14px;margin-top:12px}
+.dept-box{border-left:4px solid var(--border2);background:var(--surface2);border-radius:6px;padding:12px 14px;margin-top:12px;cursor:pointer;transition:box-shadow .12s}
+.dept-box:hover{box-shadow:0 0 0 1px var(--border2) inset}
+.dept-box.active{box-shadow:0 0 0 2px var(--accent) inset}
+.results-columns{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.results-columns > .card{margin-top:18px}
+#preview-pages{max-height:900px;overflow-y:auto}
 .dept-box-title{font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px}
 .dept-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
 .preview-page{border:1px solid var(--border2);border-radius:6px;margin-top:10px;max-width:100%;display:block}
@@ -114,18 +119,21 @@ td{font-family:var(--mono)}
       </div>
 
       <div id="results-wrap" class="hidden">
-        <div class="card">
-          <div class="row" style="justify-content:space-between">
-            <div class="section-title">Matched, by department</div>
-            <button class="secondary hidden" id="download-stamped-btn" onclick="downloadStampedPdf()">Download stamped order PDF</button>
-          </div>
-          <div id="dept-boxes"></div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="secondary hidden" id="download-stamped-btn" onclick="downloadStampedPdf()">Download stamped order PDF</button>
         </div>
+        <div class="results-columns">
+          <div class="card" style="flex:1;min-width:320px">
+            <div class="section-title">Matched, by department</div>
+            <div class="section-count">Click a department to filter the preview to its pages</div>
+            <div id="dept-boxes"></div>
+          </div>
 
-        <div class="card hidden" id="preview-card">
-          <div class="section-title">Stamped order PDF preview</div>
-          <div class="section-count">Rendered from the file just built — nothing here has been saved or sent anywhere</div>
-          <div id="preview-pages"></div>
+          <div class="card hidden" id="preview-card" style="flex:1;min-width:320px">
+            <div class="section-title">Stamped order PDF preview</div>
+            <div class="section-count">Rendered from the file just built — nothing here has been saved or sent anywhere</div>
+            <div id="preview-pages"></div>
+          </div>
         </div>
 
         <div class="card">
@@ -172,7 +180,7 @@ let accessToken = null, refreshToken = null, sessExpiresAt = 0;
 let currentUser = null, currentProfile = null;
 let ordersFiles = [], travelersFiles = [];
 let historyTimer = null;
-let lastMatched = [], lastOrderBytesByFile = {}, lastAllItemsByFile = {}, lastStampedPdfBytes = null;
+let lastMatched = [], lastOrderBytesByFile = {}, lastAllItemsByFile = {}, lastStampedPdfBytes = null, lastStampedPageMap = null;
 
 const H = () => ({'Content-Type':'application/json','apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY)});
 
@@ -300,7 +308,8 @@ function onFilesChosen(kind){
 
 function resetBatch(){
   ordersFiles = []; travelersFiles = [];
-  lastMatched = []; lastOrderBytesByFile = {}; lastAllItemsByFile = {}; lastStampedPdfBytes = null;
+  lastMatched = []; lastOrderBytesByFile = {}; lastAllItemsByFile = {}; lastStampedPdfBytes = null; lastStampedPageMap = null;
+  activeDeptFilter = null;
   document.getElementById('f-orders').value = '';
   document.getElementById('f-travelers').value = '';
   document.getElementById('fl-orders').textContent = 'No files chosen';
@@ -321,7 +330,9 @@ async function downloadStampedPdf(){
   btn.disabled = true; const origLabel = btn.textContent; btn.textContent = 'Building…';
   try{
     if(!lastStampedPdfBytes){
-      lastStampedPdfBytes = await buildStampedPdf(lastOrderBytesByFile, lastMatched, lastAllItemsByFile);
+      const built = await buildStampedPdf(lastOrderBytesByFile, lastMatched, lastAllItemsByFile);
+      lastStampedPdfBytes = built.bytes;
+      lastStampedPageMap = built.pageMap;
     }
     const blob = new Blob([lastStampedPdfBytes], {type:'application/pdf'});
     const url = URL.createObjectURL(blob);
@@ -539,6 +550,8 @@ async function recolorPageHighlightsInPlace(doc, page, itemsForPage){
 
 // Recolors highlights (by department) and stamps traveler numbers into a
 // fresh merged PDF built from the uploaded order file(s). Purely client-side.
+// Also returns pageMap: for each page of the merged output, which source
+// file/page it came from — used so the preview can be filtered by department.
 async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const outDoc = await PDFDocument.create();
@@ -551,6 +564,7 @@ async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
     stampsByFile[m.fileName][m.page].push(m);
   });
 
+  const pageMap = [];
   for(const fileName of Object.keys(orderBytesByFile)){
     const srcDoc = await PDFDocument.load(orderBytesByFile[fileName]);
     const srcPages = srcDoc.getPages();
@@ -565,12 +579,32 @@ async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
       outDoc.addPage(p);
       const stamps = (stampsByFile[fileName]||{})[idx] || [];
       stamps.forEach(s => p.drawText(s.travelerNo, {x:170, y:s.y, size:11, font, color:rgb(0,0,0)}));
+      pageMap.push({fileName, page: idx});
     });
   }
-  return await outDoc.save();
+  const bytes = await outDoc.save();
+  return {bytes, pageMap};
 }
 
-async function renderPdfPreview(bytes){
+let activeDeptFilter = null;
+
+function selectDeptFilter(dept){
+  activeDeptFilter = (activeDeptFilter === dept) ? null : dept;
+  document.querySelectorAll('.dept-box').forEach(el => {
+    el.classList.toggle('active', el.dataset.dept === activeDeptFilter);
+  });
+  applyPreviewFilter();
+}
+
+function applyPreviewFilter(){
+  document.querySelectorAll('#preview-pages .preview-page-block').forEach(block => {
+    const depts = (block.dataset.depts||'').split(',').filter(Boolean);
+    const show = !activeDeptFilter || depts.includes(activeDeptFilter);
+    block.style.display = show ? '' : 'none';
+  });
+}
+
+async function renderPdfPreview(bytes, pageMap, matched){
   const wrap = document.getElementById('preview-pages');
   wrap.innerHTML = '';
   const doc = await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
@@ -581,12 +615,25 @@ async function renderPdfPreview(bytes){
     canvas.className = 'preview-page';
     canvas.width = viewport.width; canvas.height = viewport.height;
     await page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
-    wrap.appendChild(canvas);
+
+    const src = pageMap[p-1] || {};
+    const deptsOnPage = new Set();
+    matched.forEach(m => {
+      if(m.fileName!==src.fileName || m.page!==src.page) return;
+      deptsOnPage.add((m.dept && m.dept.primary) || 'unclassified');
+    });
+
+    const block = document.createElement('div');
+    block.className = 'preview-page-block';
+    block.dataset.depts = Array.from(deptsOnPage).join(',');
+    block.appendChild(canvas);
     const label = document.createElement('div');
     label.className = 'preview-page-label';
     label.textContent = `Page ${p} of ${doc.numPages}`;
-    wrap.appendChild(label);
+    block.appendChild(label);
+    wrap.appendChild(block);
   }
+  applyPreviewFilter();
   document.getElementById('preview-card').classList.remove('hidden');
 }
 
@@ -624,6 +671,8 @@ async function runBatch(){
     lastOrderBytesByFile = orderBytesByFile;
     lastAllItemsByFile = allItemsByFile;
     lastStampedPdfBytes = null;
+    lastStampedPageMap = null;
+    activeDeptFilter = null;
     document.getElementById('download-stamped-btn').classList.toggle('hidden', matched.length===0);
     document.getElementById('preview-card').classList.add('hidden');
 
@@ -643,8 +692,10 @@ async function runBatch(){
 
     if(matched.length){
       btn.innerHTML = '<span class="spinner"></span>Building stamped PDF…';
-      lastStampedPdfBytes = await buildStampedPdf(orderBytesByFile, matched, allItemsByFile);
-      await renderPdfPreview(lastStampedPdfBytes);
+      const built = await buildStampedPdf(orderBytesByFile, matched, allItemsByFile);
+      lastStampedPdfBytes = built.bytes;
+      lastStampedPageMap = built.pageMap;
+      await renderPdfPreview(lastStampedPdfBytes, lastStampedPageMap, matched);
     }
 
     if(document.getElementById('view-history') && !document.getElementById('view-history').classList.contains('hidden')) loadHistory(document.getElementById('history-search').value);
@@ -670,16 +721,16 @@ function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized)
   const rowsHtml = list => list.map(m =>
     `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.prodLine)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`
   ).join('');
-  const boxHtml = (label, css, list) => `
-    <div class="dept-box" style="border-left-color:${css}">
+  const boxHtml = (label, css, list, deptKey) => `
+    <div class="dept-box" style="border-left-color:${css}" data-dept="${deptKey}" onclick="selectDeptFilter('${deptKey}')">
       <div class="dept-box-title"><span class="dept-swatch" style="background:${css}"></span>${escapeHtml(label)} <span class="badge badge-ok">${list.length}</span></div>
       ${list.length ? `<table><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th></tr></thead><tbody>${rowsHtml(list)}</tbody></table>` : `<div class="empty-note">None matched this run.</div>`}
     </div>`;
   DEPT_ORDER.forEach(d => {
-    boxesWrap.insertAdjacentHTML('beforeend', boxHtml(DEPT_META[d].label, DEPT_META[d].css, byDept[d]||[]));
+    boxesWrap.insertAdjacentHTML('beforeend', boxHtml(DEPT_META[d].label, DEPT_META[d].css, byDept[d]||[], d));
   });
   if(unclassified.length){
-    boxesWrap.insertAdjacentHTML('beforeend', boxHtml('Unclassified (unrecognized prod line)', '#888', unclassified));
+    boxesWrap.insertAdjacentHTML('beforeend', boxHtml('Unclassified (unrecognized prod line)', '#888', unclassified, 'unclassified'));
   }
 
   document.getElementById('count-unord').textContent = unmatchedOrders.length;
