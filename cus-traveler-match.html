@@ -46,6 +46,11 @@ td{font-family:var(--mono)}
 .tab.active{color:var(--accent);border-color:var(--accent)}
 .hidden{display:none!important}
 .empty-note{color:var(--text3);font-size:13px;padding:10px 0}
+.dept-box{border-left:4px solid var(--border2);background:var(--surface2);border-radius:6px;padding:12px 14px;margin-top:12px}
+.dept-box-title{font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px}
+.dept-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
+.preview-page{border:1px solid var(--border2);border-radius:6px;margin-top:10px;max-width:100%;display:block}
+.preview-page-label{font-size:11px;color:var(--text3);margin-top:8px}
 .topbar{display:flex;justify-content:space-between;align-items:center}
 .logout-link{color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline}
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
@@ -111,12 +116,18 @@ td{font-family:var(--mono)}
       <div id="results-wrap" class="hidden">
         <div class="card">
           <div class="row" style="justify-content:space-between">
-            <div class="section-title">Matched <span class="badge badge-ok" id="count-matched"></span></div>
+            <div class="section-title">Matched, by department</div>
             <button class="secondary hidden" id="download-stamped-btn" onclick="downloadStampedPdf()">Download stamped order PDF</button>
           </div>
-          <table id="tbl-matched"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th></tr></thead><tbody></tbody></table>
-          <div class="empty-note hidden" id="empty-matched">None matched this run.</div>
+          <div id="dept-boxes"></div>
         </div>
+
+        <div class="card hidden" id="preview-card">
+          <div class="section-title">Stamped order PDF preview</div>
+          <div class="section-count">Rendered from the file just built — nothing here has been saved or sent anywhere</div>
+          <div id="preview-pages"></div>
+        </div>
+
         <div class="card">
           <div class="section-title">Unmatched order lines <span class="badge badge-warn" id="count-unord"></span></div>
           <div class="section-count">CUS lines from the order PDFs with no matching traveler ticket uploaded</div>
@@ -161,7 +172,7 @@ let accessToken = null, refreshToken = null, sessExpiresAt = 0;
 let currentUser = null, currentProfile = null;
 let ordersFiles = [], travelersFiles = [];
 let historyTimer = null;
-let lastMatched = [], lastOrderBytesByFile = {};
+let lastMatched = [], lastOrderBytesByFile = {}, lastAllItemsByFile = {}, lastStampedPdfBytes = null;
 
 const H = () => ({'Content-Type':'application/json','apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY)});
 
@@ -289,12 +300,13 @@ function onFilesChosen(kind){
 
 function resetBatch(){
   ordersFiles = []; travelersFiles = [];
-  lastMatched = []; lastOrderBytesByFile = {};
+  lastMatched = []; lastOrderBytesByFile = {}; lastAllItemsByFile = {}; lastStampedPdfBytes = null;
   document.getElementById('f-orders').value = '';
   document.getElementById('f-travelers').value = '';
   document.getElementById('fl-orders').textContent = 'No files chosen';
   document.getElementById('fl-travelers').textContent = 'No files chosen';
   document.getElementById('results-wrap').classList.add('hidden');
+  document.getElementById('preview-card').classList.add('hidden');
   document.getElementById('download-stamped-btn').classList.add('hidden');
   document.getElementById('run-err').textContent = '';
 }
@@ -308,27 +320,10 @@ async function downloadStampedPdf(){
   const btn = document.getElementById('download-stamped-btn');
   btn.disabled = true; const origLabel = btn.textContent; btn.textContent = 'Building…';
   try{
-    const { PDFDocument, StandardFonts, rgb } = PDFLib;
-    const outDoc = await PDFDocument.create();
-    const font = await outDoc.embedFont(StandardFonts.HelveticaBold);
-    const byFile = {};
-    lastMatched.forEach(m => {
-      byFile[m.fileName] = byFile[m.fileName] || {};
-      byFile[m.fileName][m.page] = byFile[m.fileName][m.page] || [];
-      byFile[m.fileName][m.page].push(m);
-    });
-    for(const fileName of Object.keys(lastOrderBytesByFile)){
-      const srcDoc = await PDFDocument.load(lastOrderBytesByFile[fileName]);
-      const idxs = srcDoc.getPageIndices();
-      const copied = await outDoc.copyPages(srcDoc, idxs);
-      copied.forEach((p, idx) => {
-        outDoc.addPage(p);
-        const stamps = (byFile[fileName]||{})[idx] || [];
-        stamps.forEach(s => p.drawText(s.travelerNo, {x:170, y:s.y, size:11, font, color:rgb(0,0,0)}));
-      });
+    if(!lastStampedPdfBytes){
+      lastStampedPdfBytes = await buildStampedPdf(lastOrderBytesByFile, lastMatched, lastAllItemsByFile);
     }
-    const bytes = await outDoc.save();
-    const blob = new Blob([bytes], {type:'application/pdf'});
+    const blob = new Blob([lastStampedPdfBytes], {type:'application/pdf'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = 'production-order-stamped.pdf';
@@ -368,10 +363,39 @@ async function pdfFileToPagesWithPos(file){
 }
 
 function normText(s){ return (s||'').replace(/\s+/g,' ').trim().toUpperCase(); }
+function bytesToLatin1(bytes){ let s=''; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]); return s; }
+function latin1ToBytes(str){ const a=new Uint8Array(str.length); for(let i=0;i<str.length;i++) a[i]=str.charCodeAt(i)&0xFF; return a; }
+
+// ── Department classification (mirrors ProdTrack's own prod-line mapping) ──
+// Gear 100–310 (excl. 120/150/151), Gate 120/150/151, Wood 500–700, Metal 705–900.
+// 151 → gate + metal (dual), 516 → wood + metal (dual). Primary department is
+// used for which match box an item appears in and for its highlight color;
+// dual items are not currently split across two boxes.
+function classifyDept(prodLineStr){
+  const n = parseInt(prodLineStr, 10);
+  if(!Number.isFinite(n)) return {primary:null, extra:null};
+  if(n === 151) return {primary:'gate', extra:'metal'};
+  if(n === 516) return {primary:'wood', extra:'metal'};
+  if(n === 120 || n === 150) return {primary:'gate', extra:null};
+  if(n >= 100 && n <= 310) return {primary:'gear', extra:null};
+  if(n >= 500 && n <= 700) return {primary:'wood', extra:null};
+  if(n >= 705 && n <= 900) return {primary:'metal', extra:null};
+  return {primary:null, extra:null};
+}
+
+const DEPT_ORDER = ['wood','metal','gate','gear'];
+const DEPT_META = {
+  wood:  {label:'Wood',  css:'#bdf0bd', pdfColor:[0.80,0.95,0.80]},
+  metal: {label:'Metal', css:'#bcd6ff', pdfColor:[0.80,0.88,1.00]},
+  gate:  {label:'Gate',  css:'#ffc9d9', pdfColor:[1.00,0.82,0.88]},
+  gear:  {label:'Gear',  css:'#ffd9a8', pdfColor:[1.00,0.87,0.68]},
+};
 
 // ── Production Order PDF parsing ──────────────────────────────────────────
-// Each returned CUS item carries page + y (the item line's PDF coordinate)
-// so a matched traveler number can later be stamped back onto that exact spot.
+// Every item (not just CUS) carries: dept (from its prod line), lineYs (the
+// y-position of its item-code line AND every wrapped description line — used
+// to recolor the matching highlight rectangle back in the source PDF), and
+// page/y (the item-code line's own position — used to stamp the traveler #).
 function parseOrderPDF(pages, fileName){
   const allLines = [];
   pages.forEach((linesArr, pageIdx) => linesArr.forEach(l => allLines.push({text:l.text, y:l.y, page:pageIdx})));
@@ -393,15 +417,21 @@ function parseOrderPDF(pages, fileName){
     const mProd = line.match(prodLineRe);
     const mItem = line.match(itemLineRe);
     if(mProd){ flush(); currentProdLine = mProd[1]; continue; }
-    if(mItem){ flush(); cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine, descLines:[], page:ln.page, y:ln.y, fileName}; continue; }
+    if(mItem){
+      flush();
+      cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine,
+             descLines:[], page:ln.page, y:ln.y, lineYs:[ln.y], fileName, dept:classifyDept(currentProdLine)};
+      continue;
+    }
     if(cur){
       if(/^Printed:/i.test(line)){ flush(); continue; }
       cur.descLines.push(line);
+      cur.lineYs.push(ln.y);
     }
   }
   flush();
   const cusItems = items.filter(it=>/-CUS$/i.test(it.itemCode));
-  return {so, cusItems, skippedCount: items.length - cusItems.length, fileName};
+  return {so, allItems:items, cusItems, skippedCount: items.length - cusItems.length, fileName};
 }
 
 // ── Work Ticket Traveler PDF parsing ──────────────────────────────────────
@@ -450,6 +480,104 @@ function runMatchLogic(orderResults, travelerResults){
   return {matched, unmatchedOrders, unmatchedTickets: ticketPool};
 }
 
+// ── Recolor highlight rectangles in the source PDF by department ──────────
+// The yellow highlight behind each CUS line is a real filled rectangle drawn
+// in the page's content stream (not an annotation). This finds those
+// rectangles, figures out which parsed item each one belongs to (by matching
+// its vertical position against that item's line positions), and repaints it
+// in that item's department color. Left untouched if the page's structure
+// doesn't match what we expect (safer than guessing wrong).
+async function recolorPageHighlightsInPlace(doc, page, itemsForPage){
+  const { PDFName, PDFRawStream, PDFArray, decodePDFRawStream } = PDFLib;
+  let contentsRef = page.node.get(PDFName.of('Contents'));
+  const contentsObj = doc.context.lookup(contentsRef);
+  const streamObjs = contentsObj instanceof PDFArray
+    ? contentsObj.asArray().map(ref => doc.context.lookup(ref))
+    : [contentsObj];
+
+  let text = '';
+  try{
+    for(const so of streamObjs){
+      const decoded = decodePDFRawStream({dict:so.dict, contents:so.contents}).decode();
+      text += bytesToLatin1(decoded);
+    }
+  }catch(e){ return; } // couldn't decode — leave page untouched
+
+  const cmMatch = text.match(/^1\s+0\s+0\s+1\s+([\-\d.]+)\s+([\-\d.]+)\s+cm/);
+  if(!cmMatch) return; // unexpected page structure — leave untouched
+  const ty = parseFloat(cmMatch[2]);
+
+  const highlightRe = /(1(?:\.0+)?)\s+(1(?:\.0+)?)\s+(0(?:\.0+)?)\s+(sc|rg)\b([\s\S]{0,60}?)(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+re\s*\n?f\b/g;
+  const newText = text.replace(highlightRe, (whole, r,g,b,op,gap,x,y,w,h) => {
+    const rectY = parseFloat(y), rectH = parseFloat(h);
+    const yTop = ty + rectY, yBottom = yTop + rectH;
+    const loY = Math.min(yTop,yBottom) - 2, hiY = Math.max(yTop,yBottom) + 2;
+    const owner = itemsForPage.find(it => it.lineYs.some(ly => ly >= loY && ly <= hiY));
+    if(!owner || !owner.dept || !owner.dept.primary) return whole;
+    const c = DEPT_META[owner.dept.primary].pdfColor;
+    if(!c) return whole;
+    return `${c[0].toFixed(3)} ${c[1].toFixed(3)} ${c[2].toFixed(3)} ${op}${gap}${x} ${y} ${w} ${h} re\nf`;
+  });
+  if(newText === text) return;
+
+  const newStream = doc.context.flateStream(latin1ToBytes(newText));
+  const streamRef = doc.context.register(newStream);
+  page.node.set(PDFName.of('Contents'), streamRef);
+}
+
+// Recolors highlights (by department) and stamps traveler numbers into a
+// fresh merged PDF built from the uploaded order file(s). Purely client-side.
+async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
+  const outDoc = await PDFDocument.create();
+  const font = await outDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const stampsByFile = {};
+  matched.forEach(m => {
+    stampsByFile[m.fileName] = stampsByFile[m.fileName] || {};
+    stampsByFile[m.fileName][m.page] = stampsByFile[m.fileName][m.page] || [];
+    stampsByFile[m.fileName][m.page].push(m);
+  });
+
+  for(const fileName of Object.keys(orderBytesByFile)){
+    const srcDoc = await PDFDocument.load(orderBytesByFile[fileName]);
+    const srcPages = srcDoc.getPages();
+    const allItems = allItemsByFile[fileName] || [];
+    for(let pIdx=0; pIdx<srcPages.length; pIdx++){
+      const itemsForPage = allItems.filter(it => it.page === pIdx);
+      if(itemsForPage.length) await recolorPageHighlightsInPlace(srcDoc, srcPages[pIdx], itemsForPage);
+    }
+    const idxs = srcDoc.getPageIndices();
+    const copied = await outDoc.copyPages(srcDoc, idxs);
+    copied.forEach((p, idx) => {
+      outDoc.addPage(p);
+      const stamps = (stampsByFile[fileName]||{})[idx] || [];
+      stamps.forEach(s => p.drawText(s.travelerNo, {x:170, y:s.y, size:11, font, color:rgb(0,0,0)}));
+    });
+  }
+  return await outDoc.save();
+}
+
+async function renderPdfPreview(bytes){
+  const wrap = document.getElementById('preview-pages');
+  wrap.innerHTML = '';
+  const doc = await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
+  for(let p=1;p<=doc.numPages;p++){
+    const page = await doc.getPage(p);
+    const viewport = page.getViewport({scale:1.3});
+    const canvas = document.createElement('canvas');
+    canvas.className = 'preview-page';
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
+    wrap.appendChild(canvas);
+    const label = document.createElement('div');
+    label.className = 'preview-page-label';
+    label.textContent = `Page ${p} of ${doc.numPages}`;
+    wrap.appendChild(label);
+  }
+  document.getElementById('preview-card').classList.remove('hidden');
+}
+
 // ── Batch run ──────────────────────────────────────────────────────────────
 async function runBatch(){
   const err = document.getElementById('run-err');
@@ -463,10 +591,13 @@ async function runBatch(){
   try{
     const orderResults = [];
     const orderBytesByFile = {};
+    const allItemsByFile = {};
     for(const f of ordersFiles){
       const {pages, bytes} = await pdfFileToPagesWithPos(f);
       orderBytesByFile[f.name] = bytes;
-      orderResults.push(parseOrderPDF(pages, f.name));
+      const res = parseOrderPDF(pages, f.name);
+      orderResults.push(res);
+      allItemsByFile[f.name] = res.allItems;
     }
     const travelerResults = [];
     const unrecognizedAll = [];
@@ -479,7 +610,10 @@ async function runBatch(){
     const {matched, unmatchedOrders, unmatchedTickets} = runMatchLogic(orderResults, travelerResults);
     lastMatched = matched;
     lastOrderBytesByFile = orderBytesByFile;
+    lastAllItemsByFile = allItemsByFile;
+    lastStampedPdfBytes = null;
     document.getElementById('download-stamped-btn').classList.toggle('hidden', matched.length===0);
+    document.getElementById('preview-card').classList.add('hidden');
 
     if(matched.length){
       const matchedBy = currentProfile.full_name || currentProfile.username || 'unknown';
@@ -494,6 +628,13 @@ async function runBatch(){
     }
 
     renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognizedAll);
+
+    if(matched.length){
+      btn.innerHTML = '<span class="spinner"></span>Building stamped PDF…';
+      lastStampedPdfBytes = await buildStampedPdf(orderBytesByFile, matched, allItemsByFile);
+      await renderPdfPreview(lastStampedPdfBytes);
+    }
+
     if(document.getElementById('view-history') && !document.getElementById('view-history').classList.contains('hidden')) loadHistory(document.getElementById('history-search').value);
   }catch(e){
     err.textContent = e.message || 'Something went wrong parsing these files.';
@@ -505,12 +646,29 @@ async function runBatch(){
 function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized){
   document.getElementById('results-wrap').classList.remove('hidden');
 
-  document.getElementById('count-matched').textContent = matched.length;
-  const mBody = document.querySelector('#tbl-matched tbody'); mBody.innerHTML = '';
+  const boxesWrap = document.getElementById('dept-boxes');
+  boxesWrap.innerHTML = '';
+  const byDept = {};
+  const unclassified = [];
   matched.forEach(m => {
-    mBody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.prodLine)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`);
+    const d = m.dept && m.dept.primary;
+    if(!d){ unclassified.push(m); return; }
+    (byDept[d] = byDept[d] || []).push(m);
   });
-  document.getElementById('empty-matched').classList.toggle('hidden', matched.length>0);
+  const rowsHtml = list => list.map(m =>
+    `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.prodLine)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`
+  ).join('');
+  const boxHtml = (label, css, list) => `
+    <div class="dept-box" style="border-left-color:${css}">
+      <div class="dept-box-title"><span class="dept-swatch" style="background:${css}"></span>${escapeHtml(label)} <span class="badge badge-ok">${list.length}</span></div>
+      ${list.length ? `<table><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th></tr></thead><tbody>${rowsHtml(list)}</tbody></table>` : `<div class="empty-note">None matched this run.</div>`}
+    </div>`;
+  DEPT_ORDER.forEach(d => {
+    boxesWrap.insertAdjacentHTML('beforeend', boxHtml(DEPT_META[d].label, DEPT_META[d].css, byDept[d]||[]));
+  });
+  if(unclassified.length){
+    boxesWrap.insertAdjacentHTML('beforeend', boxHtml('Unclassified (unrecognized prod line)', '#888', unclassified));
+  }
 
   document.getElementById('count-unord').textContent = unmatchedOrders.length;
   const uoBody = document.querySelector('#tbl-unord tbody'); uoBody.innerHTML = '';
