@@ -2663,13 +2663,17 @@ function renderInbox(){
       const isUnread = !readBatchIds.has(b.id);
       const time=new Date(b.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       const entries = b.entries || [];
-      const soRows = entries.map(e=>
-        `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--text2);padding:2px 0">
+      const soRows = entries.map(e=>{
+        const tags = [];
+        if(e.see_pic) tags.push('<span style="color:var(--blue);font-weight:800">** See Pic **</span>');
+        if(e.hot) tags.push('<span style="color:var(--red);font-weight:800">** HOT **</span>');
+        return `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--text2);padding:2px 0">
           <span style="color:var(--text)">SO ${escapeHtml(e.so)}</span>
           <span>${escapeHtml(formatTravelerRanges(e.travelers))}</span>
           ${e.ship_date?`<span style="color:var(--text3)">Ship ${escapeHtml(e.ship_date)}</span>`:''}
-        </div>`
-      ).join('');
+          ${tags.join(' ')}
+        </div>`;
+      }).join('');
       const attachChips = [
         b.pdf_url ? inboxAttachmentChip(b.pdf_url, 'Stamped Order PDF', {accent:true, subtitle:'PDF Document', iconLabel:'PDF'}) : '',
         ...(b.extra_files||[]).map(f => inboxAttachmentChip(f.url, f.name))
