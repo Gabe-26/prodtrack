@@ -760,10 +760,23 @@ async function recolorPageHighlightsInPlace(doc, page, itemsForPage){
 // fresh merged PDF built from the uploaded order file(s). Purely client-side.
 // Also returns pageMap: for each page of the merged output, which source
 // file/page it came from — used so the preview can be filtered by department.
+// True if any matched item on this page belongs to an SO marked HOT
+// (checked against whatever department that item resolved to).
+function isPageHot(fileName, page){
+  return lastMatched.some(m => {
+    if(m.fileName!==fileName || m.page!==page) return false;
+    const d = m.dept && m.dept.primary;
+    if(!d) return false;
+    const cls = soClassifications[classKey(d, m.so)];
+    return !!(cls && cls.hot);
+  });
+}
+
 async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const outDoc = await PDFDocument.create();
   const font = await outDoc.embedFont(StandardFonts.HelveticaBold);
+  const hotFont = await outDoc.embedFont(StandardFonts.HelveticaBold);
 
   const stampsByFile = {};
   matched.forEach(m => {
@@ -787,6 +800,9 @@ async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
       outDoc.addPage(p);
       const stamps = (stampsByFile[fileName]||{})[idx] || [];
       stamps.forEach(s => p.drawText(s.travelerNo, {x:215, y:s.y, size:13, font, color:rgb(0,0,0)}));
+      if(isPageHot(fileName, idx)){
+        p.drawText('*HOT*', {x:18, y:630, size:32, font:hotFont, color:rgb(0.85,0.1,0.1)});
+      }
       pageMap.push({fileName, page: idx});
     });
   }
@@ -799,12 +815,24 @@ let activeDeptFilter = null;
 let soClassifications = {}; // `${dept}::${so}` -> {seePic:bool, hot:bool}
 const classKey = (dept, so) => `${dept}::${so}`;
 
-function toggleSoClass(dept, so, kind, btnEl){
+async function toggleSoClass(dept, so, kind, btnEl){
   const key = classKey(dept, so);
   const cur = soClassifications[key] || {seePic:false, hot:false};
   cur[kind] = !cur[kind];
   soClassifications[key] = cur;
   btnEl.classList.toggle('active', cur[kind]);
+
+  // HOT changes what the stamped PDF looks like, so rebuild it and refresh
+  // the live preview immediately. See Pic doesn't touch the PDF, so it's a no-op here.
+  if(kind === 'hot' && lastMatched.length){
+    lastStampedPdfBytes = null; lastStampedPageMap = null;
+    const built = await buildStampedPdf(lastOrderBytesByFile, lastMatched, lastAllItemsByFile);
+    lastStampedPdfBytes = built.bytes;
+    lastStampedPageMap = built.pageMap;
+    if(!document.getElementById('preview-card').classList.contains('hidden')){
+      await renderPdfPreview(lastStampedPdfBytes, lastStampedPageMap, lastMatched);
+    }
+  }
 }
 
 function toggleSoGroup(headerEl){
