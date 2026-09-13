@@ -442,7 +442,7 @@ async function buildDeptPdfSubset(dept){
     const item = lastMatched.find(m => m.fileName===src.fileName && m.page===src.page && m.dept && m.dept.primary===dept);
     const cls = item ? soClassifications[classKey(dept, item.so)] : null;
     if(cls && cls.hot){
-      p.drawText('*HOT*', {x:18, y:630, size:32, font:hotFont, color:rgb(0.85,0.1,0.1)});
+      p.drawText('*HOT*', {x:18, y:630, size:36, font:hotFont, color:rgb(0.85,0.1,0.1)});
     }
   });
   return await outDoc.save();
@@ -801,7 +801,7 @@ async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
       const stamps = (stampsByFile[fileName]||{})[idx] || [];
       stamps.forEach(s => p.drawText(s.travelerNo, {x:215, y:s.y, size:13, font, color:rgb(0,0,0)}));
       if(isPageHot(fileName, idx)){
-        p.drawText('*HOT*', {x:18, y:630, size:32, font:hotFont, color:rgb(0.85,0.1,0.1)});
+        p.drawText('*HOT*', {x:18, y:630, size:36, font:hotFont, color:rgb(0.85,0.1,0.1)});
       }
       pageMap.push({fileName, page: idx});
     });
