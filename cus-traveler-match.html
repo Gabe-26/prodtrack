@@ -152,7 +152,7 @@ td{font-family:var(--mono)}
                 <div class="section-title">Matched, by department</div>
                 <div class="section-count">Click a department to filter the preview · click an SO to see its travelers</div>
               </div>
-              <button class="secondary" onclick="expandAllSoGroups()">Expand All</button>
+              <button class="secondary" id="expand-all-btn" onclick="toggleExpandAll()">Expand All</button>
             </div>
             <div id="dept-boxes"></div>
           </div>
@@ -784,9 +784,12 @@ function toggleSoGroup(headerEl){
   chevron.textContent = isOpen ? '▸' : '▾';
 }
 
-function expandAllSoGroups(){
-  document.querySelectorAll('.so-group-body').forEach(b => b.style.display='block');
-  document.querySelectorAll('.so-chevron').forEach(c => c.textContent='▾');
+let allSoGroupsExpanded = false;
+function toggleExpandAll(){
+  allSoGroupsExpanded = !allSoGroupsExpanded;
+  document.querySelectorAll('.so-group-body').forEach(b => b.style.display = allSoGroupsExpanded ? 'block' : 'none');
+  document.querySelectorAll('.so-chevron').forEach(c => c.textContent = allSoGroupsExpanded ? '▾' : '▸');
+  document.getElementById('expand-all-btn').textContent = allSoGroupsExpanded ? 'Collapse All' : 'Expand All';
 }
 
 function selectDeptFilter(dept){
@@ -913,6 +916,8 @@ async function runBatch(){
 
 function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized){
   document.getElementById('results-wrap').classList.remove('hidden');
+  allSoGroupsExpanded = false;
+  document.getElementById('expand-all-btn').textContent = 'Expand All';
 
   const boxesWrap = document.getElementById('dept-boxes');
   boxesWrap.innerHTML = '';
