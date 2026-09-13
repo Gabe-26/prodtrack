@@ -59,6 +59,10 @@ td{font-family:var(--mono)}
 .so-group-header:hover{background:var(--surface3)}
 .so-chevron{display:inline-block;width:10px;font-size:10px;color:var(--text3)}
 .so-group-body table{margin-top:0}
+.so-classify-btns{margin-left:auto;display:flex;gap:6px}
+.so-tag-btn{background:var(--surface3);border:1px solid var(--border2);color:var(--text2);font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;cursor:pointer;font-family:var(--sans)}
+.so-tag-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.so-tag-btn.hot.active{background:var(--red);color:#fff;border-color:var(--red)}
 .results-columns{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .results-columns > .card{margin-top:18px}
 #preview-card{position:sticky;top:16px}
@@ -350,7 +354,7 @@ function onFilesChosen(kind){
 function resetBatch(){
   ordersFiles = []; travelersFiles = [];
   lastMatched = []; lastOrderBytesByFile = {}; lastAllItemsByFile = {}; lastStampedPdfBytes = null; lastStampedPageMap = null;
-  activeDeptFilter = null;
+  activeDeptFilter = null; soClassifications = {};
   document.getElementById('f-orders').value = '';
   document.getElementById('f-travelers').value = '';
   document.getElementById('fl-orders').textContent = 'No files chosen';
@@ -406,15 +410,22 @@ function buildDeptBatchEntries(){
     byDept[d][m.so].travelers.push(m.travelerNo);
   });
   const out = {};
-  Object.keys(byDept).forEach(d => { out[d] = Object.values(byDept[d]); });
+  Object.keys(byDept).forEach(d => {
+    out[d] = Object.values(byDept[d]).map(e => {
+      const cls = soClassifications[classKey(d, e.so)] || {};
+      return {...e, see_pic: !!cls.seePic, hot: !!cls.hot};
+    });
+  });
   return out;
 }
 
 // Extracts just the stamped pages relevant to one department out of the
 // already-built merged PDF, using the same fileName+page lookup the preview
-// filter uses. Returns null if that department has no pages.
+// filter uses. Returns null if that department has no pages. Also stamps
+// "*HOT*" in the blank space below WHOLESALE on any page whose SO was
+// marked HOT for this department.
 async function buildDeptPdfSubset(dept){
-  const { PDFDocument } = PDFLib;
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const pageIndices = [];
   lastStampedPageMap.forEach((src, idx) => {
     const onThisPage = lastMatched.some(m => m.fileName===src.fileName && m.page===src.page && m.dept && m.dept.primary===dept);
@@ -423,8 +434,17 @@ async function buildDeptPdfSubset(dept){
   if(!pageIndices.length) return null;
   const srcDoc = await PDFDocument.load(lastStampedPdfBytes);
   const outDoc = await PDFDocument.create();
+  const hotFont = await outDoc.embedFont(StandardFonts.HelveticaBold);
   const copied = await outDoc.copyPages(srcDoc, pageIndices);
-  copied.forEach(p => outDoc.addPage(p));
+  copied.forEach((p, i) => {
+    outDoc.addPage(p);
+    const src = lastStampedPageMap[pageIndices[i]];
+    const item = lastMatched.find(m => m.fileName===src.fileName && m.page===src.page && m.dept && m.dept.primary===dept);
+    const cls = item ? soClassifications[classKey(dept, item.so)] : null;
+    if(cls && cls.hot){
+      p.drawText('*HOT*', {x:18, y:630, size:32, font:hotFont, color:rgb(0.85,0.1,0.1)});
+    }
+  });
   return await outDoc.save();
 }
 
@@ -776,6 +796,17 @@ async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
 
 let activeDeptFilter = null;
 
+let soClassifications = {}; // `${dept}::${so}` -> {seePic:bool, hot:bool}
+const classKey = (dept, so) => `${dept}::${so}`;
+
+function toggleSoClass(dept, so, kind, btnEl){
+  const key = classKey(dept, so);
+  const cur = soClassifications[key] || {seePic:false, hot:false};
+  cur[kind] = !cur[kind];
+  soClassifications[key] = cur;
+  btnEl.classList.toggle('active', cur[kind]);
+}
+
 function toggleSoGroup(headerEl){
   const body = headerEl.nextElementSibling;
   const chevron = headerEl.querySelector('.so-chevron');
@@ -879,6 +910,7 @@ async function runBatch(){
     lastStampedPdfBytes = null;
     lastStampedPageMap = null;
     activeDeptFilter = null;
+    soClassifications = {};
     document.getElementById('download-stamped-btn').classList.toggle('hidden', matched.length===0);
     document.getElementById('upload-batch-btn').classList.toggle('hidden', matched.length===0);
     document.getElementById('upload-batch-status').textContent = '';
@@ -931,19 +963,26 @@ function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized)
   const rowsHtml = list => list.map(m =>
     `<tr><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`
   ).join('');
-  const soGroupHtml = (so, items) => `
+  const soGroupHtml = (deptKey, so, items) => {
+    const cls = soClassifications[classKey(deptKey, so)] || {};
+    return `
     <div class="so-group">
       <div class="so-group-header" onclick="toggleSoGroup(this)">
         <span class="so-chevron">▸</span><span>SO ${escapeHtml(so)}</span><span class="badge badge-ok">${items.length}</span>
+        <span class="so-classify-btns">
+          <button type="button" class="so-tag-btn${cls.seePic?' active':''}" onclick="event.stopPropagation();toggleSoClass('${deptKey}','${escapeHtml(so)}','seePic',this)">See Pic</button>
+          <button type="button" class="so-tag-btn hot${cls.hot?' active':''}" onclick="event.stopPropagation();toggleSoClass('${deptKey}','${escapeHtml(so)}','hot',this)">HOT</button>
+        </span>
       </div>
       <div class="so-group-body" style="display:none">
         <table><thead><tr><th>Item Code</th><th>Description</th><th>Qty</th><th>Traveler #</th></tr></thead><tbody>${rowsHtml(items)}</tbody></table>
       </div>
     </div>`;
+  };
   const boxHtml = (label, css, list, deptKey) => {
     const bySo = {};
     list.forEach(m => { (bySo[m.so] = bySo[m.so] || []).push(m); });
-    const groups = Object.keys(bySo).map(so => soGroupHtml(so, bySo[so])).join('');
+    const groups = Object.keys(bySo).map(so => soGroupHtml(deptKey, so, bySo[so])).join('');
     return `
     <div class="dept-box" style="border-left-color:${css}" data-dept="${deptKey}">
       <div class="dept-box-title" onclick="selectDeptFilter('${deptKey}')"><span class="dept-swatch" style="background:${css}"></span>${escapeHtml(label)} <span class="badge badge-ok">${list.length}</span></div>
