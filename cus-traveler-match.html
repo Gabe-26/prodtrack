@@ -53,6 +53,12 @@ td{font-family:var(--mono)}
 .dept-box.collapsed .dept-box-body{display:none}
 .dept-box table{font-size:11px}
 .dept-box th,.dept-box td{padding:5px 8px}
+.so-group{border-top:1px solid var(--border2)}
+.so-group:first-child{border-top:none}
+.so-group-header{display:flex;align-items:center;gap:8px;padding:8px 4px;cursor:pointer;font-size:12px;font-family:var(--mono);font-weight:700}
+.so-group-header:hover{background:var(--surface3)}
+.so-chevron{display:inline-block;width:10px;font-size:10px;color:var(--text3)}
+.so-group-body table{margin-top:0}
 .results-columns{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
 .results-columns > .card{margin-top:18px}
 #preview-card{position:sticky;top:16px}
@@ -141,8 +147,13 @@ td{font-family:var(--mono)}
         </div>
         <div class="results-columns">
           <div class="card" style="flex:1;min-width:320px">
-            <div class="section-title">Matched, by department</div>
-            <div class="section-count">Click a department to filter the preview to its pages</div>
+            <div class="row" style="justify-content:space-between;align-items:flex-start">
+              <div>
+                <div class="section-title">Matched, by department</div>
+                <div class="section-count">Click a department to filter the preview · click an SO to see its travelers</div>
+              </div>
+              <button class="secondary" onclick="expandAllSoGroups()">Expand All</button>
+            </div>
             <div id="dept-boxes"></div>
           </div>
 
@@ -765,6 +776,19 @@ async function buildStampedPdf(orderBytesByFile, matched, allItemsByFile){
 
 let activeDeptFilter = null;
 
+function toggleSoGroup(headerEl){
+  const body = headerEl.nextElementSibling;
+  const chevron = headerEl.querySelector('.so-chevron');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  chevron.textContent = isOpen ? '▸' : '▾';
+}
+
+function expandAllSoGroups(){
+  document.querySelectorAll('.so-group-body').forEach(b => b.style.display='block');
+  document.querySelectorAll('.so-chevron').forEach(c => c.textContent='▾');
+}
+
 function selectDeptFilter(dept){
   activeDeptFilter = (activeDeptFilter === dept) ? null : dept;
   document.querySelectorAll('.dept-box').forEach(el => {
@@ -900,15 +924,29 @@ function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized)
     (byDept[d] = byDept[d] || []).push(m);
   });
   const rowsHtml = list => list.map(m =>
-    `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`
+    `<tr><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.travelerNo)}</td></tr>`
   ).join('');
-  const boxHtml = (label, css, list, deptKey) => `
+  const soGroupHtml = (so, items) => `
+    <div class="so-group">
+      <div class="so-group-header" onclick="toggleSoGroup(this)">
+        <span class="so-chevron">▸</span><span>SO ${escapeHtml(so)}</span><span class="badge badge-ok">${items.length}</span>
+      </div>
+      <div class="so-group-body" style="display:none">
+        <table><thead><tr><th>Item Code</th><th>Description</th><th>Qty</th><th>Traveler #</th></tr></thead><tbody>${rowsHtml(items)}</tbody></table>
+      </div>
+    </div>`;
+  const boxHtml = (label, css, list, deptKey) => {
+    const bySo = {};
+    list.forEach(m => { (bySo[m.so] = bySo[m.so] || []).push(m); });
+    const groups = Object.keys(bySo).map(so => soGroupHtml(so, bySo[so])).join('');
+    return `
     <div class="dept-box" style="border-left-color:${css}" data-dept="${deptKey}">
       <div class="dept-box-title" onclick="selectDeptFilter('${deptKey}')"><span class="dept-swatch" style="background:${css}"></span>${escapeHtml(label)} <span class="badge badge-ok">${list.length}</span></div>
       <div class="dept-box-body">
-        ${list.length ? `<table><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Traveler #</th></tr></thead><tbody>${rowsHtml(list)}</tbody></table>` : `<div class="empty-note">None matched this run.</div>`}
+        ${list.length ? groups : `<div class="empty-note">None matched this run.</div>`}
       </div>
     </div>`;
+  };
   DEPT_ORDER.forEach(d => {
     boxesWrap.insertAdjacentHTML('beforeend', boxHtml(DEPT_META[d].label, DEPT_META[d].css, byDept[d]||[], d));
   });
