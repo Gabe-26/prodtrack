@@ -974,8 +974,11 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div id="view-inbox" style="display:none;flex-direction:row;flex:1;overflow:hidden">
         <div style="width:320px;min-width:260px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0">
           <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
-            <span style="font-size:13px;font-weight:600;color:var(--text)">Inbox</span>
-            <span style="margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text3)" id="inbox-count"></span>
+            <span style="font-size:15px;font-weight:600;color:var(--text)">Inbox</span>
+            <span style="margin-left:auto;font-size:13px;font-family:var(--mono);color:var(--text3)" id="inbox-count"></span>
+          </div>
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+            <input type="text" class="search" id="inbox-search" placeholder="Search SO, traveler #, or &quot;hot&quot;" oninput="renderInboxList()" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 10px">
           </div>
           <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch" id="inbox-list">
             <div class="empty"><div class="spinner"></div></div>
@@ -2664,8 +2667,23 @@ function renderInboxList(){
     return;
   }
 
+  const q = (document.getElementById('inbox-search')?.value||'').trim().toLowerCase();
+  const filtered = !q ? departmentBatches : departmentBatches.filter(b => {
+    const entries = b.entries || [];
+    if(q==='hot') return entries.some(e=>e.hot);
+    return entries.some(e =>
+      (e.so||'').toLowerCase().includes(q) ||
+      (e.travelers||[]).some(t=>String(t).toLowerCase().includes(q))
+    );
+  });
+
+  if(!filtered.length){
+    list.innerHTML='<div class="empty"><div class="empty-title">No matches</div></div>';
+    return;
+  }
+
   const byDate={};
-  for(const b of departmentBatches){
+  for(const b of filtered){
     const day=b.created_at.slice(0,10);
     if(!byDate[day]) byDate[day]=[];
     byDate[day].push(b);
@@ -2675,7 +2693,7 @@ function renderInboxList(){
   for(const day of Object.keys(byDate)){
     const d=new Date(day+'T12:00:00');
     const label=d.toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'});
-    html+=`<div style="padding:10px 16px 4px;font-size:10px;font-family:var(--mono);letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface)">${label}</div>`;
+    html+=`<div style="padding:10px 16px 4px;font-size:12px;font-family:var(--mono);letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface)">${label}</div>`;
     for(const b of byDate[day]){
       const isUnread = !readBatchIds.has(b.id);
       const isSelected = b.id === selectedBatchId;
@@ -2686,10 +2704,10 @@ function renderInboxList(){
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
           ${isUnread?'<span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0"></span>':'<span style="width:6px;flex-shrink:0"></span>'}
           ${makeDeptPill(b.department)}
-          <span style="font-size:12px;font-weight:${isUnread?'800':'600'};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
-          <span style="margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${time}</span>
+          <span style="font-size:14px;font-weight:${isUnread?'800':'600'};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
+          <span style="margin-left:auto;font-size:12px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${time}</span>
         </div>
-        <div style="font-size:11px;font-family:var(--mono);color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:14px">${escapeHtml(soSummary)}</div>
+        <div style="font-size:13px;font-family:var(--mono);color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:14px">${escapeHtml(soSummary)}</div>
       </div>`;
     }
   }
