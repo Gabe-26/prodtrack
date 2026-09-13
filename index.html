@@ -971,14 +971,17 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       </div>
 
       <!-- Inbox (all roles, department-scoped) -->
-      <div id="view-inbox" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-        <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
-          <span style="font-size:13px;font-weight:600;color:var(--text)">Inbox</span>
-          <span style="margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text3)" id="inbox-count"></span>
+      <div id="view-inbox" style="display:none;flex-direction:row;flex:1;overflow:hidden">
+        <div style="width:320px;min-width:260px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:600;color:var(--text)">Inbox</span>
+            <span style="margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text3)" id="inbox-count"></span>
+          </div>
+          <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch" id="inbox-list">
+            <div class="empty"><div class="spinner"></div></div>
+          </div>
         </div>
-        <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch" id="inbox-body">
-          <div class="empty"><div class="spinner"></div></div>
-        </div>
+        <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px" id="inbox-detail"></div>
       </div>
  
     </div>
@@ -2636,14 +2639,28 @@ function formatTravelerRanges(travelers){
   return ranges.map(r=>'WO '+r).join(', ');
 }
 
+let selectedBatchId = null;
+
 function renderInbox(){
-  const body=document.getElementById('inbox-body');
+  renderInboxList();
+  if(selectedBatchId == null && departmentBatches.length){
+    selectedBatchId = departmentBatches[0].id; // most recent, since query orders by created_at.desc
+  }
+  if(selectedBatchId != null && departmentBatches.some(b=>b.id===selectedBatchId)){
+    selectInboxEntry(selectedBatchId);
+  } else {
+    document.getElementById('inbox-detail').innerHTML = '<div class="empty"><div class="empty-icon">✉</div><div class="empty-title">No batches yet</div><div class="empty-sub">Uploaded CUS traveler batches for your departments will appear here</div></div>';
+  }
+}
+
+function renderInboxList(){
+  const list=document.getElementById('inbox-list');
   const cnt=document.getElementById('inbox-count');
-  if(!body) return;
+  if(!list) return;
   if(cnt) cnt.textContent = `${departmentBatches.length} batch${departmentBatches.length!==1?'es':''}`;
 
   if(!departmentBatches.length){
-    body.innerHTML='<div class="empty"><div class="empty-icon">✉</div><div class="empty-title">No batches yet</div><div class="empty-sub">Uploaded CUS traveler batches for your departments will appear here</div></div>';
+    list.innerHTML='<div class="empty"><div class="empty-icon">✉</div><div class="empty-title">No batches</div></div>';
     return;
   }
 
@@ -2658,49 +2675,68 @@ function renderInbox(){
   for(const day of Object.keys(byDate)){
     const d=new Date(day+'T12:00:00');
     const label=d.toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'});
-    html+=`<div style="padding:10px 20px 4px;font-size:10px;font-family:var(--mono);letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface)">${label}</div>`;
+    html+=`<div style="padding:10px 16px 4px;font-size:10px;font-family:var(--mono);letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface)">${label}</div>`;
     for(const b of byDate[day]){
       const isUnread = !readBatchIds.has(b.id);
+      const isSelected = b.id === selectedBatchId;
       const time=new Date(b.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      const entries = b.entries || [];
-      const soRows = entries.map(e=>{
-        const tags = [];
-        if(e.see_pic) tags.push('<span style="color:var(--blue);font-weight:800">** See Pic **</span>');
-        if(e.hot) tags.push('<span style="color:var(--red);font-weight:800">** HOT **</span>');
-        return `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--text2);padding:2px 0">
-          <span style="color:var(--text)">SO ${escapeHtml(e.so)}</span>
-          <span>${escapeHtml(formatTravelerRanges(e.travelers))}</span>
-          ${e.ship_date?`<span style="color:var(--text3)">Ship ${escapeHtml(e.ship_date)}</span>`:''}
-          ${tags.join(' ')}
-        </div>`;
-      }).join('');
-      const attachChips = [
-        b.pdf_url ? inboxAttachmentChip(b.pdf_url, 'Stamped Order PDF', {accent:true, subtitle:'PDF Document', iconLabel:'PDF'}) : '',
-        ...(b.extra_files||[]).map(f => inboxAttachmentChip(f.url, f.name))
-      ].filter(Boolean).join('');
-      const restBg = isUnread ? 'var(--surface2)' : 'transparent';
-      html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);transition:background 0.1s;cursor:pointer;background:${restBg}" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${restBg}'" onclick="markBatchRead(${b.id})">
-        ${isUnread?'<span style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:6px"></span>':'<span style="width:8px;flex-shrink:0"></span>'}
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            ${makeDeptPill(b.department)}
-            <span style="font-size:13px;font-weight:600;color:var(--text)">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
-            <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${escapeHtml(b.uploaded_by||'')}</span>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;margin-bottom:16px">${attachChips}</div>
-          ${soRows}
+      const soSummary = (b.entries||[]).map(e=>`SO ${e.so}`).join(', ');
+      const rowBg = isSelected ? 'var(--surface3)' : (isUnread ? 'var(--surface2)' : 'transparent');
+      html+=`<div onclick="selectInboxEntry(${b.id})" style="padding:10px 16px;border-bottom:1px solid var(--border);border-left:3px solid ${isSelected?'var(--accent)':'transparent'};cursor:pointer;background:${rowBg}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          ${isUnread?'<span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0"></span>':'<span style="width:6px;flex-shrink:0"></span>'}
+          ${makeDeptPill(b.department)}
+          <span style="font-size:12px;font-weight:${isUnread?'800':'600'};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
+          <span style="margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${time}</span>
         </div>
-        <span style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;margin-top:2px">${time}</span>
+        <div style="font-size:11px;font-family:var(--mono);color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:14px">${escapeHtml(soSummary)}</div>
       </div>`;
     }
   }
-  body.innerHTML=html;
+  list.innerHTML=html;
+}
+
+function renderInboxDetail(batchId){
+  const wrap=document.getElementById('inbox-detail');
+  const b = departmentBatches.find(x=>x.id===batchId);
+  if(!b){ wrap.innerHTML=''; return; }
+  const entries = b.entries || [];
+  const soRows = entries.map(e=>{
+    const tags = [];
+    if(e.see_pic) tags.push('<span style="color:var(--blue);font-weight:800">** See Pic **</span>');
+    if(e.hot) tags.push('<span style="color:var(--red);font-weight:800">** HOT **</span>');
+    return `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:13px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--text)">SO ${escapeHtml(e.so)}</span>
+      <span>${escapeHtml(formatTravelerRanges(e.travelers))}</span>
+      ${e.ship_date?`<span style="color:var(--text3)">Ship ${escapeHtml(e.ship_date)}</span>`:''}
+      ${tags.join(' ')}
+    </div>`;
+  }).join('');
+  const attachChips = [
+    b.pdf_url ? inboxAttachmentChip(b.pdf_url, 'Stamped Order PDF', {accent:true, subtitle:'PDF Document', iconLabel:'PDF'}) : '',
+    ...(b.extra_files||[]).map(f => inboxAttachmentChip(f.url, f.name))
+  ].filter(Boolean).join('');
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      ${makeDeptPill(b.department)}
+      <span style="font-size:18px;font-weight:800;color:var(--text)">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:20px">${escapeHtml(b.uploaded_by||'')} · ${new Date(b.created_at).toLocaleString()}</div>
+    <div style="display:flex;flex-wrap:wrap;margin-bottom:20px">${attachChips}</div>
+    <div>${soRows}</div>
+  `;
+}
+
+function selectInboxEntry(batchId){
+  selectedBatchId = batchId;
+  markBatchRead(batchId);
+  renderInboxList();
+  renderInboxDetail(batchId);
 }
 
 async function markBatchRead(batchId){
   if(readBatchIds.has(batchId)) return;
   readBatchIds.add(batchId);
-  renderInbox();
   const inboxBadge=document.getElementById('b-inbox');
   if(inboxBadge) inboxBadge.textContent=departmentBatches.filter(b=>!readBatchIds.has(b.id)).length;
   try{
