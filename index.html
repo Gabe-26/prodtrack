@@ -2705,10 +2705,10 @@ function renderInboxDetail(batchId){
     const tags = [];
     if(e.see_pic) tags.push('<span style="color:var(--blue);font-weight:800">** See Pic **</span>');
     if(e.hot) tags.push('<span style="color:var(--red);font-weight:800">** HOT **</span>');
-    return `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:13px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--text)">SO ${escapeHtml(e.so)}</span>
-      <span>${escapeHtml(formatTravelerRanges(e.travelers))}</span>
-      ${e.ship_date?`<span style="color:var(--text3)">Ship ${escapeHtml(e.ship_date)}</span>`:''}
+    return `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:15px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--text);font-weight:800">SO ${escapeHtml(e.so)}</span>
+      <span style="font-weight:800">${escapeHtml(formatTravelerRanges(e.travelers))}</span>
+      ${e.ship_date?`<span style="color:var(--text3);font-weight:800">Ship ${escapeHtml(e.ship_date)}</span>`:''}
       ${tags.join(' ')}
     </div>`;
   }).join('');
