@@ -771,6 +771,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         Wood codes
       </div>
+      <div class="nav-item" id="nav-changedates" onclick="sv('changedates')" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 15l2 2 4-4"/></svg>
+        Change Dates
+      </div>
       <a href="cus-traveler-match.html" target="_blank" class="nav-item" id="nav-cus-traveler" style="display:none;text-decoration:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
         CUS Travelers
@@ -986,7 +990,29 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         </div>
         <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px" id="inbox-detail"></div>
       </div>
- 
+
+      <!-- Change Dates (Production + zgta26 only) -->
+      <div id="view-changedates" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px">Change Dates</div>
+          <input type="text" class="search" id="cd-search" placeholder="Search SO or customer..." oninput="renderChangeDatesSearch()" style="width:280px">
+        </div>
+        <div style="display:flex;flex:1;overflow:hidden">
+          <div style="flex:1;overflow-y:auto;padding:0 20px" id="cd-search-results">
+            <div class="empty"><div class="empty-title">Search for an order</div><div class="empty-sub">By SO number or customer name</div></div>
+          </div>
+          <div style="width:340px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text);flex-shrink:0">
+              Pending changes <span id="cd-pending-count" style="font-family:var(--mono);color:var(--text3);font-weight:400"></span>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:0 16px" id="cd-pending-list"></div>
+            <div style="padding:14px 16px;border-top:1px solid var(--border);flex-shrink:0">
+              <button class="btn primary" id="cd-send-btn" onclick="sendDateChanges()" style="width:100%" disabled>Send date changes</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1011,6 +1037,7 @@ let currentUser = null;
 let currentProfile = null; // {full_name, role, username}
 let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [], soComments = {}, holidayList = [], holidayDates = new Set();
 let departmentBatches = [], readBatchIds = new Set();
+let pendingDateChanges = []; // staged bulk date changes: {so, customer, oldRaw, newRaw}
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
 let collapsedTravelers = new Set();
 let missingFromCSV = [];
@@ -1178,6 +1205,7 @@ function showApp(){
   document.getElementById('nav-holidays').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-wood-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-cus-traveler').style.display = (isProd || uname === 'zgta26') ? 'flex' : 'none';
+  document.getElementById('nav-changedates').style.display = (isProd || uname === 'zgta26') ? 'flex' : 'none';
   // Body classes drive CSS permissions
   document.body.classList.toggle('manager',    isMgr);
   document.body.classList.toggle('viewer',     isViewer || isProd); // production = no photo upload
@@ -2673,6 +2701,7 @@ function renderInboxList(){
     if(q==='hot') return entries.some(e=>e.hot);
     return entries.some(e =>
       (e.so||'').toLowerCase().includes(q) ||
+      (e.customer||'').toLowerCase().includes(q) ||
       (e.travelers||[]).some(t=>String(t).toLowerCase().includes(q))
     );
   });
@@ -2698,13 +2727,16 @@ function renderInboxList(){
       const isUnread = !readBatchIds.has(b.id);
       const isSelected = b.id === selectedBatchId;
       const time=new Date(b.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      const soSummary = (b.entries||[]).map(e=>`SO ${e.so}`).join(', ');
+      const isDC = b.type === 'date_change';
+      const soSummary = isDC
+        ? (b.entries||[]).map(e=>`SO ${e.so} → ${e.new_ship_date}`).join(', ')
+        : (b.entries||[]).map(e=>`SO ${e.so}`).join(', ');
       const rowBg = isSelected ? 'var(--surface3)' : (isUnread ? 'var(--surface2)' : 'transparent');
       html+=`<div onclick="selectInboxEntry(${b.id})" style="padding:10px 16px;border-bottom:1px solid var(--border);border-left:3px solid ${isSelected?'var(--accent)':'transparent'};cursor:pointer;background:${rowBg}">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
           ${isUnread?'<span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0"></span>':'<span style="width:6px;flex-shrink:0"></span>'}
           ${makeDeptPill(b.department)}
-          <span style="font-size:14px;font-weight:${isUnread?'800':'600'};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
+          <span style="font-size:14px;font-weight:${isUnread?'800':'600'};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} ${isDC?'date change':'batch'}</span>
           <span style="margin-left:auto;font-size:12px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${time}</span>
         </div>
         <div style="font-size:13px;font-family:var(--mono);color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:14px">${escapeHtml(soSummary)}</div>
@@ -2719,6 +2751,19 @@ function renderInboxDetail(batchId){
   const b = departmentBatches.find(x=>x.id===batchId);
   if(!b){ wrap.innerHTML=''; return; }
   const entries = b.entries || [];
+  if(b.type === 'date_change'){
+    const e = entries[0] || {};
+    wrap.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        ${makeDeptPill(b.department)}
+        <span style="font-size:18px;font-weight:800;color:var(--text)">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} date change</span>
+      </div>
+      <div style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:20px">${escapeHtml(b.uploaded_by||'')} · ${new Date(b.created_at).toLocaleString()}</div>
+      <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:10px">SO ${escapeHtml(e.so||'')} — ${escapeHtml(e.customer||'')}</div>
+      <div style="font-family:var(--mono);font-size:15px;color:var(--text2)">From ${escapeHtml(e.old_ship_date||'')} to ${escapeHtml(e.new_ship_date||'')}</div>
+    `;
+    return;
+  }
   const soRows = entries.map(e=>{
     const tags = [];
     if(e.see_pic) tags.push('<span style="color:var(--blue);font-weight:800">** See Pic **</span>');
@@ -2763,6 +2808,132 @@ async function markBatchRead(batchId){
       body: JSON.stringify({batch_id:batchId, user_id:currentUser.id})
     });
   }catch(e){}
+}
+
+// ── Change Dates (bulk ship-date changes, Production + zgta26 only) ────────────
+function openChangeDatesView(){
+  const isProd = currentProfile?.role === 'production';
+  const uname = currentProfile?.username;
+  if(!(isProd || uname === 'zgta26')) return;
+  renderChangeDatesSearch();
+  renderPendingDateChanges();
+}
+
+function renderChangeDatesSearch(){
+  const wrap = document.getElementById('cd-search-results');
+  if(!wrap) return;
+  const q = (document.getElementById('cd-search')?.value||'').trim().toLowerCase();
+  if(!q){
+    wrap.innerHTML = '<div class="empty"><div class="empty-title">Search for an order</div><div class="empty-sub">By SO number or customer name</div></div>';
+    return;
+  }
+  const groups = groupBySO(orders).filter(g=>{
+    const cust = (g.travelers[0]?.customer||'').toLowerCase();
+    const custNo = (customerNameMap.get(cust.toUpperCase())||'').toLowerCase();
+    return g.so.toLowerCase().includes(q) || cust.includes(q) || custNo.includes(q);
+  }).slice(0, 50);
+  if(!groups.length){ wrap.innerHTML = '<div class="empty"><div class="empty-title">No matches</div></div>'; return; }
+  wrap.innerHTML = groups.map(g=>{
+    const t0 = g.travelers[0];
+    const depts = [...new Set(g.travelers.map(t=>t.department).filter(Boolean))];
+    const staged = pendingDateChanges.find(p=>p.so===g.so);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <span class="mono" style="font-weight:700;color:var(--text);min-width:80px">${escapeHtml(g.so)}</span>
+      <span style="color:var(--text2);font-size:13px;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t0.customer||'')}</span>
+      ${depts.map(d=>makeDeptPill(d)).join('')}
+      <span class="mono" style="font-size:12px;color:var(--text3)">Current: ${t0.soShip||'—'}</span>
+      <input type="date" id="cd-date-${g.so}" value="${staged?staged.newRaw:(t0.soShipRaw||'')}"
+        style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 8px;color:var(--text);font-family:var(--mono);font-size:12px">
+      <button class="btn" onclick="addPendingDateChange('${g.so}')">${staged?'Update':'Add'}</button>
+    </div>`;
+  }).join('');
+}
+
+function addPendingDateChange(so){
+  const input = document.getElementById('cd-date-'+so);
+  if(!input || !input.value){ toast('No date selected','Please pick a date first.','amber'); return; }
+  const newRaw = input.value;
+  const grp = groupBySO(orders).find(g=>g.so===so);
+  if(!grp) return;
+  const oldRaw = grp.travelers[0].soShipRaw;
+  if(newRaw === oldRaw){ toast('No change','That is already the current ship date.','amber'); return; }
+  const customer = grp.travelers[0].customer;
+  const existing = pendingDateChanges.find(p=>p.so===so);
+  if(existing){ existing.newRaw = newRaw; } else { pendingDateChanges.push({so, customer, oldRaw, newRaw}); }
+  renderPendingDateChanges();
+  renderChangeDatesSearch();
+}
+
+function removePendingDateChange(so){
+  pendingDateChanges = pendingDateChanges.filter(p=>p.so!==so);
+  renderPendingDateChanges();
+  renderChangeDatesSearch();
+}
+
+function renderPendingDateChanges(){
+  const wrap = document.getElementById('cd-pending-list');
+  const cnt = document.getElementById('cd-pending-count');
+  const btn = document.getElementById('cd-send-btn');
+  if(cnt) cnt.textContent = pendingDateChanges.length ? `(${pendingDateChanges.length})` : '';
+  if(btn) btn.disabled = !pendingDateChanges.length;
+  if(!wrap) return;
+  if(!pendingDateChanges.length){
+    wrap.innerHTML = '<div class="empty"><div class="empty-sub">Search and add orders to stage date changes</div></div>';
+    return;
+  }
+  wrap.innerHTML = pendingDateChanges.map(p=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div>
+        <div class="mono" style="font-weight:700;color:var(--text)">SO ${escapeHtml(p.so)}</div>
+        <div style="color:var(--text3);font-size:11px">${fmtDate(p.oldRaw)} → ${fmtDate(p.newRaw)}</div>
+      </div>
+      <button class="btn" onclick="removePendingDateChange('${p.so}')" style="padding:4px 8px;font-size:11px">✕</button>
+    </div>`).join('');
+}
+
+async function sendDateChanges(){
+  if(!pendingDateChanges.length) return;
+  const btn = document.getElementById('cd-send-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const batch = pendingDateChanges.slice();
+  const actor = currentProfile?.full_name || 'unknown';
+  try{
+    // 1. Update ship dates + activity log (same mechanics as the single-order picker)
+    for(const p of batch){
+      const r = await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${p.so}&archived=eq.false`, {
+        method:'PATCH', headers:{...H(),'Prefer':'return=minimal'}, body: JSON.stringify({so_ship: p.newRaw})
+      });
+      if(!r.ok) throw new Error(await r.text());
+      const oldFmt = fmtDate(p.oldRaw), newFmt = fmtDate(p.newRaw);
+      await logActivity('date_change', p.so, `${actor} changed order ${p.so} from ${oldFmt} to ${newFmt}`);
+      orders.forEach(o=>{ if(o.so===p.so){ o.soShipRaw=p.newRaw; o.soShip=newFmt; } });
+    }
+    // 2. One Inbox notification per department that has travelers on that SO
+    const rowsToInsert = [];
+    for(const p of batch){
+      const grp = groupBySO(orders).find(g=>g.so===p.so);
+      const depts = [...new Set((grp?.travelers||[]).map(t=>t.department).filter(Boolean))];
+      for(const d of depts){
+        rowsToInsert.push({
+          department: d, type: 'date_change', uploaded_by: actor,
+          entries: [{so: p.so, customer: p.customer, old_ship_date: fmtDate(p.oldRaw), new_ship_date: fmtDate(p.newRaw)}]
+        });
+      }
+    }
+    if(rowsToInsert.length){
+      const inserted = await sbInsert('department_batches', rowsToInsert);
+      departmentBatches = [...inserted, ...departmentBatches];
+    }
+    pendingDateChanges = [];
+    renderPendingDateChanges();
+    renderChangeDatesSearch();
+    updateAll(); render();
+    toast('Date changes sent', `${batch.length} order${batch.length!==1?'s':''} updated · ${rowsToInsert.length} notification${rowsToInsert.length!==1?'s':''} sent`, 'green');
+  } catch(e){
+    toast('Error', e.message, 'red');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send date changes';
+  }
 }
 
 // ── Photo upload ──────────────────────────────────────────────────────────────
@@ -3990,7 +4161,8 @@ function sv(v){
   document.getElementById('view-archive').style.display=v==='archive'?'flex':'none';
   document.getElementById('view-log').style.display=v==='log'?'flex':'none';
   document.getElementById('view-inbox').style.display=v==='inbox'?'flex':'none';
-  ['tomorrow','all','pending','done','datechanges','upload','users','archive','log','inbox'].forEach(n=>{
+  document.getElementById('view-changedates').style.display=v==='changedates'?'flex':'none';
+  ['tomorrow','all','pending','done','datechanges','upload','users','archive','log','inbox','changedates'].forEach(n=>{
     document.getElementById('nav-'+n)?.classList.remove('active');
   });
   document.getElementById('nav-'+v)?.classList.add('active');
@@ -3998,6 +4170,7 @@ function sv(v){
   if(v==='archive') openArchiveView();
   if(v==='log') loadLog();
   if(v==='inbox') renderInbox();
+  if(v==='changedates') openChangeDatesView();
   closeDrawer(); render();
 }
  
