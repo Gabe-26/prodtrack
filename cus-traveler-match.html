@@ -61,6 +61,16 @@ td{font-family:var(--mono)}
 .dept-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
 .preview-page{border:1px solid var(--border2);border-radius:6px;margin-top:10px;max-width:100%;display:block}
 .preview-page-label{font-size:11px;color:var(--text3);margin-top:8px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal-card{background:var(--surface);border:1px solid var(--border2);border-radius:10px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;padding:22px}
+.modal-title{font-size:16px;font-weight:800}
+.modal-sub{font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:16px}
+.ub-dept-row{border:1px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--surface2)}
+.ub-dept-row label{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;cursor:pointer}
+.ub-dept-files{margin-top:8px;margin-left:24px}
+.ub-dept-filelist{font-size:11px;color:var(--text3);margin-top:4px}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
 .topbar{display:flex;justify-content:space-between;align-items:center}
 .logout-link{color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline}
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
@@ -126,7 +136,7 @@ td{font-family:var(--mono)}
       <div id="results-wrap" class="hidden">
         <div class="row" style="justify-content:flex-end;align-items:center">
           <div class="sub" id="upload-batch-status" style="margin-top:0"></div>
-          <button class="secondary hidden" id="upload-batch-btn" onclick="uploadBatch()">Upload Batch</button>
+          <button class="secondary hidden" id="upload-batch-btn" onclick="openUploadBatchModal()">Upload Batch</button>
           <button class="secondary hidden" id="download-stamped-btn" onclick="downloadStampedPdf()">Download stamped order PDF</button>
         </div>
         <div class="results-columns">
@@ -169,6 +179,19 @@ td{font-family:var(--mono)}
         <table id="tbl-history"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Prod Line</th><th>Traveler #</th><th>Matched By</th><th>When</th></tr></thead><tbody></tbody></table>
         <div class="empty-note hidden" id="empty-history">No matches logged yet.</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="upload-batch-modal">
+  <div class="modal-card">
+    <div class="modal-title">Upload Batch</div>
+    <div class="modal-sub">Choose which departments to send. You can attach extra files (a drawing, a spec) to each department separately — unchecked departments aren't sent and can still be uploaded later.</div>
+    <div id="ub-dept-list"></div>
+    <div class="err" id="ub-modal-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeUploadBatchModal()">Cancel</button>
+      <button onclick="confirmUploadBatch()" id="ub-confirm-btn">Confirm Upload</button>
     </div>
   </div>
 </div>
@@ -394,12 +417,48 @@ async function buildDeptPdfSubset(dept){
   return await outDoc.save();
 }
 
-async function uploadBatch(){
+let ubExtraFiles = {}; // {dept: File[]} — chosen extra files per department, reset each time the modal opens
+
+function openUploadBatchModal(){
   if(!lastMatched.length) return;
-  const btn = document.getElementById('upload-batch-btn');
+  const byDept = buildDeptBatchEntries();
+  const depts = Object.keys(byDept);
   const status = document.getElementById('upload-batch-status');
-  const err = document.getElementById('run-err');
-  err.textContent = ''; status.textContent = '';
+  if(!depts.length){ status.textContent = 'Nothing to upload — no classified matches this run.'; return; }
+
+  ubExtraFiles = {};
+  const wrap = document.getElementById('ub-dept-list');
+  wrap.innerHTML = depts.map(d => `
+    <div class="ub-dept-row">
+      <label><input type="checkbox" checked class="ub-dept-check" data-dept="${d}"> ${DEPT_META[d].label} (${byDept[d].length} SO${byDept[d].length===1?'':'s'})</label>
+      <div class="ub-dept-files">
+        <input type="file" multiple onchange="onUbExtraFilesChosen('${d}', this)">
+        <div class="ub-dept-filelist" id="ub-filelist-${d}">No extra files</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('ub-modal-err').textContent = '';
+  document.getElementById('upload-batch-modal').classList.add('open');
+}
+
+function closeUploadBatchModal(){
+  document.getElementById('upload-batch-modal').classList.remove('open');
+}
+
+function onUbExtraFilesChosen(dept, input){
+  ubExtraFiles[dept] = Array.from(input.files);
+  document.getElementById(`ub-filelist-${dept}`).textContent =
+    ubExtraFiles[dept].length ? ubExtraFiles[dept].map(f=>f.name).join(', ') : 'No extra files';
+}
+
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeUploadBatchModal(); });
+
+async function confirmUploadBatch(){
+  const err = document.getElementById('ub-modal-err');
+  err.textContent = '';
+  const checked = Array.from(document.querySelectorAll('.ub-dept-check:checked')).map(el=>el.dataset.dept);
+  if(!checked.length){ err.textContent = 'Choose at least one department.'; return; }
+
+  const btn = document.getElementById('ub-confirm-btn');
   btn.disabled = true; const origLabel = btn.textContent; btn.textContent = 'Uploading…';
   try{
     if(!lastStampedPdfBytes){
@@ -408,13 +467,12 @@ async function uploadBatch(){
       lastStampedPageMap = built.pageMap;
     }
     const byDept = buildDeptBatchEntries();
-    const depts = Object.keys(byDept);
-    if(!depts.length){ status.textContent = 'Nothing to upload — no classified matches this run.'; return; }
-
     const uploadedBy = currentProfile.full_name || currentProfile.username || 'unknown';
     const summary = [];
-    for(const dept of depts){
+    for(const dept of checked){
       const entries = byDept[dept];
+      if(!entries) continue;
+
       const pdfBytes = await buildDeptPdfSubset(dept);
       let pdfUrl = null;
       if(pdfBytes){
@@ -427,14 +485,33 @@ async function uploadBatch(){
         if(!r.ok) throw new Error(`Upload failed for ${DEPT_META[dept].label}: ${await r.text()}`);
         pdfUrl = `${SUPA_URL}/storage/v1/object/public/${BATCH_BUCKET}/${path}`;
       }
+
+      const files = ubExtraFiles[dept] || [];
+      const extraFiles = [];
+      for(const f of files){
+        const path = `${dept}/extra/${Date.now()}_${Math.random().toString(36).slice(2)}_${f.name}`;
+        const buf = await f.arrayBuffer();
+        const r = await fetch(`${SUPA_URL}/storage/v1/object/${BATCH_BUCKET}/${path}`,{
+          method:'POST',
+          headers:{'apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY),'Content-Type':f.type||'application/octet-stream'},
+          body: buf
+        });
+        if(!r.ok) throw new Error(`Extra file upload failed for ${DEPT_META[dept].label}: ${await r.text()}`);
+        extraFiles.push({name:f.name, url:`${SUPA_URL}/storage/v1/object/public/${BATCH_BUCKET}/${path}`});
+      }
+
+      const insertBody = {department:dept, entries, pdf_url:pdfUrl, uploaded_by:uploadedBy};
+      if(extraFiles.length) insertBody.extra_files = extraFiles;
+
       const insertRes = await fetch(`${SUPA_URL}/rest/v1/department_batches`,{
         method:'POST', headers:{...H(), 'Prefer':'return=minimal'},
-        body: JSON.stringify({department:dept, entries, pdf_url:pdfUrl, uploaded_by:uploadedBy})
+        body: JSON.stringify(insertBody)
       });
       if(!insertRes.ok) throw new Error(`Saving batch failed for ${DEPT_META[dept].label}: ${await insertRes.text()}`);
-      summary.push(`${DEPT_META[dept].label} (${entries.length} SO${entries.length===1?'':'s'})`);
+      summary.push(`${DEPT_META[dept].label} (${entries.length} SO${entries.length===1?'':'s'}${extraFiles.length?`, ${extraFiles.length} extra file${extraFiles.length===1?'':'s'}`:''})`);
     }
-    status.textContent = `Uploaded: ${summary.join(', ')}`;
+    document.getElementById('upload-batch-status').textContent = `Uploaded: ${summary.join(', ')}`;
+    closeUploadBatchModal();
   }catch(e){
     err.textContent = e.message || 'Upload failed.';
   }finally{
