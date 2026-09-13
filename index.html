@@ -2604,16 +2604,17 @@ function renderLog(){
 // Renders one Outlook-style attachment chip: colored type badge + name + subtitle.
 function inboxAttachmentChip(url, name, opts){
   opts = opts || {};
-  const ext = (name.split('.').pop()||'').toUpperCase();
+  const ext = (name.includes('.') ? name.split('.').pop() : '').toUpperCase();
   const iconBg = opts.accent ? 'var(--accent)' : (
     ext==='PDF' ? '#e5484d' :
     ['PNG','JPG','JPEG','GIF','WEBP'].includes(ext) ? '#3477eb' :
     ['DWG','DXF'].includes(ext) ? '#f0a020' : '#6e6e78'
   );
   const iconColor = opts.accent ? '#0f0f11' : '#fff';
+  const iconLabel = opts.iconLabel || ext || 'DOC';
   const subtitle = opts.subtitle || (ext ? ext+' File' : 'File');
   return `<a href="${url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:8px;background:var(--surface3);border:1px solid ${opts.accent?'var(--accent)':'var(--border2)'};border-radius:8px;padding:6px 10px;text-decoration:none;max-width:230px;margin:0 8px 8px 0">
-    <span style="width:28px;height:28px;border-radius:4px;background:${iconBg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:${iconColor};flex-shrink:0">${ext||'DOC'}</span>
+    <span style="width:28px;height:28px;border-radius:4px;background:${iconBg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:${iconColor};flex-shrink:0">${iconLabel}</span>
     <span style="display:flex;flex-direction:column;overflow:hidden">
       <span style="font-size:12px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>
       <span style="font-size:10px;color:var(--text3)">${escapeHtml(subtitle)}</span>
@@ -2663,14 +2664,14 @@ function renderInbox(){
       const time=new Date(b.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       const entries = b.entries || [];
       const soRows = entries.map(e=>
-        `<div style="display:flex;gap:28px;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--text2);padding:2px 0">
+        `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--text2);padding:2px 0">
           <span style="color:var(--text)">SO ${escapeHtml(e.so)}</span>
           <span>${escapeHtml(formatTravelerRanges(e.travelers))}</span>
           ${e.ship_date?`<span style="color:var(--text3)">Ship ${escapeHtml(e.ship_date)}</span>`:''}
         </div>`
       ).join('');
       const attachChips = [
-        b.pdf_url ? inboxAttachmentChip(b.pdf_url, 'Stamped Order PDF', {accent:true, subtitle:'PDF Document'}) : '',
+        b.pdf_url ? inboxAttachmentChip(b.pdf_url, 'Stamped Order PDF', {accent:true, subtitle:'PDF Document', iconLabel:'PDF'}) : '',
         ...(b.extra_files||[]).map(f => inboxAttachmentChip(f.url, f.name))
       ].filter(Boolean).join('');
       const restBg = isUnread ? 'var(--surface2)' : 'transparent';
@@ -2682,7 +2683,7 @@ function renderInbox(){
             <span style="font-size:13px;font-weight:600;color:var(--text)">${DEPT_META[b.department]?DEPT_META[b.department].label:b.department} batch</span>
             <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${escapeHtml(b.uploaded_by||'')}</span>
           </div>
-          <div style="display:flex;flex-wrap:wrap;margin-bottom:6px">${attachChips}</div>
+          <div style="display:flex;flex-wrap:wrap;margin-bottom:16px">${attachChips}</div>
           ${soRows}
         </div>
         <span style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;margin-top:2px">${time}</span>
