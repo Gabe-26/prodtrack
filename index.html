@@ -2659,7 +2659,8 @@ function renderInbox(){
             <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${escapeHtml(b.uploaded_by||'')}</span>
           </div>
           ${soRows}
-          ${b.pdf_url?`<a href="${b.pdf_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-block;margin-top:6px;font-size:12px;color:var(--accent)">Open stamped PDF ↗</a>`:''}
+          ${b.pdf_url?`<a href="${b.pdf_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-block;margin-top:6px;margin-right:14px;font-size:12px;color:var(--accent)">Open stamped PDF ↗</a>`:''}
+          ${(b.extra_files||[]).map(f=>`<a href="${f.url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-block;margin-top:6px;margin-right:14px;font-size:12px;color:var(--accent)">${escapeHtml(f.name)} ↗</a>`).join('')}
         </div>
         <span style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;margin-top:2px">${time}</span>
       </div>`;
