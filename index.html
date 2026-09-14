@@ -413,6 +413,19 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 #so-modal-body .tr-row{display:block;padding:10px 2px;border-bottom:1px solid var(--border)}
 #so-modal-body .tr-row td{display:block!important;padding:2px 0!important;text-align:left!important}
 #so-modal-body .tr-row td[data-label]::before{content:attr(data-label);display:inline-block;min-width:36px;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:0.3px;margin-right:6px;font-family:var(--sans);font-weight:600}
+#orders-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin:0 14px 10px}
+#orders-summary .sum-item{background:var(--surface);padding:12px 16px}
+#orders-summary .sum-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px}
+#orders-summary .sum-val{font-size:22px;font-weight:700;letter-spacing:-0.03em;font-family:var(--mono);color:var(--text)}
+#orders-summary .sum-val.amber{color:var(--amber)}
+#orders-summary .sum-val.green{color:var(--green)}
+#orders-summary .sum-val.red{color:var(--red)}
+.hidden{display:none}
+@media(max-width:700px),(max-height:500px) and (orientation:landscape){
+  #orders-summary{grid-template-columns:repeat(2,1fr);margin:0 10px 10px}
+  #orders-summary .sum-item{padding:8px 10px}
+  #orders-summary .sum-val{font-size:18px}
+}
 </style>
 </head>
 <body>
@@ -521,6 +534,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div style="display:flex;gap:8px">
         <button class="btn primary" id="pl-dept-wood-btn" onclick="setPrintLabelDept('wood')">Wood</button>
         <button class="btn" id="pl-dept-gate-btn" onclick="setPrintLabelDept('gate')">Gate</button>
+        <button class="btn" id="pl-dept-gear-btn" onclick="setPrintLabelDept('gear')">Gear</button>
       </div>
     </div>
     <div style="display:flex;gap:20px;align-items:flex-start">
@@ -846,6 +860,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
           </button>
         </div>
         <div id="last-csv-line" style="display:none;margin:0 14px 10px;padding:6px 12px;font-size:14px;font-weight:600;color:var(--text);text-align:center;border:3px solid var(--accent)"></div>
+        <div id="orders-summary" style="display:none"></div>
         <div class="table-wrap">
           <table id="main-table">
             <thead><tr id="thead-row">
@@ -1038,6 +1053,7 @@ let currentProfile = null; // {full_name, role, username}
 let orders = [], photos = {}, dateChanges = [], approvals = {}, archivedOrders = [], soComments = {}, holidayList = [], holidayDates = new Set();
 let departmentBatches = [], readBatchIds = new Set();
 let pendingDateChanges = []; // staged bulk date changes: {so, customer, oldRaw, newRaw}
+let moveLogCache = {}; // per-SO ship-date-change history, fetched on demand when a row/modal opens
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
 let collapsedTravelers = new Set();
 let missingFromCSV = [];
@@ -2073,6 +2089,21 @@ function updateAll(){
 }
  
 // ── Render ────────────────────────────────────────────────────────────────────
+function renderOrdersSummary(groups){
+  const wrap = document.getElementById('orders-summary');
+  if(!wrap) return;
+  if(!['tomorrow','all'].includes(activeView)){ wrap.style.display='none'; return; }
+  const totalTravelers = groups.reduce((a,g)=>a+g.travelers.length,0);
+  const totalPhotos = groups.filter(g=>visiblePhotosFor(g.so).length>0).length;
+  const totalNone = groups.length - totalPhotos;
+  wrap.style.display='';
+  wrap.innerHTML = `
+    <div class="sum-item"><div class="sum-label">Orders</div><div class="sum-val amber">${groups.length}</div></div>
+    <div class="sum-item"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
+    <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
+    <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
+  `;
+}
 function render(){
   if(!['tomorrow','all','pending','done'].includes(activeView)) return;
   const q=document.getElementById('search').value.toLowerCase();
@@ -2124,6 +2155,8 @@ function render(){
     return (a.travelers[0].soShipRaw||'').localeCompare(b.travelers[0].soShipRaw||'');
   });
  
+  renderOrdersSummary(groups);
+
   const tbody=document.getElementById('tbody');
   const emf=document.getElementById('empty-f');
   if(!groups.length&&orders.length){tbody.innerHTML='';emf.style.display='flex';return;}
@@ -2146,6 +2179,7 @@ function render(){
     const isMgr = currentProfile?.role === 'manager';
     const hasWoodTravelers = orders.some(o=>o.so===so && o.department==='wood');
     const hasGateTravelers = orders.some(o=>o.so===so && o.department==='gate');
+    const hasGearTravelers = orders.some(o=>o.so===so && o.department==='gear');
     // Approval status for SO
     const approvedTravelers = travelers.filter(o => approvals[o.traveler]);
     const allApproved = travelers.length > 0 && approvedTravelers.length === travelers.length;
@@ -2181,7 +2215,7 @@ function render(){
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${picTag}
         ${isMgr && !allApproved ? `<button class="approve-btn" onclick="event.stopPropagation();confirmColorThenApproveAll('${so}')" style="font-size:10px;padding:3px 8px">Approve all</button>` : ''}
-        ${isMgr && (hasWoodTravelers||hasGateTravelers) ? `<button class="btn print-label-btn" onclick="event.stopPropagation();openPrintLabelModal('${so}')" style="font-size:10px;padding:3px 8px">Print label</button>` : ''}
+        ${isMgr && (hasWoodTravelers||hasGateTravelers||hasGearTravelers) ? `<button class="btn print-label-btn" onclick="event.stopPropagation();openPrintLabelModal('${so}')" style="font-size:10px;padding:3px 8px">Print label</button>` : ''}
       </div></td>
     </tr>`;
  
@@ -2192,6 +2226,7 @@ function render(){
   }
   tbody.innerHTML=html;
   openedSOs.forEach(autoTranslateComments);
+  openedSOs.forEach(loadMoveLogForSO);
 }
  
 // Builds the traveler rows + photo/comments section for one SO. Shared by the
@@ -2223,6 +2258,10 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
       <td>${approveBtn}</td>
     </tr>`;
   }
+  html+=`<tr class="movelog-row"><td colspan="6">
+    <div id="movelog-summary-${so}" onclick="toggleMoveLog('${so}')" style="font-size:12px;color:var(--text3);font-family:var(--mono);padding:4px 0;cursor:pointer;width:fit-content">Checking move history…</div>
+    <div id="movelog-list-${so}" class="hidden" style="margin:2px 0 8px;padding-left:2px"></div>
+  </td></tr>`;
   const visiblePhotos = (soPhotos||[]).filter(p=>isDeptVisible(p.department));
   const deptsPresent = [...new Set(travelers.map(t=>t.department).filter(Boolean))];
   const zoneDepts = deptsPresent.length ? deptsPresent : [null];
@@ -2443,6 +2482,7 @@ function openSOModal(so){
   document.getElementById('so-modal-body').innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${buildSODetailRows(so, travelers, soPhotos, isMgr)}</tbody></table>`;
   document.getElementById('so-modal').classList.add('open');
   autoTranslateComments(so);
+  loadMoveLogForSO(so);
 }
 function closeSOModal(){
   currentModalSO = null;
@@ -2523,6 +2563,10 @@ async function saveShipDate(so, oldRaw){
  
     // Update local state
     orders.forEach(o => { if(o.so === so){ o.soShipRaw = newRaw; o.soShip = newFmt; } });
+
+    // Notify each department with travelers on this SO (same as bulk Change Dates)
+    await notifyDateChangeInbox(so, oldRaw, newRaw);
+
  
     closeDatePicker();
     updateAll();
@@ -2533,6 +2577,28 @@ async function saveShipDate(so, oldRaw){
     if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent='Save'; }
   }
 }
+
+// Shared: insert one department_batches row (type:'date_change') per department
+// that has travelers on `so`. Used by both the single-order date picker and the
+// bulk Change Dates tool. Never blocks the date change itself if it fails.
+async function notifyDateChangeInbox(so, oldRaw, newRaw){
+  const grp = groupBySO(orders).find(g=>g.so===so);
+  if(!grp) return [];
+  const depts = [...new Set(grp.travelers.map(t=>t.department).filter(Boolean))];
+  if(!depts.length) return [];
+  const customer = grp.travelers[0].customer;
+  const actor = currentProfile?.full_name || 'unknown';
+  const rows = depts.map(d=>({
+    department: d, type: 'date_change', uploaded_by: actor,
+    entries: [{so, customer, old_ship_date: fmtDate(oldRaw), new_ship_date: fmtDate(newRaw)}]
+  }));
+  try{
+    const inserted = await sbInsert('department_batches', rows);
+    departmentBatches = [...inserted, ...departmentBatches];
+    return inserted;
+  } catch(e){ return []; }
+}
+
 function toggleExpandAll(){
   allExp=!allExp;
   const btn=document.getElementById('xbtn');
@@ -2559,6 +2625,40 @@ async function logActivity(action, so, detail){
       body: JSON.stringify({action, so, actor: currentProfile?.full_name||'unknown', detail})
     });
   } catch(e){ console.warn('Log write failed:', e.message); }
+}
+
+// Per-SO ship-date-change history ("Moved N times"). Fetched on demand each
+// time the row/modal opens rather than preloaded with everything else —
+// activity_log grows unbounded and most orders are never expanded, so
+// there's no reason to pull it all up front like photos/comments are.
+async function loadMoveLogForSO(so){
+  try{
+    const rows = await sbGet('activity_log', `so=eq.${so}&action=eq.date_change&order=created_at.desc`);
+    moveLogCache[so] = rows;
+    renderMoveLogSummary(so);
+  } catch(e){
+    const el = document.getElementById('movelog-summary-'+so);
+    if(el) el.textContent = 'Move history unavailable';
+  }
+}
+function renderMoveLogSummary(so){
+  const el = document.getElementById('movelog-summary-'+so);
+  if(!el) return; // row was collapsed again before the fetch finished
+  const rows = moveLogCache[so] || [];
+  el.textContent = rows.length ? `Moved ${rows.length} time${rows.length>1?'s':''} — click to view` : 'No date changes yet';
+  el.style.cursor = rows.length ? 'pointer' : 'default';
+}
+function toggleMoveLog(so){
+  const rows = moveLogCache[so] || [];
+  if(!rows.length) return;
+  const listEl = document.getElementById('movelog-list-'+so);
+  if(!listEl) return;
+  if(listEl.classList.contains('hidden')){
+    listEl.innerHTML = rows.map(r=>`<div style="padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;font-family:var(--mono);color:var(--text2)">${escapeHtml(r.detail||'')} <span style="color:var(--text3)">· ${new Date(r.created_at).toLocaleString()}</span></div>`).join('');
+    listEl.classList.remove('hidden');
+  } else {
+    listEl.classList.add('hidden');
+  }
 }
  
 async function loadLog(){
@@ -2764,17 +2864,20 @@ function renderInboxDetail(batchId){
     `;
     return;
   }
-  const soRows = entries.map(e=>{
-    const tags = [];
-    if(e.see_pic) tags.push('<span style="color:var(--blue);font-weight:800">** See Pic **</span>');
-    if(e.hot) tags.push('<span style="color:var(--red);font-weight:800">** HOT **</span>');
-    return `<div style="display:flex;gap:40px;align-items:baseline;font-family:var(--mono);font-size:15px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--text);font-weight:800">SO ${escapeHtml(e.so)}</span>
-      <span style="font-weight:800">${escapeHtml(formatTravelerRanges(e.travelers))}</span>
-      ${e.ship_date?`<span style="color:var(--text3);font-weight:800">Ship ${escapeHtml(e.ship_date)}</span>`:''}
-      ${tags.join(' ')}
-    </div>`;
-  }).join('');
+  const rowCellStyle = 'padding:6px 40px 6px 0;border-bottom:1px solid var(--border);white-space:nowrap;';
+  const soRows = `<div style="display:grid;grid-template-columns:auto auto auto 1fr;align-items:baseline;font-family:var(--mono);font-size:15px;color:var(--text2)">
+    ${entries.map(e=>{
+      const tags = [];
+      if(e.see_pic) tags.push('<span style="color:var(--blue);font-weight:800">** See Pic **</span>');
+      if(e.hot) tags.push('<span style="color:var(--red);font-weight:800">** HOT **</span>');
+      return `<div style="display:contents">
+        <span style="${rowCellStyle}color:var(--text);font-weight:800">SO ${escapeHtml(e.so)}</span>
+        <span style="${rowCellStyle}font-weight:800">${escapeHtml(formatTravelerRanges(e.travelers))}</span>
+        <span style="${rowCellStyle}color:var(--text3);font-weight:800">${e.ship_date?'Ship '+escapeHtml(e.ship_date):''}</span>
+        <span style="padding:6px 0;border-bottom:1px solid var(--border)">${tags.join(' ')}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
   const attachChips = [
     b.pdf_url ? inboxAttachmentChip(b.pdf_url, 'Stamped Order PDF', {accent:true, subtitle:'PDF Document', iconLabel:'PDF'}) : '',
     ...(b.extra_files||[]).map(f => inboxAttachmentChip(f.url, f.name))
@@ -2897,8 +3000,8 @@ async function sendDateChanges(){
   btn.disabled = true; btn.textContent = 'Sending…';
   const batch = pendingDateChanges.slice();
   const actor = currentProfile?.full_name || 'unknown';
+  let notifCount = 0;
   try{
-    // 1. Update ship dates + activity log (same mechanics as the single-order picker)
     for(const p of batch){
       const r = await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${p.so}&archived=eq.false`, {
         method:'PATCH', headers:{...H(),'Prefer':'return=minimal'}, body: JSON.stringify({so_ship: p.newRaw})
@@ -2907,28 +3010,14 @@ async function sendDateChanges(){
       const oldFmt = fmtDate(p.oldRaw), newFmt = fmtDate(p.newRaw);
       await logActivity('date_change', p.so, `${actor} changed order ${p.so} from ${oldFmt} to ${newFmt}`);
       orders.forEach(o=>{ if(o.so===p.so){ o.soShipRaw=p.newRaw; o.soShip=newFmt; } });
-    }
-    // 2. One Inbox notification per department that has travelers on that SO
-    const rowsToInsert = [];
-    for(const p of batch){
-      const grp = groupBySO(orders).find(g=>g.so===p.so);
-      const depts = [...new Set((grp?.travelers||[]).map(t=>t.department).filter(Boolean))];
-      for(const d of depts){
-        rowsToInsert.push({
-          department: d, type: 'date_change', uploaded_by: actor,
-          entries: [{so: p.so, customer: p.customer, old_ship_date: fmtDate(p.oldRaw), new_ship_date: fmtDate(p.newRaw)}]
-        });
-      }
-    }
-    if(rowsToInsert.length){
-      const inserted = await sbInsert('department_batches', rowsToInsert);
-      departmentBatches = [...inserted, ...departmentBatches];
+      const inserted = await notifyDateChangeInbox(p.so, p.oldRaw, p.newRaw);
+      notifCount += inserted.length;
     }
     pendingDateChanges = [];
     renderPendingDateChanges();
     renderChangeDatesSearch();
     updateAll(); render();
-    toast('Date changes sent', `${batch.length} order${batch.length!==1?'s':''} updated · ${rowsToInsert.length} notification${rowsToInsert.length!==1?'s':''} sent`, 'green');
+    toast('Date changes sent', `${batch.length} order${batch.length!==1?'s':''} updated · ${notifCount} notification${notifCount!==1?'s':''} sent`, 'green');
   } catch(e){
     toast('Error', e.message, 'red');
   } finally {
@@ -3508,35 +3597,40 @@ let labelDeptTravelers = [];
 let labelSkids = []; // [{ items: [{traveler,item,desc,qty}] }]
 let labelEditingItems = new Set(); // keys "si-ii" currently in wording-edit mode
 const LABEL_DEPT_CONFIG = {
-  wood: { cap: 20, allowCombine: true, widthIn: 4, heightIn: 6, previewScale: 1,   printScale: 1,   previewItemScale: 1,   printItemScale: 1,   topReducePx: 5,  lineGapPx: 6 },
-  gate: { cap: 1,  allowCombine: false, widthIn: 4, heightIn: 3, previewScale: 0.5, printScale: 0.65, previewItemScale: 0.5, printItemScale: 0.5, topReducePx: 18, lineGapPx: 2 }
+  wood: { cap: 20, allowCombine: true, widthIn: 4, heightIn: 6, previewScale: 1,   printScale: 1,   previewItemScale: 1,   printItemScale: 1,   topReducePx: 5,  lineGapPx: 6, colorTagStyle: 'swatch' },
+  gate: { cap: 1,  allowCombine: false, widthIn: 4, heightIn: 3, previewScale: 0.5, printScale: 0.65, previewItemScale: 0.5, printItemScale: 0.5, topReducePx: 18, lineGapPx: 2, colorTagStyle: 'text' },
+  gear: { cap: 14, allowCombine: true, widthIn: 4, heightIn: 6, previewScale: 1,   printScale: 1,   previewItemScale: 1,   printItemScale: 1,   topReducePx: 5,  lineGapPx: 6, colorTagStyle: 'text' }
 };
 
 function openPrintLabelModal(so){
   if(currentProfile?.role!=='manager') return;
-  const woodTravelers = orders.filter(o=>o.so===so && o.department==='wood');
-  const gateTravelers = orders.filter(o=>o.so===so && o.department==='gate');
-  if(!woodTravelers.length && !gateTravelers.length){ toast('No Wood/Gate travelers', 'This SO has no Wood or Gate department travelers.', 'amber'); return; }
+  const travelersByDept = {
+    wood: orders.filter(o=>o.so===so && o.department==='wood'),
+    gate: orders.filter(o=>o.so===so && o.department==='gate'),
+    gear: orders.filter(o=>o.so===so && o.department==='gear')
+  };
+  const availableDepts = Object.keys(travelersByDept).filter(d=>travelersByDept[d].length);
+  if(!availableDepts.length){ toast('No Wood/Gate/Gear travelers', 'This SO has no Wood, Gate, or Gear department travelers.', 'amber'); return; }
   labelSO = so;
-  window._plWoodTravelers = woodTravelers;
-  window._plGateTravelers = gateTravelers;
+  window._plTravelersByDept = travelersByDept;
   const picker = document.getElementById('pl-dept-picker');
-  if(woodTravelers.length && gateTravelers.length){
-    picker.style.display = '';
-  } else {
-    picker.style.display = 'none';
-  }
+  ['wood','gate','gear'].forEach(d=>{
+    const btn = document.getElementById('pl-dept-'+d+'-btn');
+    if(btn) btn.style.display = travelersByDept[d].length ? '' : 'none';
+  });
+  picker.style.display = availableDepts.length > 1 ? '' : 'none';
   document.getElementById('pl-so-num').textContent = so;
   document.getElementById('pl-cust').value = '';
   document.getElementById('pl-po').value = '';
-  setPrintLabelDept(woodTravelers.length ? 'wood' : 'gate');
+  setPrintLabelDept(availableDepts[0]);
   document.getElementById('print-label-modal').classList.add('open');
 }
 function setPrintLabelDept(dept){
   labelDept = dept;
-  labelDeptTravelers = dept==='wood' ? window._plWoodTravelers : window._plGateTravelers;
-  document.getElementById('pl-dept-wood-btn')?.classList.toggle('primary', dept==='wood');
-  document.getElementById('pl-dept-gate-btn')?.classList.toggle('primary', dept==='gate');
+  labelDeptTravelers = (window._plTravelersByDept && window._plTravelersByDept[dept]) || [];
+  ['wood','gate','gear'].forEach(d=>{
+    document.getElementById('pl-dept-'+d+'-btn')?.classList.toggle('primary', dept===d);
+  });
   labelEditingItems = new Set();
   const custMatch = customerNameMap.get((labelDeptTravelers[0]?.customer||'').trim().toUpperCase());
   document.getElementById('pl-cust').value = custMatch || '';
@@ -3661,7 +3755,7 @@ function renderPrintLabelPreview(){
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
-        ${labelDept==='gate'
+        ${LABEL_DEPT_CONFIG[labelDept].colorTagStyle==='text'
           ? `<div class="lbl-color-tag lbl-color-tag-text" style="color:${viaColorHex(t0.via, t0.location)}">${viaColorWord(t0.via, t0.location)}</div>`
           : `<div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>`}
         <div class="lbl-page">${i+1} of ${total}</div>
@@ -3751,7 +3845,7 @@ function generateLabelDocument(so, cust, po, skids){
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
-        ${labelDept==='gate'
+        ${LABEL_DEPT_CONFIG[labelDept].colorTagStyle==='text'
           ? `<div class="lbl-color-tag lbl-color-tag-text" style="color:${viaColorHex(t0.via, t0.location)}">${viaColorWord(t0.via, t0.location)}</div>`
           : `<div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>`}
         <div class="lbl-page">${i+1} of ${total}</div>
