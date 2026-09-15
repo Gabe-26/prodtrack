@@ -494,6 +494,17 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     </div>
   </div>
 </div>
+
+<div class="confirm-overlay" id="confirm-stale-csv">
+  <div class="confirm-card">
+    <div class="confirm-title">This report wouldn't update anything</div>
+    <div class="confirm-body" id="sc-body">Every prod line in this file already has a newer report loaded.</div>
+    <div class="confirm-btns">
+      <button class="btn" onclick="staleCsvRespond(false)">Cancel</button>
+      <button class="btn primary" onclick="staleCsvRespond(true)">Upload anyway</button>
+    </div>
+  </div>
+</div>
  
 <!-- Print report modal -->
 <div class="modal-overlay" id="print-report-modal">
@@ -1060,6 +1071,7 @@ let missingFromCSV = [];
 let pendingDelPhotoId = null, pendingDelStoragePath = null, pendingDelSO = null, pendingDelFilename = null;
 let pendingDelUserId = null;
 let pendingColorCheckCallback = null;
+let pendingStaleCsvCallback = null;
  
 // ── Headers ───────────────────────────────────────────────────────────────────
 const H = (tok) => ({
@@ -1768,6 +1780,47 @@ async function doDeleteUser(){
 }
  
 // ── CSV ───────────────────────────────────────────────────────────────────────
+// Pulls Sage's own "print date/time" out of a Due-Date-format CSV — the
+// moment Sage actually ran the report, not when someone happened to upload
+// it. Every row repeats this at columns 38/39 (e.g. "9/15/2026","11:38:05AM"),
+// confirmed against a real export. Returns an ISO-ish "YYYY-MM-DDTHH:MM:SS"
+// string (safe to compare with plain < since it's zero-padded), or null if
+// the file is the Product Line alternative format, which doesn't carry
+// this field at all — never guessed at a position for that format.
+function extractCsvReportTimestamp(txt){
+  const lines = txt.split('\n');
+  const firstRow = parseRow(lines.find(l=>l.trim())||'');
+  if(firstRow.length < 25) return null;
+  for(const line of lines){
+    if(!line.trim()) continue;
+    const c = parseRow(line);
+    if(c.length < 40) continue;
+    const d = (c[38]||'').trim(), t = (c[39]||'').trim();
+    if(!d || !t) continue;
+    const p = d.split('/');
+    if(p.length !== 3) continue;
+    const yr = p[2].length===4 ? p[2].slice(2) : p[2];
+    const iso = `20${yr}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
+    const m = t.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    if(!m) return `${iso}T00:00:00`;
+    let hh = parseInt(m[1],10);
+    if(/pm/i.test(m[4]) && hh!==12) hh+=12;
+    if(/am/i.test(m[4]) && hh===12) hh=0;
+    return `${iso}T${String(hh).padStart(2,'0')}:${m[2]}:${m[3]}`;
+  }
+  return null;
+}
+function showStaleCsvModal(message, onConfirm){
+  document.getElementById('sc-body').textContent = message;
+  pendingStaleCsvCallback = onConfirm;
+  document.getElementById('confirm-stale-csv').classList.add('open');
+}
+function staleCsvRespond(confirmed){
+  document.getElementById('confirm-stale-csv').classList.remove('open');
+  const cb = pendingStaleCsvCallback;
+  pendingStaleCsvCallback = null;
+  if(confirmed && cb) cb();
+}
 function parseCSV(txt){
   const out=[];
   const lines=txt.split('\n');
@@ -1871,16 +1924,52 @@ async function handleCSV(file){
   fr.onload=async e=>{
     const parsed=parseCSV(e.target.result);
     if(!parsed.length){toast('Parse error','Could not read orders.','red');return;}
+    const newReportTime = extractCsvReportTimestamp(e.target.result);
+    let prodLineTimes = {};
+    if(newReportTime){
+      try{
+        const rows = await sbGet('app_meta', 'key=eq.csv_prodline_timestamps&select=value');
+        prodLineTimes = rows[0]?.value ? JSON.parse(rows[0].value) : {};
+      } catch(err){ prodLineTimes = {}; }
+    }
+    const run = () => performCSVUpload(parsed, newReportTime, prodLineTimes, st);
+    if(newReportTime){
+      const isStale = r => prodLineTimes[r.line] && newReportTime < prodLineTimes[r.line];
+      if(parsed.every(isStale)){
+        showStaleCsvModal(
+          `Every prod line in this report (generated ${new Date(newReportTime).toLocaleString()}) `+
+          `already has a newer report loaded for it — this upload wouldn't update anything.`,
+          run
+        );
+        return;
+      }
+    }
+    run();
+  };
+  fr.readAsText(file);
+}
+async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
     st.textContent='Uploading '+parsed.length+' travelers…';
     try{
       const prevSODates={};
       orders.forEach(o=>{if(o.so&&o.soShipRaw) prevSODates[o.so]=o.soShipRaw;});
- 
-      // Upsert all parsed rows
-      for(let i=0;i<parsed.length;i+=500) await sbUpsertOrders(parsed.slice(i,i+500));
- 
-      // For each SO in the CSV, remove any travelers in the DB that are no longer in the CSV
-      // (handles voided/replaced travelers in Sage)
+
+      // Per-prod-line staleness: a row is skipped (left as-is in the DB) only
+      // if THIS SPECIFIC prod line already has a newer report loaded for it —
+      // so a full multi-department report run slightly earlier than some
+      // other department's own more-recent partial report still updates
+      // every OTHER prod line normally, instead of the whole upload being
+      // treated as stale-or-not as one unit.
+      const isStale = r => newReportTime && prodLineTimes[r.line] && newReportTime < prodLineTimes[r.line];
+      const rowsToUpsert = parsed.filter(r=>!isStale(r));
+      const skippedRows = parsed.filter(isStale);
+
+      // Upsert only the non-stale rows
+      for(let i=0;i<rowsToUpsert.length;i+=500) await sbUpsertOrders(rowsToUpsert.slice(i,i+500));
+
+      // For each SO in the FULL CSV — including skipped/stale rows, which are
+      // still legitimately part of this report and must not be treated as
+      // voided — remove any DB travelers no longer present anywhere in it.
       const csvSOMap={}; // so -> Set of traveler strings
       for(const r of parsed){
         if(!csvSOMap[r.so]) csvSOMap[r.so]=new Set();
@@ -1893,22 +1982,26 @@ async function handleCSV(file){
           method:'DELETE',headers:{...H(),'Prefer':'return=minimal'}
         }).catch(()=>{});
       }
- 
+
+      // Date-change detection reflects only what was actually applied — a
+      // skipped row didn't touch the DB, so it isn't a "change".
       const newSODates={};
-      parsed.forEach(r=>{if(r.so&&r.so_ship) newSODates[r.so]=r.so_ship;});
+      rowsToUpsert.forEach(r=>{if(r.so&&r.so_ship) newSODates[r.so]=r.so_ship;});
       dateChanges=[];
-      missingFromCSV=[];
       for(const so of Object.keys(newSODates)){
         if(prevSODates[so]&&prevSODates[so]!==newSODates[so]){
-          const t=parsed.find(r=>r.so===so);
+          const t=rowsToUpsert.find(r=>r.so===so);
           dateChanges.push({so,customer:t?.customer||'',from:prevSODates[so],to:newSODates[so]});
         }
       }
-      // Detect SOs that were in the DB but are not in this CSV (informational only — no auto-archive)
+      // "Missing from CSV" must check presence in the FULL report, not just
+      // the applied rows — an SO whose only rows were skipped for being
+      // stale is still genuinely present in this report, not gone from Sage.
+      const soPresentInCSV = new Set(parsed.map(r=>r.so));
       const prevSOs=Object.keys(prevSODates);
       missingFromCSV=[];
       for(const so of prevSOs){
-        if(!newSODates[so]){
+        if(!soPresentInCSV.has(so)){
           const existing=orders.find(o=>o.so===so);
           missingFromCSV.push({so, customer:existing?.customer||'', lastDate:prevSODates[so]});
         }
@@ -1922,24 +2015,38 @@ async function handleCSV(file){
         method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates,return=minimal'},
         body: JSON.stringify({key:'last_csv_upload', value:new Date().toISOString()})
       }).then(()=>loadLastCsvUpload()).catch(()=>{});
-      st.textContent='✓ '+parsed.length+' travelers at '+ts;
+      // Records the report time actually applied, per prod line touched by
+      // this upload — so the next upload can tell, prod line by prod line,
+      // whether it would be going backwards, rather than judging the whole
+      // file as one unit.
+      if(newReportTime && rowsToUpsert.length){
+        const updatedMap = {...prodLineTimes};
+        new Set(rowsToUpsert.map(r=>r.line)).forEach(line=>{ updatedMap[line] = newReportTime; });
+        fetch(`${SUPA_URL}/rest/v1/app_meta?on_conflict=key`, {
+          method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates,return=minimal'},
+          body: JSON.stringify({key:'csv_prodline_timestamps', value:JSON.stringify(updatedMap)})
+        }).catch(()=>{});
+      }
+      st.textContent='✓ '+rowsToUpsert.length+' travelers at '+ts+(skippedRows.length?` (${skippedRows.length} skipped)`:'');
       await loadOrders(); updateAll();
-      const hasIssues = dateChanges.length || missingFromCSV.length;
+      const hasIssues = dateChanges.length || missingFromCSV.length || skippedRows.length;
       if(hasIssues){
         const parts=[];
         if(dateChanges.length) parts.push(`${dateChanges.length} date change${dateChanges.length>1?'s':''}`);
         if(missingFromCSV.length) parts.push(`${missingFromCSV.length} missing SO${missingFromCSV.length>1?'s':''}`);
+        if(skippedRows.length){
+          const lines=[...new Set(skippedRows.map(r=>r.line))];
+          parts.push(`${skippedRows.length} skipped (prod line${lines.length>1?'s':''} ${lines.join(', ')} already newer)`);
+        }
         toast(parts.join(' · '),
           [...dateChanges.slice(0,2).map(c=>`SO ${c.so}: ${fmtDate(c.from)} → ${fmtDate(c.to)}`),
            ...missingFromCSV.slice(0,2).map(c=>`⚠ SO ${c.so} not in CSV`)].join('\n'),'amber');
         setTimeout(()=>sv('datechanges'),1400);
       } else {
-        toast('CSV uploaded',''+parsed.length+' travelers saved.','green');
+        toast('CSV uploaded',''+rowsToUpsert.length+' travelers saved.','green');
         setTimeout(()=>sv('tomorrow'),1200);
       }
     } catch(err){st.textContent='Error: '+err.message;toast('Upload failed',err.message,'red');}
-  };
-  fr.readAsText(file);
 }
  
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -4316,7 +4423,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();colorCheckRespond(false);
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();colorCheckRespond(false);staleCsvRespond(false);
   }
 });
  
