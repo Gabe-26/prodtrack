@@ -1648,6 +1648,7 @@ async function loadUsers(){
 function renderUsers(){
   const list = document.getElementById('users-list');
   if(!allUsers.length){ list.innerHTML='<div class="empty"><div class="empty-title">No users yet</div></div>'; return; }
+  const isOwner = currentProfile?.username === 'zgta26';
   const roleOrder = ['manager','worker','production','viewer'];
   const roleLabel = {manager:'Manager', worker:'Worker', production:'Production', viewer:'Viewer'};
   const roleCls   = {manager:'tb', worker:'td', production:'ta', viewer:'td'};
@@ -1673,9 +1674,9 @@ function renderUsers(){
         </div>
       </div>
       <div class="uc-actions">
-        <button class="btn" onclick="toggleRole('${u.id}','${role}')" title="Change role to ${roleNext[role]}">
-          ${roleNextLabel[role]}
-        </button>
+        ${isOwner
+          ? `<button class="btn" onclick="toggleRole('${u.id}','${role}')" title="Change role to ${roleNext[role]}">${roleNextLabel[role]}</button>`
+          : `<span class="tag td" title="Only the owner account can change roles">Role locked</span>`}
         ${!isMe?`<button class="btn danger" onclick="askDeleteUser('${u.id}','${u.full_name||uname}')">Remove</button>`:''}
       </div>
     </div>`;
@@ -1705,10 +1706,14 @@ async function toggleUserDept(userId, dept){
 }
  
 async function toggleRole(userId, currentRole){
+  if(currentProfile?.username !== 'zgta26'){ toast('Not allowed', 'Only the owner account can change roles.', 'red'); return; }
   const cycle = {manager:'worker', worker:'production', production:'viewer', viewer:'manager'};
   const newRole = cycle[currentRole] || 'worker';
+  const target = allUsers.find(x=>x.id===userId);
+  const targetName = target?.full_name || target?.username || 'a user';
   try{
     await sbUpdate('profiles', userId, {role: newRole});
+    await logActivity('role_change', null, `${currentProfile?.full_name||'zgta26'} changed ${targetName}'s role from ${currentRole} to ${newRole}`);
     await loadUsers();
     toast('Role updated', `User is now ${newRole}.`, 'green');
   } catch(e){ toast('Error', e.message, 'red'); }
@@ -1719,6 +1724,7 @@ function openAddUser(){
   document.getElementById('nu-username').value='';
   document.getElementById('nu-pass').value='';
   document.getElementById('nu-role').value='worker';
+  document.getElementById('nu-role').disabled = currentProfile?.username !== 'zgta26';
   document.getElementById('nu-err').textContent='';
   document.getElementById('nu-btn').disabled=false;
   document.getElementById('nu-btn').textContent='Create user';
