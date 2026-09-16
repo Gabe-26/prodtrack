@@ -1407,7 +1407,7 @@ async function loadOrders(){
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
     soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer,
-    department:r.department, deptExtra:r.department_extra
+    department:r.department, deptExtra:r.department_extra, flaggedMissingAt:r.flagged_missing_at
   }));
 }
 let archivedLoaded = false;
@@ -1999,12 +1999,54 @@ async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
       // stale is still genuinely present in this report, not gone from Sage.
       const soPresentInCSV = new Set(parsed.map(r=>r.so));
       const prevSOs=Object.keys(prevSODates);
+
+      // Per-prod-line date coverage in THIS upload's full report (skipped/stale
+      // rows included — the report genuinely ran that prod line either way).
+      // Lets us tell "missing because it's outside this report's date window"
+      // apart from "missing because it's actually done or gone from Sage."
+      const lineDateRange={};
+      for(const r of parsed){
+        if(!r.line || !r.so_ship) continue;
+        if(!lineDateRange[r.line]) lineDateRange[r.line]={min:r.so_ship,max:r.so_ship};
+        else{
+          if(r.so_ship<lineDateRange[r.line].min) lineDateRange[r.line].min=r.so_ship;
+          if(r.so_ship>lineDateRange[r.line].max) lineDateRange[r.line].max=r.so_ship;
+        }
+      }
+      const prevSOLines={};
+      orders.forEach(o=>{ if(o.so){ if(!prevSOLines[o.so]) prevSOLines[o.so]=new Set(); if(o.line) prevSOLines[o.so].add(o.line); } });
+
       missingFromCSV=[];
+      const newlyFlagged=[];
       for(const so of prevSOs){
         if(!soPresentInCSV.has(so)){
           const existing=orders.find(o=>o.so===so);
-          missingFromCSV.push({so, customer:existing?.customer||'', lastDate:prevSODates[so]});
+          const lines=[...(prevSOLines[so]||[])];
+          const shipDate=prevSODates[so];
+          // Flag as "possibly completed" only when EVERY prod line this SO
+          // touches was covered by this upload's date range — a partial
+          // report (e.g. just Wood) must never flag a Gear-only SO.
+          const possibleCompleted = lines.length>0 && lines.every(l=>{
+            const r=lineDateRange[l];
+            return r && shipDate>=r.min && shipDate<=r.max;
+          });
+          missingFromCSV.push({so, customer:existing?.customer||'', lastDate:shipDate, possibleCompleted});
+          if(possibleCompleted && !existing?.flaggedMissingAt) newlyFlagged.push(so);
         }
+      }
+      // Any SO that reappears anywhere in this report clears a previous flag.
+      const toUnflag=[...new Set(orders.filter(o=>o.flaggedMissingAt && soPresentInCSV.has(o.so)).map(o=>o.so))];
+      for(const so of newlyFlagged){
+        await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${so}&archived=eq.false`,{
+          method:'PATCH',headers:{...H(),'Prefer':'return=minimal'},
+          body:JSON.stringify({flagged_missing_at:new Date().toISOString()})
+        }).catch(()=>{});
+      }
+      for(const so of toUnflag){
+        await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${so}&archived=eq.false`,{
+          method:'PATCH',headers:{...H(),'Prefer':'return=minimal'},
+          body:JSON.stringify({flagged_missing_at:null})
+        }).catch(()=>{});
       }
       // NOTE: We no longer auto-archive missing SOs — partial reports (e.g. Wood Report)
       // would otherwise archive all unrelated orders. Use the Archive tab for manual cleanup.
@@ -2162,14 +2204,14 @@ function updateAll(){
     const missingCards=missingFromCSV.map(c=>`
       <div style="background:var(--surface);border:1px solid rgba(255,95,95,0.3);border-radius:8px;margin-bottom:8px;overflow:hidden">
         <div style="display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--border)">
-          <span class="tag tr">NOT IN CSV</span>
+          <span class="tag ${c.possibleCompleted?'ta':'tr'}">${c.possibleCompleted?'POSSIBLY COMPLETED':'NOT IN CSV'}</span>
           <span style="font-weight:700;font-size:13px;color:var(--text)">SO ${c.so}</span>
           <span style="margin-left:auto;font-size:12px;color:var(--text3)">${c.customer}</span>
         </div>
         <div style="padding:9px 13px;font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:10px">
           <span style="color:var(--text2)">Last known ship date:</span>
           <span style="color:var(--red);font-weight:600">${fmtDate(c.lastDate)}</span>
-          <span style="margin-left:auto;color:var(--text3)">Not in this CSV — archive manually if needed</span>
+          <span style="margin-left:auto;color:var(--text3)">${c.possibleCompleted?'Every prod line on this SO was covered by this upload — likely done or removed':'Not in this CSV — archive manually if needed'}</span>
         </div>
       </div>`).join('');
     dcBody.innerHTML=dcCards+missingCards;
@@ -2296,6 +2338,9 @@ function render(){
       : someApproved
       ? `<span class="tag td appr-full" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span><span class="appr-check tag td" style="display:none;margin-left:4px">${approvedTravelers.length}/${travelers.length}</span>`
       : '';
+    const flaggedBadge = travelers[0].flaggedMissingAt
+      ? `<span class="tag ta" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
+      : '';
  
     const canEditDate = document.body.classList.contains('can-edit-date');
     const dateCell = canEditDate
@@ -2314,6 +2359,7 @@ function render(){
         <span class="so-dept-wrap">${deptPillsForTravelers(travelers)}</span>
         ${visibleCommentsFor(so).length?`<span title="${visibleCommentsFor(so).length} comment${visibleCommentsFor(so).length>1?'s':''}" style="display:inline-flex;align-items:center;color:var(--blue);opacity:0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></span>`:''}
         ${approvalBadge}
+        ${flaggedBadge}
       </div></td>
       ${dateCell}
       <td>${viaTag}</td>
@@ -2574,6 +2620,9 @@ function openSOModal(so){
     : someApproved
     ? `<span class="tag td">${approvedTravelers.length}/${travelers.length} approved</span>`
     : '';
+  const flaggedBadge = t0.flaggedMissingAt
+    ? `<span class="tag ta" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
+    : '';
   document.getElementById('so-modal-title').textContent = 'SO '+so;
   document.getElementById('so-modal-summary').innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -2584,6 +2633,7 @@ function openSOModal(so){
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span class="mono" style="font-size:13px;font-weight:600;color:var(--text)">${fmtDate(t0.soShipRaw)}</span>
       ${approvalBadge}
+      ${flaggedBadge}
       ${isMgr && !allApproved ? `<button class="approve-btn" onclick="confirmColorThenApproveAll('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
     </div>`;
   document.getElementById('so-modal-body').innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${buildSODetailRows(so, travelers, soPhotos, isMgr)}</tbody></table>`;
