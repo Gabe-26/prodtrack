@@ -2242,12 +2242,15 @@ function renderOrdersSummary(groups){
   const wrap = document.getElementById('orders-summary');
   if(!wrap) return;
   if(!['tomorrow','all'].includes(activeView)){ wrap.style.display='none'; return; }
-  const totalTravelers = groups.reduce((a,g)=>a+g.travelers.length,0);
-  const totalPhotos = groups.filter(g=>visiblePhotosFor(g.so).length>0).length;
-  const totalNone = groups.length - totalPhotos;
+  // Possibly-completed SOs stay visible in the table with their badge, but
+  // are excluded from these tallies so they don't skew production counts.
+  const activeGroups = groups.filter(g=>!g.travelers[0]?.flaggedMissingAt);
+  const totalTravelers = activeGroups.reduce((a,g)=>a+g.travelers.length,0);
+  const totalPhotos = activeGroups.filter(g=>visiblePhotosFor(g.so).length>0).length;
+  const totalNone = activeGroups.length - totalPhotos;
   wrap.style.display='';
   wrap.innerHTML = `
-    <div class="sum-item"><div class="sum-label">Orders</div><div class="sum-val amber">${groups.length}</div></div>
+    <div class="sum-item"><div class="sum-label">Orders</div><div class="sum-val amber">${activeGroups.length}</div></div>
     <div class="sum-item"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
     <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
     <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
@@ -3538,6 +3541,7 @@ function generatePrintReport(startDate, endDate, deptSet){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
 
   const filtered = orders.filter(o=>{
+    if(o.flaggedMissingAt) return false; // possibly-completed — excluded entirely, not just uncounted
     if(!o.soShipRaw || o.soShipRaw < startDate || o.soShipRaw > endDate) return false;
     const primaryVisible = !o.department || deptSet.has(o.department);
     const extraVisible = !!o.deptExtra && deptSet.has(o.deptExtra);
