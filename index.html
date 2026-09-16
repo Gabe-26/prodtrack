@@ -1788,7 +1788,7 @@ async function doDeleteUser(){
 // the file is the Product Line alternative format, which doesn't carry
 // this field at all — never guessed at a position for that format.
 function extractCsvReportTimestamp(txt){
-  const lines = txt.split('\n');
+  const lines = splitCSVRecords(txt);
   const firstRow = parseRow(lines.find(l=>l.trim())||'');
   if(firstRow.length < 25) return null;
   for(const line of lines){
@@ -1823,7 +1823,7 @@ function staleCsvRespond(confirmed){
 }
 function parseCSV(txt){
   const out=[];
-  const lines=txt.split('\n');
+  const lines=splitCSVRecords(txt);
   if(!lines.length) return out;
  
   // Detect format by column count of first non-empty line
@@ -1910,6 +1910,26 @@ function parseRow(line){
   }
   r.push(cur.trim());
   return r;
+}
+// Splits raw CSV text into logical records, respecting quoted fields. Sage
+// sometimes wraps a long quoted Description onto a literal second line
+// (verified in a real "Open Work Ticket" export) — a plain txt.split('\n')
+// cuts that record in half and both halves silently fail to parse. Only a
+// newline OUTSIDE an open quote ends a record here; parseRow() still does
+// the actual column split + unescaping on each record string this returns.
+function splitCSVRecords(txt){
+  const records=[]; let cur='', inQ=false, i=0;
+  while(i<txt.length){
+    const ch=txt[i];
+    if(ch==='"'){
+      if(inQ && txt[i+1]==='"'){ cur+='""'; i+=2; continue; }
+      inQ=!inQ; cur+=ch; i++; continue;
+    }
+    if(ch==='\n' && !inQ){ records.push(cur); cur=''; i++; continue; }
+    cur+=ch; i++;
+  }
+  if(cur.trim()!=='') records.push(cur);
+  return records;
 }
 const dzEl=document.getElementById('dz');
 dzEl.addEventListener('dragover',e=>{e.preventDefault();dzEl.classList.add('drag');});
@@ -4096,7 +4116,7 @@ function openCustomerListModal(){
 }
 function closeCustomerListModal(){ document.getElementById('customer-list-modal').classList.remove('open'); }
 function parseCustomerCSV(txt){
-  const lines = txt.split('\n').filter(l=>l.trim());
+  const lines = splitCSVRecords(txt).filter(l=>l.trim());
   if(!lines.length) return [];
   let headerRowIdx=-1, noIdx=-1, nameIdx=-1;
   for(let i=0;i<Math.min(5,lines.length);i++){
@@ -4145,7 +4165,7 @@ async function handleCustomerCSVUpload(file){
   document.getElementById('cl-file-input').value = '';
 }
 function parseWoodCodesCSV(txt){
-  const lines = txt.split(/\r?\n/).filter(l=>l.trim());
+  const lines = splitCSVRecords(txt).filter(l=>l.trim());
   if(!lines.length) return null;
   let headerIdx=-1, codeIdx=-1, descIdx=-1, prodIdx=-1;
   for(let i=0;i<Math.min(5,lines.length);i++){
