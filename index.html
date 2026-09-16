@@ -957,6 +957,19 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
                 </button>
               </div>
             </div>
+            <div class="archive-box" id="archive-box-restore-range">
+              <div class="archive-box-title">Restore by ship date range</div>
+              <div class="archive-box-desc">Move all archived orders with a ship date in this range back to the main dashboard.</div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+                <input type="date" id="restore-start-date" class="archive-date-input">
+                <span style="color:var(--text3);font-size:12px">to</span>
+                <input type="date" id="restore-end-date" class="archive-date-input">
+                <button class="btn" onclick="restoreByDateRange()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 16 3 21 8 21"/><path d="M3 21l6-6"/><path d="M21 8V3h-5"/><path d="M21 3l-6 6"/></svg>
+                  Restore these orders
+                </button>
+              </div>
+            </div>
           </div>
           <div class="archive-list-header">
             <div style="font-size:13px;font-weight:600;color:var(--text)">Archived orders <span id="archive-count" style="font-family:var(--mono);font-size:11px;color:var(--text3)"></span></div>
@@ -1238,6 +1251,7 @@ function showApp(){
   document.getElementById('nav-wood-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('archive-box-bydate').style.display = uname === 'zgta26' ? '' : 'none';
   document.getElementById('archive-box-shipped').style.display = uname === 'zgta26' ? '' : 'none';
+  document.getElementById('archive-box-restore-range').style.display = uname === 'zgta26' ? '' : 'none';
   document.getElementById('nav-cus-traveler').style.display = (isProd || uname === 'zgta26') ? 'flex' : 'none';
   document.getElementById('nav-changedates').style.display = (isProd || uname === 'zgta26') ? 'flex' : 'none';
   // Body classes drive CSS permissions
@@ -4408,6 +4422,24 @@ async function restoreSO(so){
     });
     await loadOrders(); await loadArchivedOrders(); updateAll(); renderArchive();
     toast('Order restored',`SO ${so} is back in the main dashboard.`,'green');
+  } catch(e){toast('Error',e.message,'red');}
+}
+async function restoreByDateRange(){
+  if(currentProfile?.username!=='zgta26'){toast('Access denied','Only the owner account can restore orders.','red');return;}
+  const start = document.getElementById('restore-start-date').value;
+  const end = document.getElementById('restore-end-date').value;
+  if(!start || !end){toast('Pick both dates','Please select a start and end date.','amber');return;}
+  if(start>end){toast('Invalid range','Start date must be on or before end date.','amber');return;}
+  const matching = archivedOrders.filter(g=>g.soShipRaw && g.soShipRaw>=start && g.soShipRaw<=end).map(g=>g.so);
+  if(!matching.length){toast('Nothing to restore',`No archived orders shipping between ${fmtDate(start)} and ${fmtDate(end)}.`,'amber');return;}
+  if(!confirm(`Restore ${matching.length} order${matching.length>1?'s':''} shipping between ${fmtDate(start)} and ${fmtDate(end)}? They will reappear in the main dashboard.`)) return;
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/orders?archived=eq.true&so_ship=gte.${start}&so_ship=lte.${end}`,{
+      method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
+      body: JSON.stringify({archived:false})
+    });
+    await loadOrders(); await loadArchivedOrders(); updateAll(); renderArchive();
+    toast(`${matching.length} order${matching.length>1?'s':''} restored`,'Back in the main dashboard.','green');
   } catch(e){toast('Error',e.message,'red');}
 }
  
