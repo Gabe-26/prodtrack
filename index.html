@@ -1082,6 +1082,7 @@ let departmentBatches = [], readBatchIds = new Set();
 let pendingDateChanges = []; // staged bulk date changes: {so, customer, oldRaw, newRaw}
 let moveLogCache = {}; // per-SO ship-date-change history, fetched on demand when a row/modal opens
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
+let archExpanded = new Set(); // which archived SOs are expanded in the Archive tab (read-only view)
 let summaryPhotoFilter = null; // null | 'photo' | 'nophoto' — set by clicking a tile in the orders summary box
 let collapsedTravelers = new Set();
 let missingFromCSV = [];
@@ -4468,16 +4469,79 @@ function renderArchive(){
     const hasPic=soPhotos.length>0;
     const viaTag=makeViaTag(g.via, g.travelers[0]?.location||'');
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length}</span>`:`<span class="tag td">No photo</span>`;
-    return `<tr class="archive-row">
-      <td style="font-family:var(--mono);font-weight:600;color:var(--text)">${g.so}</td>
+    const isOpen=archExpanded.has(g.so);
+    return `<tr class="archive-row" onclick="toggleArchiveSO('${g.so}')" style="cursor:pointer">
+      <td style="font-family:var(--mono);font-weight:600;color:var(--text)"><span class="chevron${isOpen?' open':''}" style="margin-right:6px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>${g.so}</td>
       <td><span class="mono">${g.soShip}</span></td>
       <td>${viaTag}</td>
       <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${g.customer}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--text3)">${g.travelers.length}</td>
       <td>${picTag}</td>
-      <td>${currentProfile?.username==='zgta26'?`<button class="btn" onclick="restoreSO('${g.so}')">Restore</button>`:`<span class="tag td" title="Only the owner account can restore archived orders">Locked</span>`}</td>
+      <td onclick="event.stopPropagation()">${currentProfile?.username==='zgta26'?`<button class="btn" onclick="restoreSO('${g.so}')">Restore</button>`:`<span class="tag td" title="Only the owner account can restore archived orders">Locked</span>`}</td>
+    </tr>${isOpen?`<tr class="archive-detail-row"><td colspan="7" style="padding:0">${buildArchiveDetailRows(g.so, g.travelers, soPhotos)}</td></tr>`:''}`;
+  }).join('');
+}
+function toggleArchiveSO(so){
+  if(archExpanded.has(so)) archExpanded.delete(so); else archExpanded.add(so);
+  renderArchive();
+}
+// Read-only travelers/photos/comments for an archived SO — deliberately no
+// upload zone, no comment box, no approve/delete controls. This is a
+// look-don't-touch view so a manager can check what shipped without
+// restoring the order first.
+function buildArchiveDetailRows(so, travelers, soPhotos){
+  const travRows = travelers.map(o=>{
+    const isApproved = !!approvals[o.traveler];
+    const approvalInfo = approvals[o.traveler];
+    const statusTag = isApproved
+      ? `<span class="tag tg" title="Approved by ${approvalInfo.approved_by}">✓ Approved</span>`
+      : `<span class="tag td">Pending</span>`;
+    return `<tr>
+      <td style="font-size:12px;font-family:var(--mono);color:var(--text);font-weight:600;padding:6px 10px">${o.traveler}</td>
+      <td style="color:var(--text);font-size:13px;padding:6px 10px">${o.desc}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text);padding:6px 10px">${o.item}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:13px;color:var(--text);padding:6px 10px">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:6px 10px">${o.line}</td>
+      <td style="padding:6px 10px">${statusTag}</td>
     </tr>`;
   }).join('');
+  const visiblePhotos = (soPhotos||[]).filter(p=>isDeptVisible(p.department));
+  const thumbs = visiblePhotos.map(p=>`
+    <div class="photo-thumb-wrap">
+      <img class="photo-thumb" src="${p.url}" loading="lazy"
+        title="${p.filename} · ${p.uploaded_by} · ${new Date(p.uploaded_at).toLocaleString()}"
+        onclick="event.stopPropagation();openLB('${p.url}','${p.filename}','${p.uploaded_by||''}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}','${so}')">
+      ${p.department?`<div style="position:absolute;bottom:-6px;left:-6px">${makeDeptPill(p.department)}</div>`:''}
+    </div>`).join('');
+  const threadComments = (soComments[so]||[]).filter(c=>isDeptVisible(c.department));
+  const commentsHtml = threadComments.map(c=>`<div class="comment-item">
+      <div class="comment-avatar">${c.actor_initials}</div>
+      <div class="comment-bubble">
+        <div class="comment-meta">
+          <span style="color:var(--text2);font-weight:600">${c.actor}</span>
+          <span>${new Date(c.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div class="comment-body">${escapeHtml(c.body)}</div>
+      </div>
+    </div>`).join('');
+  return `<div style="padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)" onclick="event.stopPropagation()">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">
+        <th style="text-align:left;padding:4px 10px">Traveler</th><th style="text-align:left;padding:4px 10px">Description</th>
+        <th style="text-align:left;padding:4px 10px">Item</th><th style="text-align:right;padding:4px 10px">Qty</th>
+        <th style="text-align:left;padding:4px 10px">Line</th><th style="text-align:left;padding:4px 10px">Status</th>
+      </tr></thead>
+      <tbody>${travRows}</tbody>
+    </table>
+    <div style="margin-top:12px">
+      <div style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Photos</div>
+      ${visiblePhotos.length?`<div class="photo-thumbs">${thumbs}</div>`:`<div style="font-size:12px;color:var(--text3)">No photos</div>`}
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Comments</div>
+      ${threadComments.length?commentsHtml:`<div style="font-size:12px;color:var(--text3)">No comments</div>`}
+    </div>
+  </div>`;
 }
  
  
