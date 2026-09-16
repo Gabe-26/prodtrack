@@ -420,6 +420,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 #orders-summary .sum-val.amber{color:var(--amber)}
 #orders-summary .sum-val.green{color:var(--green)}
 #orders-summary .sum-val.red{color:var(--red)}
+#orders-summary .sum-item.clickable{cursor:pointer}
+#orders-summary .sum-item.clickable:hover{background:var(--surface2)}
+#orders-summary .sum-item.active{background:var(--surface2);box-shadow:inset 0 0 0 1px var(--accent)}
 .hidden{display:none}
 @media(max-width:700px),(max-height:500px) and (orientation:landscape){
   #orders-summary{grid-template-columns:repeat(2,1fr);margin:0 10px 10px}
@@ -1066,6 +1069,7 @@ let departmentBatches = [], readBatchIds = new Set();
 let pendingDateChanges = []; // staged bulk date changes: {so, customer, oldRaw, newRaw}
 let moveLogCache = {}; // per-SO ship-date-change history, fetched on demand when a row/modal opens
 let expanded = new Set(), allExp = false, activeLine = '', activeView = 'tomorrow';
+let summaryPhotoFilter = null; // null | 'photo' | 'nophoto' — set by clicking a tile in the orders summary box
 let collapsedTravelers = new Set();
 let missingFromCSV = [];
 let pendingDelPhotoId = null, pendingDelStoragePath = null, pendingDelSO = null, pendingDelFilename = null;
@@ -2270,11 +2274,15 @@ function renderOrdersSummary(groups){
   const totalNone = activeGroups.length - totalPhotos;
   wrap.style.display='';
   wrap.innerHTML = `
-    <div class="sum-item"><div class="sum-label">Orders</div><div class="sum-val amber">${activeGroups.length}</div></div>
-    <div class="sum-item"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
-    <div class="sum-item"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
+    <div class="sum-item clickable${!summaryPhotoFilter?' active':''}" onclick="setSummaryPhotoFilter(null)"><div class="sum-label">Orders</div><div class="sum-val amber">${activeGroups.length}</div></div>
+    <div class="sum-item clickable${summaryPhotoFilter==='photo'?' active':''}" onclick="setSummaryPhotoFilter('photo')"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
+    <div class="sum-item clickable${summaryPhotoFilter==='nophoto'?' active':''}" onclick="setSummaryPhotoFilter('nophoto')"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
     <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
   `;
+}
+function setSummaryPhotoFilter(mode){
+  summaryPhotoFilter = (mode!==null && summaryPhotoFilter===mode) ? null : mode;
+  render();
 }
 function render(){
   if(!['tomorrow','all','pending','done'].includes(activeView)) return;
@@ -2329,9 +2337,19 @@ function render(){
  
   renderOrdersSummary(groups);
 
+  // The tile toggle only narrows what's shown below — the tiles above always
+  // reflect the full filtered set so their own numbers don't move as you toggle.
+  let displayGroups = groups;
+  if((activeView==='tomorrow'||activeView==='all') && summaryPhotoFilter){
+    displayGroups = groups.filter(g=>{
+      const hasPhoto = visiblePhotosFor(g.so).length>0;
+      return summaryPhotoFilter==='photo' ? hasPhoto : !hasPhoto;
+    });
+  }
+
   const tbody=document.getElementById('tbody');
   const emf=document.getElementById('empty-f');
-  if(!groups.length&&orders.length){tbody.innerHTML='';emf.style.display='flex';return;}
+  if(!displayGroups.length&&orders.length){tbody.innerHTML='';emf.style.display='flex';return;}
   emf.style.display='none';
  
   const anyOpen=allExp||expanded.size>0;
@@ -2341,7 +2359,7 @@ function render(){
  
   let html='';
   const openedSOs=[];
-  for(const {so,travelers} of groups){
+  for(const {so,travelers} of displayGroups){
     const soPhotos=visiblePhotosFor(so), hasPic=soPhotos.length>0;
     const isOpen=allExp||expanded.has(so);
     const via0=travelers[0].via, customer=travelers[0].customer, soShipRaw=travelers[0].soShipRaw;
@@ -4425,6 +4443,7 @@ function renderArchive(){
  
 function sv(v){
   activeView=v;
+  summaryPhotoFilter=null;
   const showMain=['tomorrow','all','pending','done'].includes(v);
   const df=document.getElementById('f-date');
   if(df) df.style.display=v==='tomorrow'?'none':'inline-block';
