@@ -4054,7 +4054,7 @@ function generateLabelDocument(so, cust, po, skids){
         </div>
         <div class="lbl-item-desc">${escapeHtml(it.desc)}</div>
       </div>`).join('');
-      pages += `<div class="label" style="--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.printScale};--lbl-item-dept-scale:${cfg.printItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px">
+      const pageHtml = `<div class="label" style="--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.printScale};--lbl-item-dept-scale:${cfg.printItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px">
       <div class="lbl-so">${escapeHtml(String(so).padStart(7,'0'))}</div>
       <div class="lbl-line">CUST: ${escapeHtml(cust)}</div>
       <div class="lbl-line">SHIP VIA: ${t0.via||''}</div>
@@ -4069,6 +4069,7 @@ function generateLabelDocument(so, cust, po, skids){
         <div class="lbl-page">${i+1} of ${total}</div>
       </div>
     </div>`;
+      pages += pageHtml + pageHtml; // print 2 copies of every label, back-to-back
     });
   });
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ProdTrack — Label ${so}</title>
