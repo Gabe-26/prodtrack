@@ -428,9 +428,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 #orders-summary .sum-item.active{background:var(--surface2);box-shadow:inset 0 0 0 1px var(--accent)}
 .hidden{display:none}
 @media(max-width:700px),(max-height:500px) and (orientation:landscape){
-  #orders-summary{grid-template-columns:repeat(2,1fr);margin:0 10px 10px}
-  #orders-summary .sum-item{padding:8px 10px}
-  #orders-summary .sum-val{font-size:18px}
+  #orders-summary{grid-template-columns:repeat(4,1fr);margin:0 8px 8px}
+  #orders-summary .sum-item{padding:6px 4px}
+  #orders-summary .sum-label{font-size:8px;letter-spacing:0.02em}
+  #orders-summary .sum-val{font-size:15px}
 }
 </style>
 </head>
