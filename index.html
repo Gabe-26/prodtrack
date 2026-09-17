@@ -947,16 +947,6 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
                 </button>
               </div>
             </div>
-            <div class="archive-box" id="archive-box-shipped">
-              <div class="archive-box-title">Archive already shipped</div>
-              <div class="archive-box-desc">Move all orders whose ship date has already passed (before today) to the archive.</div>
-              <div style="margin-top:12px">
-                <button class="btn danger" onclick="archiveShipped()">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/></svg>
-                  Archive all past orders
-                </button>
-              </div>
-            </div>
             <div class="archive-box" id="archive-box-restore-range">
               <div class="archive-box-title">Restore by ship date range</div>
               <div class="archive-box-desc">Move all archived orders with a ship date in this range back to the main dashboard.</div>
@@ -1251,7 +1241,6 @@ function showApp(){
   document.getElementById('nav-holidays').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-wood-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('archive-box-bydate').style.display = uname === 'zgta26' ? '' : 'none';
-  document.getElementById('archive-box-shipped').style.display = uname === 'zgta26' ? '' : 'none';
   document.getElementById('archive-box-restore-range').style.display = uname === 'zgta26' ? '' : 'none';
   document.getElementById('nav-cus-traveler').style.display = (isProd || uname === 'zgta26') ? 'flex' : 'none';
   document.getElementById('nav-changedates').style.display = (isProd || uname === 'zgta26') ? 'flex' : 'none';
@@ -4395,22 +4384,6 @@ async function archiveByDate(){
     });
     await loadOrders(); await loadArchivedOrders(); updateAll(); renderArchive();
     toast(`${uniqueSOs.length} order${uniqueSOs.length>1?'s':''} archived`,`Moved to archive successfully.`,'green');
-  } catch(e){toast('Error',e.message,'red');}
-}
- 
-async function archiveShipped(){
-  if(currentProfile?.username!=='zgta26'){toast('Access denied','Only the owner account can archive.','red');return;}
-  const today = new Date().toISOString().slice(0,10);
-  const pastOrders = [...new Set(orders.filter(o=>o.soShipRaw&&o.soShipRaw<today).map(o=>o.so))];
-  if(!pastOrders.length){toast('Nothing to archive','No past orders found in the dashboard.','amber');return;}
-  if(!confirm(`Archive ${pastOrders.length} order${pastOrders.length>1?'s':''} with past ship dates? They will be hidden from the main dashboard.`)) return;
-  try{
-    await fetch(`${SUPA_URL}/rest/v1/orders?archived=eq.false&so_ship=lt.${today}`,{
-      method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
-      body: JSON.stringify({archived:true})
-    });
-    await loadOrders(); await loadArchivedOrders(); updateAll(); renderArchive();
-    toast(`${pastOrders.length} order${pastOrders.length>1?'s':''} archived`,'Moved to archive successfully.','green');
   } catch(e){toast('Error',e.message,'red');}
 }
  
