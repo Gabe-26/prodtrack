@@ -4074,8 +4074,8 @@ function renderPrintLabelSkids(){
         <span style="flex:1;font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(it.item)} · ${escapeHtml(it.desc)}</span>
         <input type="number" min="0" step="1" value="${it.qty}" class="modal-input" style="width:64px;padding:4px 6px" onchange="updateSkidItemQty(${si},${ii},this.value)">
         <button class="btn" style="padding:2px 8px;font-size:11px" onclick="toggleEditSkidItem(${si},${ii})" title="Edit wording">✎</button>
-        <select class="modal-input" style="width:auto;padding:2px 4px;font-size:11px" title="Move to another skid" onchange="moveItemToSkid(${si},${ii},this.value);this.value=''">
-          <option value="">→ Move</option>
+        <select class="modal-input" style="width:auto;padding:2px 2px;font-size:11px" title="Move to another skid" onchange="moveItemToSkid(${si},${ii},this.value);this.value=''">
+          <option value="">Move</option>
           ${moveOptions}
           <option value="new">+ New skid</option>
         </select>
