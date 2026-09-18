@@ -4015,18 +4015,35 @@ function setPrintLabelDept(dept){
   document.getElementById('pl-cust').value = custMatch || '';
   const cap = LABEL_DEPT_CONFIG[dept].cap;
   labelSkids = [];
-  labelDeptTravelers.forEach(t=>{
-    let remaining = t.qty;
-    if(remaining <= cap){
-      labelSkids.push({items:[{traveler:t.traveler, item:t.item, desc:t.desc, qty:remaining}]});
-    } else {
-      while(remaining > 0){
-        const q = Math.min(cap, remaining);
-        labelSkids.push({items:[{traveler:t.traveler, item:t.item, desc:t.desc, qty:q}]});
-        remaining -= q;
+  if(dept==='gear'){
+    // Suggested starting layout for Gear skids (Gabriel's grouping, no qty cap applied here):
+    // Section/Topper/Lattice Profile/Profile/Bend share one skid (this is also the catch-all
+    // for anything still unclassified as Misc, or mistakenly tagged Gates); Post/Post & Rail
+    // share a second skid; Arb/Perg gets its own skid, kept separate from the other two.
+    const GEAR_POST_GROUP = new Set(['post','post_and_rail']);
+    const groups = [[],[],[]]; // [0]=sections+catch-all, [1]=post, [2]=arb/perg
+    labelDeptTravelers.forEach(t=>{
+      const type = classifyGearItem(t.item);
+      const item = {traveler:t.traveler, item:t.item, desc:t.desc, qty:t.qty};
+      if(type==='arb_perg') groups[2].push(item);
+      else if(GEAR_POST_GROUP.has(type)) groups[1].push(item);
+      else groups[0].push(item);
+    });
+    groups.forEach(items=>{ if(items.length) labelSkids.push({items}); });
+  } else {
+    labelDeptTravelers.forEach(t=>{
+      let remaining = t.qty;
+      if(remaining <= cap){
+        labelSkids.push({items:[{traveler:t.traveler, item:t.item, desc:t.desc, qty:remaining}]});
+      } else {
+        while(remaining > 0){
+          const q = Math.min(cap, remaining);
+          labelSkids.push({items:[{traveler:t.traveler, item:t.item, desc:t.desc, qty:q}]});
+          remaining -= q;
+        }
       }
-    }
-  });
+    });
+  }
   document.getElementById('pl-err').textContent = '';
   renderPrintLabelSkids();
 }
