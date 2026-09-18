@@ -4054,6 +4054,7 @@ function renderPrintLabelSkids(){
   const allowCombine = LABEL_DEPT_CONFIG[labelDept].allowCombine;
   wrap.innerHTML = labelSkids.map((skid,si)=>{
     const itemOptions = labelDeptTravelers.map(t=>`<option value="${t.traveler}">${t.traveler} — ${t.item}</option>`).join('');
+    const moveOptions = labelSkids.map((_,ti)=> ti===si ? '' : `<option value="${ti}">Skid ${ti+1}</option>`).join('');
     const rows = skid.items.map((it,ii)=>{
       const key = si+'-'+ii;
       if(labelEditingItems.has(key)){
@@ -4073,6 +4074,11 @@ function renderPrintLabelSkids(){
         <span style="flex:1;font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(it.item)} · ${escapeHtml(it.desc)}</span>
         <input type="number" min="0" step="1" value="${it.qty}" class="modal-input" style="width:64px;padding:4px 6px" onchange="updateSkidItemQty(${si},${ii},this.value)">
         <button class="btn" style="padding:2px 8px;font-size:11px" onclick="toggleEditSkidItem(${si},${ii})" title="Edit wording">✎</button>
+        <select class="modal-input" style="width:auto;padding:2px 4px;font-size:11px" title="Move to another skid" onchange="moveItemToSkid(${si},${ii},this.value);this.value=''">
+          <option value="">→ Move</option>
+          ${moveOptions}
+          <option value="new">+ New skid</option>
+        </select>
         ${skid.items.length>1 ? `<button class="btn" style="padding:2px 8px;font-size:11px" onclick="removeSkidItem(${si},${ii})">✕</button>` : ''}
       </div>`;
     }).join('');
@@ -4196,6 +4202,16 @@ function updateSkidItemQty(si,ii,val){
 }
 function removeSkidItem(si,ii){ labelSkids[si].items.splice(ii,1); renderPrintLabelSkids(); }
 function removeSkid(si){ labelSkids.splice(si,1); renderPrintLabelSkids(); }
+function moveItemToSkid(si,ii,targetVal){
+  if(targetVal==='') return;
+  const item = labelSkids[si].items[ii];
+  if(!item) return;
+  labelSkids[si].items.splice(ii,1);
+  let targetIndex = targetVal==='new' ? labelSkids.length : Number(targetVal);
+  if(targetVal==='new') labelSkids.push({items:[]});
+  labelSkids[targetIndex].items.push(item);
+  renderPrintLabelSkids();
+}
 function addItemToSkid(si,travelerNum){
   if(!travelerNum) return;
   const t = labelDeptTravelers.find(x=>String(x.traveler)===String(travelerNum));
