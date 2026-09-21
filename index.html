@@ -604,8 +604,8 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div id="pl-preview" style="max-height:65vh;overflow-y:auto"></div>
       <div style="flex:1;min-width:0">
         <div class="modal-field">
-          <div class="modal-label">CUST code</div>
-          <input class="modal-input" id="pl-cust" type="text" placeholder="e.g. 01-VF_610" oninput="renderPrintLabelPreview()">
+          <div class="modal-label">Customer name</div>
+          <input class="modal-input" id="pl-cust" type="text" placeholder="e.g. VF FENCE LLC" oninput="renderPrintLabelPreview()">
         </div>
         <div class="modal-field">
           <div class="modal-label">PO#</div>
@@ -4139,7 +4139,7 @@ function setPrintLabelDept(dept){
     document.getElementById('pl-dept-'+d+'-btn')?.classList.toggle('primary', dept===d);
   });
   labelEditingItems = new Set();
-  const custMatch = customerNameMap.get((labelDeptTravelers[0]?.customer||'').trim().toUpperCase());
+  const custMatch = (labelDeptTravelers[0]?.customer||'').trim();
   const cap = LABEL_DEPT_CONFIG[dept].cap;
   const statusEl = document.getElementById('pl-print-status');
   const prevPrint = labelPrints[labelSO+'|'+dept];
