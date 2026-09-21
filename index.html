@@ -4269,6 +4269,13 @@ function labelScaleForItemCount(n){
   const table = {1:1, 2:0.8, 3:0.66, 4:0.56, 5:0.48, 6:0.42, 7:0.37};
   return table[n] || 0.37;
 }
+function custNameFontSize(name){
+  const len = (name||'').length;
+  if(len<=12) return 22;
+  if(len<=18) return 18;
+  if(len<=26) return 15;
+  return 12;
+}
 const MAX_ITEMS_PER_LABEL_PAGE = 7;
 function viaColorHex(via, location){
   if(via==='OUR TRUCK') return '#2ea043';
@@ -4303,6 +4310,7 @@ function renderPrintLabelPreview(){
   const wrapW = cfg.widthIn*72, wrapH = cfg.heightIn*72; // 96px/in * 0.75 scale
   const cust = document.getElementById('pl-cust')?.value.trim() || '';
   const po = document.getElementById('pl-po')?.value.trim() || '';
+  const custLineSize = labelDept==='gate' ? cfg.lineSizePreview : custNameFontSize(cust);
   const shipDate = fmtDate(t0.soShipRaw);
   const validSkids = labelSkids.filter(s=>s.items.length);
   const total = validSkids.length;
@@ -4317,7 +4325,7 @@ function renderPrintLabelPreview(){
         </div>
         <div class="lbl-item-desc">${escapeHtml(it.desc)}</div>
       </div>`).join('');
-      html += `<div class="pl-preview-wrap" style="width:${wrapW}px;height:${wrapH}px"><div class="pl-preview-page" style="width:${cfg.widthIn}in;height:${cfg.heightIn}in;--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.previewScale};--lbl-item-dept-scale:${cfg.previewItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px;--lbl-line-size:${cfg.lineSizePreview}px">
+      html += `<div class="pl-preview-wrap" style="width:${wrapW}px;height:${wrapH}px"><div class="pl-preview-page" style="width:${cfg.widthIn}in;height:${cfg.heightIn}in;--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.previewScale};--lbl-item-dept-scale:${cfg.previewItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px;--lbl-line-size:${custLineSize}px">
       <div class="lbl-so">${escapeHtml(String(labelSO).padStart(7,'0'))}</div>
       <div class="lbl-line">CUST: <span class="lbl-cust-name">${escapeHtml(cust)}</span></div>
       <div class="lbl-line">SHIP VIA: ${escapeHtml(t0.via||'')}</div>
@@ -4414,6 +4422,7 @@ function generateLabelDocument(so, cust, po, skids){
   const t0 = labelDeptTravelers[0];
   const cfg = LABEL_DEPT_CONFIG[labelDept];
   const shipDate = fmtDate(t0.soShipRaw);
+  const custLineSize = labelDept==='gate' ? cfg.lineSizePrint : custNameFontSize(cust);
   const total = skids.length;
   let pages = '';
   skids.forEach((skid,i)=>{
@@ -4426,7 +4435,7 @@ function generateLabelDocument(so, cust, po, skids){
         </div>
         <div class="lbl-item-desc">${escapeHtml(it.desc)}</div>
       </div>`).join('');
-      const pageHtml = `<div class="label" style="--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.printScale};--lbl-item-dept-scale:${cfg.printItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px;--lbl-line-size:${cfg.lineSizePrint}px">
+      const pageHtml = `<div class="label" style="--lbl-scale:${labelScaleForItemCount(chunk.length)};--lbl-dept-scale:${cfg.printScale};--lbl-item-dept-scale:${cfg.printItemScale};--lbl-top-reduce:${cfg.topReducePx}px;--lbl-line-gap:${cfg.lineGapPx}px;--lbl-line-size:${custLineSize}px">
       <div class="lbl-so">${escapeHtml(String(so).padStart(7,'0'))}</div>
       <div class="lbl-line">CUST: <span class="lbl-cust-name">${escapeHtml(cust)}</span></div>
       <div class="lbl-line">SHIP VIA: ${t0.via||''}</div>
