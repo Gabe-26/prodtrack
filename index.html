@@ -1283,7 +1283,7 @@ function deptPillsForTravelers(travelers){
   return present.map(makeDeptPill).join('');
 }
 function soLabelPrintedBadge(so){
-  const depts = ['wood','gate','gear'].filter(d=>labelPrints[so+'|'+d]);
+  const depts = ['wood','gate','gear'].filter(d=>labelPrints[so+'|'+d] && activeDepts.has(d));
   if(!depts.length) return '';
   const title = depts.map(d=>{
     const p = labelPrints[so+'|'+d];
