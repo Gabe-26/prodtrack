@@ -2598,9 +2598,9 @@ function render(){
     const picTag=hasPic?`<span class="tag tg">✓ ${soPhotos.length} photo${soPhotos.length>1?'s':''}</span>`:`<span class="tag ta">No photo</span>`;
  
     const isMgr = currentProfile?.role === 'manager';
-    const hasWoodTravelers = orders.some(o=>o.so===so && o.department==='wood');
-    const hasGateTravelers = orders.some(o=>o.so===so && o.department==='gate');
-    const hasGearTravelers = orders.some(o=>o.so===so && o.department==='gear');
+    const hasWoodTravelers = activeDepts.has('wood') && orders.some(o=>o.so===so && o.department==='wood');
+    const hasGateTravelers = activeDepts.has('gate') && orders.some(o=>o.so===so && o.department==='gate');
+    const hasGearTravelers = activeDepts.has('gear') && orders.some(o=>o.so===so && o.department==='gear');
     // Approval status for SO
     const approvedTravelers = travelers.filter(o => approvals[o.traveler]);
     const allApproved = travelers.length > 0 && approvedTravelers.length === travelers.length;
@@ -4113,9 +4113,9 @@ const LABEL_DEPT_CONFIG = {
 function openPrintLabelModal(so){
   if(currentProfile?.role!=='manager') return;
   const travelersByDept = {
-    wood: orders.filter(o=>o.so===so && o.department==='wood'),
-    gate: orders.filter(o=>o.so===so && o.department==='gate'),
-    gear: orders.filter(o=>o.so===so && o.department==='gear')
+    wood: activeDepts.has('wood') ? orders.filter(o=>o.so===so && o.department==='wood') : [],
+    gate: activeDepts.has('gate') ? orders.filter(o=>o.so===so && o.department==='gate') : [],
+    gear: activeDepts.has('gear') ? orders.filter(o=>o.so===so && o.department==='gear') : []
   };
   const availableDepts = Object.keys(travelersByDept).filter(d=>travelersByDept[d].length);
   if(!availableDepts.length){ toast('No Wood/Gate/Gear travelers', 'This SO has no Wood, Gate, or Gear department travelers.', 'amber'); return; }
