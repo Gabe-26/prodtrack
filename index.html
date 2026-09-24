@@ -130,11 +130,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .metrics{flex-shrink:0}.toolbar{flex-shrink:0}
   .table-wrap{flex:1;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;padding-bottom:env(safe-area-inset-bottom,40px);min-height:0;min-width:0}
   #main-table{table-layout:fixed}
-  #thead-row th:nth-child(1){width:40px!important}
-  #thead-row th:nth-child(2){width:20px!important}
-  #thead-row th:nth-child(3){width:1px!important}
-  #thead-row th:nth-child(4){width:55px!important}
-  #thead-row th:nth-child(6){width:40px!important}
+  #thead-row th:nth-child(1){width:14.93%!important}
+  #thead-row th:nth-child(2){width:21.33%!important}
+  #thead-row th:nth-child(3){width:11.2%!important}
+  #thead-row th:nth-child(4){width:33.87%!important}
+  #thead-row th:nth-child(6){width:18.67%!important}
+
+  /* fit-content forces this to its natural (desktop) size regardless of
+     the mobile column's actual width, overflowing past the cell — let it
+     size to the cell instead */
+  .date-click-wrap{width:auto!important}
   .approve-btn{font-size:10px;padding:3px 6px}
   .upload-view,.users-view{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,40px)}
   .pill:not(.live):not(.mgr){display:none}
@@ -174,23 +179,33 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   /* SO row sizing */
   .so-row td{padding:6px 4px!important;font-size:13px!important}
   .so-row td:first-child{padding-left:6px}
-  .so-dept-wrap{display:block;width:max-content;max-width:none;white-space:nowrap;margin-left:19px;margin-top:2px}
+  .so-dept-wrap{display:block;width:max-content;max-width:none;white-space:nowrap;margin-left:4px!important;margin-top:2px}
 
   /* SO number */
   .so-row td:first-child span[style*="font-size:13px"]{font-size:13px!important}
 
   /* Ship date */
-  .so-row td:nth-child(2) span{font-size:13px!important}
+  .so-row td:nth-child(2) span{font-size:12px!important}
+  .so-num-text{font-size:11px!important}
 
   /* Customer */
-  .so-row td:nth-child(4){font-size:13px!important;max-width:78px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .so-row td:nth-child(4){font-size:12px!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .so-row td:nth-child(2){padding-left:12px!important}
+  .so-row td:nth-child(3){padding-left:0!important}
+  .so-badges-cell{padding-left:19px!important}
+
+  /* Mobile opens a modal on tap, not an inline expand — the chevron and the
+     department-status accent bar are desktop-only affordances */
+  .so-row .chevron{display:none!important}
+  .so-row.done td:first-child{border-left:none!important}
+  .so-row.pending td:first-child{border-left:none!important}
 
   /* Photos tag */
   .so-row .tag{font-size:10px;padding:2px 5px}
 
   /* Via pill — mobile shows emoji icon only */
   .via-pill .via-label{display:none}
-  .via-pill{padding:5px 7px!important;font-size:14px!important;gap:0!important;min-width:28px;justify-content:center}
+  .via-pill{padding:5px 7px!important;font-size:10px!important;gap:0!important;min-width:28px;justify-content:center}
 
   /* Approval badge — mobile shows ✓ only */
   .appr-full{display:none!important}
@@ -203,12 +218,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   /* Printed badge — mobile shows 🖨 only */
   .prn-full{display:none!important}
   .prn-check{display:inline-flex!important}
-
-  /* Reverted for tonight — mobile keeps badges in the SO# column (stacked,
-     legible) instead of the shared full-width row, which caused text to
-     collide with the date/customer columns. Desktop keeps the full-width row. */
-  .so-badges-row{display:none!important}
-  .so-row.no-bb td{border-bottom:1px solid var(--border)!important}
 
   /* Traveler rows */
   .tr-row td{padding:8px 6px 8px 18px;font-size:13px}
@@ -244,7 +253,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .so-row{cursor:pointer;user-select:none}
 .so-row td{padding:14px 14px;border-bottom:1px solid var(--border);vertical-align:middle;transition:background 0.1s;font-size:14px}
 .so-row.no-bb td{border-bottom:none}
+.so-badges-cell{padding-left:34px}
 .so-row:hover td{background:var(--surface2)}
+.hovered td{background:var(--surface2)!important}
 .so-row.done td{background:rgba(96,208,138,0.04)}
 .so-row.done td:first-child{border-left:3px solid var(--green)}
 .so-row.pending td:first-child{border-left:3px solid var(--amber)}
@@ -1298,6 +1309,12 @@ function makeDeptPill(d){
 function deptPillsForTravelers(travelers){
   const present = [...new Set((travelers||[]).flatMap(t=>[t.department,t.deptExtra]).filter(Boolean))];
   return present.map(makeDeptPill).join('');
+}
+function linkedHover(so, on){
+  const a = document.getElementById('so-row-'+so);
+  const b = document.getElementById('so-badges-'+so);
+  if(a) a.classList.toggle('hovered', on);
+  if(b) b.classList.toggle('hovered', on);
 }
 function soLabelPrintedBadge(so, mode){
   const depts = ['wood','gate','gear'].filter(d=>labelPrints[so+'|'+d] && activeDepts.has(d));
@@ -2645,22 +2662,19 @@ function render(){
     const canEditDate = document.body.classList.contains('can-edit-date');
     const dateCell = canEditDate
       ? `<td onclick="event.stopPropagation();openDatePicker('${so}','${soShipRaw||''}',this)">
-           <div style="display:flex;align-items:center;gap:6px;cursor:pointer;width:fit-content" title="Click to change ship date">
+           <div class="date-click-wrap" style="display:flex;align-items:center;gap:6px;cursor:pointer;width:fit-content" title="Click to change ship date">
              <span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span>
              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2" style="flex-shrink:0"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
            </div>
          </td>`
       : `<td><span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span></td>`;
  
-    html+=`<tr id="so-row-${so}" class="so-row ${hasPic?'done':'pending'}${(approvalFull||flagFull||printedFull)?' no-bb':''}" onclick="handleSORowClick('${so}')">
+    html+=`<tr id="so-row-${so}" class="so-row ${hasPic?'done':'pending'}${(approvalFull||flagFull||printedFull)?' no-bb':''}" onclick="handleSORowClick('${so}')" onmouseenter="linkedHover('${so}',true)" onmouseleave="linkedHover('${so}',false)">
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
-        <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
+        <span class="so-num-text" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
         <span class="so-dept-wrap">${deptPillsForTravelers(travelers)}</span>
         ${visibleCommentsFor(so).length?`<span title="${visibleCommentsFor(so).length} comment${visibleCommentsFor(so).length>1?'s':''}" style="display:inline-flex;align-items:center;color:var(--blue);opacity:0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></span>`:''}
-        ${printedCheck}
-        ${approvalCheck}
-        ${flagCheck}
       </div></td>
       ${dateCell}
       <td>${viaTag}</td>
@@ -2674,8 +2688,8 @@ function render(){
     </tr>`;
 
     if(approvalFull||flagFull||printedFull){
-      html+=`<tr class="so-row so-badges-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')">
-        <td colspan="6" style="padding:0 12px 8px 34px!important;border-top:none">
+      html+=`<tr id="so-badges-${so}" class="so-row so-badges-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')" onmouseenter="linkedHover('${so}',true)" onmouseleave="linkedHover('${so}',false)">
+        <td colspan="6" style="padding:0 12px 8px 0;border-top:none" class="so-badges-cell">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             ${printedFull}${printedCheck}
             ${approvalFull}${approvalCheck}
