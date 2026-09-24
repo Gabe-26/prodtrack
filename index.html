@@ -204,6 +204,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .prn-full{display:none!important}
   .prn-check{display:inline-flex!important}
 
+  /* Full-text badge row only exists for desktop's wider layout */
+  .so-badges-row{display:none!important}
+  .so-row.no-bb td{border-bottom:1px solid var(--border)!important}
+
   /* Traveler rows */
   .tr-row td{padding:8px 6px 8px 18px;font-size:13px}
   .photo-row td{padding:12px 10px 14px 18px}
@@ -237,6 +241,7 @@ table{width:100%;border-collapse:collapse}
 thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border2);padding:10px 14px;text-align:left;font-size:11px;font-family:var(--mono);letter-spacing:0.07em;color:var(--text3);text-transform:uppercase;white-space:nowrap}
 .so-row{cursor:pointer;user-select:none}
 .so-row td{padding:14px 14px;border-bottom:1px solid var(--border);vertical-align:middle;transition:background 0.1s;font-size:14px}
+.so-row.no-bb td{border-bottom:none}
 .so-row:hover td{background:var(--surface2)}
 .so-row.done td{background:rgba(96,208,138,0.04)}
 .so-row.done td:first-child{border-left:3px solid var(--green)}
@@ -1292,7 +1297,7 @@ function deptPillsForTravelers(travelers){
   const present = [...new Set((travelers||[]).flatMap(t=>[t.department,t.deptExtra]).filter(Boolean))];
   return present.map(makeDeptPill).join('');
 }
-function soLabelPrintedBadge(so){
+function soLabelPrintedBadge(so, mode){
   const depts = ['wood','gate','gear'].filter(d=>labelPrints[so+'|'+d] && activeDepts.has(d));
   if(!depts.length) return '';
   const title = depts.map(d=>{
@@ -1300,7 +1305,8 @@ function soLabelPrintedBadge(so){
     const when = new Date(p.printed_at).toLocaleDateString();
     return `${DEPT_META[d]?.label||d} label printed ${when} by ${p.printed_by||'worker'}`;
   }).join(' · ');
-  return `<span class="tag td prn-full" title="${escapeHtml(title)}">🖨 Printed</span><span class="tag td prn-check" title="${escapeHtml(title)}">🖨</span>`;
+  if(mode==='check') return `<span class="tag td prn-check" title="${escapeHtml(title)}">🖨</span>`;
+  return `<span class="tag td prn-full" title="${escapeHtml(title)}">🖨 Printed</span>`;
 }
 function isDeptVisible(department){
   return !department || activeDepts.has(department);
@@ -2615,14 +2621,24 @@ function render(){
     const approvedTravelers = travelers.filter(o => approvals[o.traveler]);
     const allApproved = travelers.length > 0 && approvedTravelers.length === travelers.length;
     const someApproved = approvedTravelers.length > 0 && !allApproved;
-    const approvalBadge = allApproved
-      ? `<span class="tag tg appr-full" style="margin-left:6px">✓ Approved</span><span class="appr-check tag tg" style="display:none;margin-left:4px">✓</span>`
+    const approvalFull = allApproved
+      ? `<span class="tag tg appr-full" style="margin-left:6px">✓ Approved</span>`
       : someApproved
-      ? `<span class="tag td appr-full" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span><span class="appr-check tag td" style="display:none;margin-left:4px">${approvedTravelers.length}/${travelers.length}</span>`
+      ? `<span class="tag td appr-full" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span>`
       : '';
-    const flaggedBadge = travelers[0].flaggedMissingAt
-      ? `<span class="tag ta flag-full" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span><span class="tag ta flag-check" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">⚠</span>`
+    const approvalCheck = allApproved
+      ? `<span class="appr-check tag tg">✓</span>`
+      : someApproved
+      ? `<span class="appr-check tag td">${approvedTravelers.length}/${travelers.length}</span>`
       : '';
+    const flagFull = travelers[0].flaggedMissingAt
+      ? `<span class="tag ta flag-full" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
+      : '';
+    const flagCheck = travelers[0].flaggedMissingAt
+      ? `<span class="tag ta flag-check" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">⚠</span>`
+      : '';
+    const printedFull = soLabelPrintedBadge(so);
+    const printedCheck = soLabelPrintedBadge(so,'check');
  
     const canEditDate = document.body.classList.contains('can-edit-date');
     const dateCell = canEditDate
@@ -2634,15 +2650,15 @@ function render(){
          </td>`
       : `<td><span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span></td>`;
  
-    html+=`<tr id="so-row-${so}" class="so-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')">
+    html+=`<tr id="so-row-${so}" class="so-row ${hasPic?'done':'pending'}${(approvalFull||flagFull||printedFull)?' no-bb':''}" onclick="handleSORowClick('${so}')">
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
         <span class="so-dept-wrap">${deptPillsForTravelers(travelers)}</span>
         ${visibleCommentsFor(so).length?`<span title="${visibleCommentsFor(so).length} comment${visibleCommentsFor(so).length>1?'s':''}" style="display:inline-flex;align-items:center;color:var(--blue);opacity:0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></span>`:''}
-        ${approvalBadge}
-        ${flaggedBadge}
-        ${soLabelPrintedBadge(so)}
+        ${approvalCheck}
+        ${flagCheck}
+        ${printedCheck}
       </div></td>
       ${dateCell}
       <td>${viaTag}</td>
@@ -2654,6 +2670,18 @@ function render(){
         ${isMgr && (hasWoodTravelers||hasGateTravelers||hasGearTravelers) ? `<button class="btn print-label-btn" onclick="event.stopPropagation();openPrintLabelModal('${so}')" style="font-size:10px;padding:3px 8px">Print label</button>` : ''}
       </div></td>
     </tr>`;
+
+    if(approvalFull||flagFull||printedFull){
+      html+=`<tr class="so-badges-row" onclick="handleSORowClick('${so}')">
+        <td colspan="6" style="padding:0 12px 8px 34px;border-top:none;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${approvalFull}
+            ${flagFull}
+            ${printedFull}
+          </div>
+        </td>
+      </tr>`;
+    }
  
     if(isOpen){
       html+=buildSODetailRows(so, travelers, soPhotos, isMgr);
