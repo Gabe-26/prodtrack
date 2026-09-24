@@ -196,6 +196,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .appr-full{display:none!important}
   .appr-check{display:inline-flex!important}
 
+  /* Possibly-completed badge — mobile shows ⚠ only */
+  .flag-full{display:none!important}
+  .flag-check{display:inline-flex!important}
+
+  /* Printed badge — mobile shows 🖨 only */
+  .prn-full{display:none!important}
+  .prn-check{display:inline-flex!important}
+
   /* Traveler rows */
   .tr-row td{padding:8px 6px 8px 18px;font-size:13px}
   .photo-row td{padding:12px 10px 14px 18px}
@@ -278,6 +286,8 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .td{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
 .mono{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
 .appr-check{display:none}
+.flag-check{display:none}
+.prn-check{display:none}
  
 /* ── Archive view ──────────────────────────────────────────────────────────── */
 .archive-view{flex:1;overflow-y:auto;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
@@ -1290,7 +1300,7 @@ function soLabelPrintedBadge(so){
     const when = new Date(p.printed_at).toLocaleDateString();
     return `${DEPT_META[d]?.label||d} label printed ${when} by ${p.printed_by||'worker'}`;
   }).join(' · ');
-  return `<span class="tag td" title="${escapeHtml(title)}">🖨 Printed</span>`;
+  return `<span class="tag td prn-full" title="${escapeHtml(title)}">🖨 Printed</span><span class="tag td prn-check" title="${escapeHtml(title)}">🖨</span>`;
 }
 function isDeptVisible(department){
   return !department || activeDepts.has(department);
@@ -2611,7 +2621,7 @@ function render(){
       ? `<span class="tag td appr-full" style="margin-left:6px">${approvedTravelers.length}/${travelers.length} approved</span><span class="appr-check tag td" style="display:none;margin-left:4px">${approvedTravelers.length}/${travelers.length}</span>`
       : '';
     const flaggedBadge = travelers[0].flaggedMissingAt
-      ? `<span class="tag ta" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
+      ? `<span class="tag ta flag-full" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span><span class="tag ta flag-check" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">⚠</span>`
       : '';
  
     const canEditDate = document.body.classList.contains('can-edit-date');
