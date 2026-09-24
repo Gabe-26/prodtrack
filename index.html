@@ -172,7 +172,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   .tr-row td:nth-child(5){display:none}
 
   /* SO row sizing */
-  .so-row td{padding:6px 4px;font-size:13px}
+  .so-row td{padding:6px 4px!important;font-size:13px!important}
   .so-row td:first-child{padding-left:6px}
   .so-dept-wrap{display:block;width:max-content;max-width:none;white-space:nowrap;margin-left:19px;margin-top:2px}
 
@@ -190,7 +190,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 
   /* Via pill — mobile shows emoji icon only */
   .via-pill .via-label{display:none}
-  .via-pill{padding:5px 7px;font-size:14px;gap:0;min-width:28px;justify-content:center}
+  .via-pill{padding:5px 7px!important;font-size:14px!important;gap:0!important;min-width:28px;justify-content:center}
 
   /* Approval badge — mobile shows ✓ only */
   .appr-full{display:none!important}
@@ -2666,7 +2666,7 @@ function render(){
 
     if(approvalFull||flagFull||printedFull){
       html+=`<tr class="so-row so-badges-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')">
-        <td colspan="6" style="padding:0 12px 8px 34px;border-top:none">
+        <td colspan="6" style="padding:0 12px 8px 34px!important;border-top:none">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             ${printedFull}${printedCheck}
             ${approvalFull}${approvalCheck}
