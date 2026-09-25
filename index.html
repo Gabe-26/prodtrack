@@ -378,7 +378,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .pl-preview-wrap{width:288px;height:432px;overflow:hidden;position:relative;border:1px solid var(--border2);border-radius:4px;background:#fff;margin-bottom:12px;flex-shrink:0}
 .pl-preview-page{position:absolute;top:0;left:0;width:4in;height:6in;padding:calc(0.22in - var(--lbl-top-reduce,5px)) 0.22in 0.22in 0.22in;box-sizing:border-box;transform:scale(0.75);transform-origin:top left;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
 .pl-preview-page .lbl-so{font-size:65px;font-weight:800;margin-bottom:0;letter-spacing:1px;text-align:center}
-.pl-preview-page .lbl-line{font-size:calc(22px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:var(--lbl-line-gap,6px)}
+.pl-preview-page .lbl-line{font-size:calc(22px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:var(--lbl-line-gap,6px);line-height:1.1}
 .pl-preview-page .lbl-cust-name{font-size:var(--lbl-line-size,22px)}
 .pl-preview-page .lbl-divider{border-top:2px solid #000;margin:calc(4px * var(--lbl-dept-scale,1)) 0 calc(8px * var(--lbl-dept-scale,1))}
 .pl-preview-page .lbl-loc{font-size:18px;font-weight:700;margin:10px 0 4px}
@@ -4252,6 +4252,44 @@ function setPrintLabelDept(dept){
         else groups[0].push(item);
       });
       groups.forEach(items=>{ if(items.length) labelSkids.push({items}); });
+    } else if(dept==='wood'){
+      // Wood skid grouping (Gabriel's rule): Section+Gate share skids capped at a combined
+      // qty of 20; Misc rides along uncapped on the first Section+Gate skid (misc can be
+      // moved by hand); Post shares skids capped at 70; Arb/Perg gets one skid, no cap.
+      const WOOD_SECTION_GATE_CAP = 20, WOOD_POST_CAP = 70;
+      const sectionGateItems = [], postItems = [], arbPergItems = [], miscItems = [];
+      labelDeptTravelers.forEach(t=>{
+        const type = classifyWoodTraveler(t.line, t.item, t.desc);
+        const item = {traveler:t.traveler, item:t.item, desc:t.desc, qty:t.qty};
+        if(type==='arb_perg') arbPergItems.push(item);
+        else if(type==='post') postItems.push(item);
+        else if(type==='section' || type==='gate') sectionGateItems.push(item);
+        else miscItems.push(item);
+      });
+      const buildCappedGroupSkids = (items, groupCap)=>{
+        const skids = [];
+        let current = [], currentQty = 0;
+        items.forEach(it=>{
+          let remaining = it.qty;
+          while(remaining > 0){
+            if(currentQty >= groupCap){ skids.push({items:current}); current = []; currentQty = 0; }
+            const take = Math.min(remaining, groupCap - currentQty);
+            current.push({traveler:it.traveler, item:it.item, desc:it.desc, qty:take});
+            currentQty += take;
+            remaining -= take;
+          }
+        });
+        if(current.length) skids.push({items:current});
+        return skids;
+      };
+      const sectionGateSkids = buildCappedGroupSkids(sectionGateItems, WOOD_SECTION_GATE_CAP);
+      if(miscItems.length){
+        if(sectionGateSkids.length) sectionGateSkids[0].items = sectionGateSkids[0].items.concat(miscItems);
+        else sectionGateSkids.push({items:miscItems});
+      }
+      const postSkids = buildCappedGroupSkids(postItems, WOOD_POST_CAP);
+      const arbPergSkids = arbPergItems.length ? [{items:arbPergItems}] : [];
+      labelSkids = [...sectionGateSkids, ...postSkids, ...arbPergSkids];
     } else {
       labelDeptTravelers.forEach(t=>{
         let remaining = t.qty;
@@ -4514,7 +4552,7 @@ function generateLabelDocument(so, cust, po, skids){
 body{background:#fff;color:#000}
 .label{width:${cfg.widthIn}in;height:${cfg.heightIn}in;padding:calc(0.22in - var(--lbl-top-reduce,5px)) 0.22in 0.22in 0.22in;position:relative;page-break-after:always;overflow:hidden}
 .lbl-so{font-size:65px;font-weight:800;margin-bottom:0;letter-spacing:1px;text-align:center}
-.lbl-line{font-size:calc(22px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:var(--lbl-line-gap,6px)}
+.lbl-line{font-size:calc(22px * var(--lbl-dept-scale,1));font-weight:700;margin-bottom:var(--lbl-line-gap,6px);line-height:1.1}
 .lbl-cust-name{font-size:var(--lbl-line-size,22px)}
 .lbl-divider{border-top:2px solid #000;margin:calc(4px * var(--lbl-dept-scale,1)) 0 calc(8px * var(--lbl-dept-scale,1))}
 .lbl-item{margin-bottom:calc(14px * var(--lbl-scale,1) * var(--lbl-item-dept-scale,1))}
