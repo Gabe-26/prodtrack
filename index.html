@@ -351,6 +351,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .modal-label{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px}
 .modal-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color 0.15s}
 .modal-input:focus{border-color:var(--accent)}
+#print-label-modal{z-index:850} /* opens from inside the SO modal, so it must layer above it (both default to 800) */
 #print-label-modal .modal-card{max-width:840px}
 #wood-codes-modal .modal-card{max-width:1100px}
 #gear-codes-modal .modal-card{max-width:1300px}
@@ -456,6 +457,21 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .comment-word-count.over{color:var(--red)}
 /* SO modal — let long descriptions wrap instead of truncating (desktop table keeps truncation) */
 #so-modal-body .tr-row td:nth-child(2){white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important}
+.so-modal-desktop-cols{display:flex;gap:0;align-items:flex-start}
+.so-modal-desktop-cols .so-modal-col-main{flex:0 0 65%;max-width:65%;min-width:0;padding-right:16px;border-right:1px solid var(--border)}
+.so-modal-desktop-cols .so-modal-col-right{flex:1 1 35%;min-width:0;padding-left:16px}
+.so-modal-desktop-cols .so-modal-col-right .comments-section{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.so-modal-header-desktop{padding-top:2px}
+.so-modal-eyebrow{font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
+.so-modal-header-row1{display:flex;align-items:flex-start;gap:28px;margin-bottom:16px}
+.so-modal-so-num{font-size:26px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
+.so-modal-header-customer{flex:1;min-width:0}
+.so-modal-customer-name{font-size:16px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.so-modal-header-pills{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;margin-top:2px}
+.so-modal-header-row2{display:flex;align-items:center;gap:24px;padding-top:14px;border-top:1px solid var(--border)}
+.so-modal-header-stat{display:flex;flex-direction:column;gap:2px}
+.so-modal-ship-date{font-size:14px;font-weight:600;color:var(--text)}
+.so-modal-header-status{display:flex;align-items:center;gap:8px}
 .trav-chev{display:none}
 #so-modal-body .trav-chev{display:inline-flex;transition:transform 0.18s;color:var(--text3);margin-right:4px}
 #so-modal-body .trav-chev.open{transform:rotate(90deg)}
@@ -833,8 +849,8 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 </div>
  
 <!-- SO detail modal (mobile row tap) -->
-<div class="modal-overlay" id="so-modal">
-  <div class="modal-card" style="max-width:700px;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;text-align:left">
+<div class="modal-overlay" id="so-modal" onclick="if(event.target===this) closeSOModal()">
+  <div class="modal-card" id="so-modal-card" style="max-width:700px;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;text-align:left">
     <div class="modal-title">
       <span id="so-modal-title">SO</span>
       <button class="modal-close" onclick="closeSOModal()">✕</button>
@@ -2209,6 +2225,23 @@ async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
           dateChanges.push({so,customer:t?.customer||'',from:prevSODates[so],to:newSODates[so]});
         }
       }
+      // Also record each CSV-detected date change in activity_log so it shows in the
+      // per-SO move log alongside manual changes. Batched (one POST per 500) since a
+      // single upload can move many orders; a failed write never blocks the upload.
+      try{
+        const csvActor = currentProfile?.full_name || 'unknown';
+        const logRows = dateChanges.map(c=>({
+          action:'date_change', so:c.so, actor:csvActor,
+          detail:`CSV upload (${csvActor}): order ${c.so} changed from ${fmtDate(c.from)} to ${fmtDate(c.to)}`
+        }));
+        for(let i=0;i<logRows.length;i+=500){
+          const lr = await fetch(`${SUPA_URL}/rest/v1/activity_log`,{
+            method:'POST', headers:{...H(),'Prefer':'return=minimal'},
+            body:JSON.stringify(logRows.slice(i,i+500))
+          });
+          if(!lr.ok) throw new Error(await lr.text());
+        }
+      }catch(e){ console.warn('CSV date-change log write failed:', e.message); }
       // "Missing from CSV" must check presence in the FULL report, not just
       // the applied rows — an SO whose only rows were skipped for being
       // stale is still genuinely present in this report, not gone from Sage.
@@ -2928,7 +2961,7 @@ function isMobileLayout(){
   return window.matchMedia('(max-width:700px), (max-height:500px) and (orientation:landscape)').matches;
 }
 function handleSORowClick(so){
-  if(isMobileLayout()) openSOModal(so); else toggleSO(so);
+  openSOModal(so); // TEMP: always modal, even on desktop — testing this out (revert to isMobileLayout() check to restore inline expand)
 }
 let currentModalSO = null;
 function openSOModal(so){
@@ -2950,8 +2983,15 @@ function openSOModal(so){
   const flaggedBadge = t0.flaggedMissingAt
     ? `<span class="tag ta" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
     : '';
-  document.getElementById('so-modal-title').textContent = 'SO '+so;
-  document.getElementById('so-modal-summary').innerHTML = `
+  const printedBadge = soLabelPrintedBadge(so);
+  const hasWoodTravelers = activeDepts.has('wood') && orders.some(o=>o.so===so && o.department==='wood');
+  const hasGateTravelers = activeDepts.has('gate') && orders.some(o=>o.so===so && o.department==='gate');
+  const hasGearTravelers = activeDepts.has('gear') && orders.some(o=>o.so===so && o.department==='gear');
+  const printLabelBtn = isMgr && (hasWoodTravelers||hasGateTravelers||hasGearTravelers)
+    ? `<button class="btn print-label-btn" onclick="openPrintLabelModal('${so}')" style="font-size:11px;padding:4px 9px">Print label</button>`
+    : '';
+  document.getElementById('so-modal-title').textContent = isMobileLayout() ? 'SO '+so : '';
+  document.getElementById('so-modal-summary').innerHTML = isMobileLayout() ? `
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       ${viaTag}
       ${deptPillsForTravelers(travelers)}
@@ -2962,11 +3002,65 @@ function openSOModal(so){
       ${approvalBadge}
       ${flaggedBadge}
       ${isMgr && !allApproved ? `<button class="approve-btn" onclick="confirmColorThenApproveAll('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
+    </div>` : `
+    <div class="so-modal-header-desktop">
+      <div class="so-modal-header-row1">
+        <div>
+          <div class="so-modal-eyebrow">Sales Order</div>
+          <div class="so-modal-so-num mono">${so}</div>
+        </div>
+        <div class="so-modal-header-customer">
+          <div class="so-modal-eyebrow">Customer</div>
+          <div class="so-modal-customer-name">${t0.customer}</div>
+        </div>
+        <div class="so-modal-header-pills">${viaTag}${deptPillsForTravelers(travelers)}</div>
+      </div>
+      <div class="so-modal-header-row2">
+        <div class="so-modal-header-stat">
+          <span class="so-modal-eyebrow">Ship Date</span>
+          <span class="mono so-modal-ship-date">${fmtDate(t0.soShipRaw)}</span>
+        </div>
+        <div class="so-modal-header-status">${approvalBadge}${flaggedBadge}${printedBadge}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          ${printLabelBtn}
+          ${isMgr && !allApproved ? `<button class="approve-btn" onclick="confirmColorThenApproveAll('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
+        </div>
+      </div>
     </div>`;
   document.getElementById('so-modal-body').innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${buildSODetailRows(so, travelers, soPhotos, isMgr)}</tbody></table>`;
+  const modalCard = document.getElementById('so-modal-card');
+  if(isMobileLayout()){
+    modalCard.style.maxWidth = '700px';
+  } else {
+    modalCard.style.maxWidth = '1100px';
+    layoutSOModalDesktopColumns(so);
+  }
   document.getElementById('so-modal').classList.add('open');
   autoTranslateComments(so);
   loadMoveLogForSO(so);
+}
+// Desktop-only: pulls the comments section and the move-log (date change) section out of
+// their normal stacked spots and lays them side by side (comments left, move log right)
+// below the photos section. Mobile keeps the single-column stack untouched — buildSODetailRows()
+// itself is never forked, this just rearranges the DOM nodes it already produced.
+function layoutSOModalDesktopColumns(so){
+  const body = document.getElementById('so-modal-body');
+  const tbl = body.querySelector('table');
+  if(!tbl) return;
+  const movelogRow = tbl.querySelector('tr.movelog-row');
+  const movelogTd = movelogRow ? movelogRow.querySelector('td') : null;
+  const commentsSection = tbl.querySelector('.comments-section');
+  if(!movelogTd || !commentsSection) return;
+  const cols = document.createElement('div');
+  cols.className = 'so-modal-desktop-cols';
+  cols.innerHTML = '<div class="so-modal-col-main"></div><div class="so-modal-col-right"></div>';
+  const colMain = cols.querySelector('.so-modal-col-main');
+  const colRight = cols.querySelector('.so-modal-col-right');
+  colRight.appendChild(commentsSection); // comments on top
+  while(movelogTd.firstChild) colRight.appendChild(movelogTd.firstChild); // move log below
+  movelogRow.remove();
+  colMain.appendChild(tbl); // travelers + photos, unchanged, just relocated into the left column
+  body.appendChild(cols);
 }
 function closeSOModal(){
   currentModalSO = null;
