@@ -1612,9 +1612,19 @@ async function loadOrders(){
     traveler:r.traveler, so:r.so, item:r.item, desc:r.description,
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
     soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer,
-    department:r.department, deptExtra:r.department_extra, flaggedMissingAt:r.flagged_missing_at
+    department:r.department, deptExtra:r.department_extra, flaggedMissingAt:r.flagged_missing_at,
+    completedBatch:r.completed_batch||null, completedAt:r.completed_at||null
   }));
+  // SO is "Completed" only when EVERY traveler on it carries a register batch tag.
+  completedSOBatch={};
+  const _bySO={};
+  orders.forEach(o=>{ (_bySO[o.so]=_bySO[o.so]||[]).push(o); });
+  for(const so in _bySO){
+    const ts=_bySO[so];
+    if(ts.length && ts.every(t=>t.completedBatch)) completedSOBatch[so]=[...new Set(ts.map(t=>t.completedBatch))].join(', ');
+  }
 }
+let completedSOBatch = {};
 let archivedLoaded = false;
 async function loadArchivedOrders(){
   const arch = await sbGet('orders','select=*&archived=eq.true&order=so_ship.desc,so.asc');
@@ -2209,7 +2219,7 @@ async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
       for(const so of Object.keys(csvSOMap)){
         const csvTravelers=[...csvSOMap[so]].join(',');
         // Delete DB rows for this SO whose traveler is NOT in the CSV list
-        await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${so}&traveler=not.in.(${csvTravelers})&archived=eq.false`,{
+        await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${so}&traveler=not.in.(${csvTravelers})&completed_batch=is.null&archived=eq.false`,{
           method:'DELETE',headers:{...H(),'Prefer':'return=minimal'}
         }).catch(()=>{});
       }
@@ -2492,7 +2502,7 @@ function renderOrdersSummary(groups){
   if(!['tomorrow','all'].includes(activeView)){ wrap.style.display='none'; return; }
   // Possibly-completed SOs stay visible in the table with their badge, but
   // are excluded from these tallies so they don't skew production counts.
-  const activeGroups = groups.filter(g=>!g.travelers[0]?.flaggedMissingAt);
+  const activeGroups = groups.filter(g=>!g.travelers[0]?.flaggedMissingAt && !completedSOBatch[g.so]);
   const totalTravelers = activeGroups.reduce((a,g)=>a+g.travelers.length,0);
   const totalPhotos = activeGroups.filter(g=>visiblePhotosFor(g.so).length>0).length;
   const totalNone = activeGroups.length - totalPhotos;
@@ -2534,7 +2544,7 @@ function renderCategoryBreakdown(groups){
   const wrap = document.getElementById('category-breakdown');
   if(!wrap) return;
   if(!['tomorrow','all'].includes(activeView) || categoryBreakdownHidden){ wrap.style.display='none'; return; }
-  const activeGroups = groups.filter(g=>!g.travelers[0]?.flaggedMissingAt);
+  const activeGroups = groups.filter(g=>!g.travelers[0]?.flaggedMissingAt && !completedSOBatch[g.so]);
   const woodTotals = {section:0, gate:0, post:0, arb_perg:0, misc:0};
   const gearTotals = {section:0, post:0, profile:0, lattice_profile:0, topper:0, bend:0, arb_perg:0, post_and_rail:0, misc:0};
   const gateTotals = {gate:0, misc:0};
@@ -2683,10 +2693,14 @@ function render(){
       : someApproved
       ? `<span class="appr-check tag td">${approvedTravelers.length}/${travelers.length}</span>`
       : '';
-    const flagFull = travelers[0].flaggedMissingAt
+    const flagFull = completedSOBatch[so]
+      ? `<span class="tag tg flag-full" title="Every traveler on this SO was closed in Sage (register batch ${completedSOBatch[so]})">✔ COMPLETED · Batch ${completedSOBatch[so]}</span>`
+      : travelers[0].flaggedMissingAt
       ? `<span class="tag ta flag-full" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
       : '';
-    const flagCheck = travelers[0].flaggedMissingAt
+    const flagCheck = completedSOBatch[so]
+      ? `<span class="tag tg flag-check" title="Completed — register batch ${completedSOBatch[so]}">✔</span>`
+      : travelers[0].flaggedMissingAt
       ? `<span class="tag ta flag-check" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">⚠</span>`
       : '';
     const printedFull = soLabelPrintedBadge(so);
@@ -2768,7 +2782,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
       <td data-label="Item"><span class="mono" style="${isCus(o)?'color:var(--amber)':'color:var(--text)'};font-weight:600">${o.item}</span></td>
       <td data-label="Qty" style="text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${o.qty%1===0?o.qty:o.qty.toFixed(1)}</td>
       <td data-label="Line" style="font-family:var(--mono);font-size:11px;color:var(--text3)">${o.line}</td>
-      <td>${approveBtn}</td>
+      <td>${approveBtn}${o.completedBatch?`<span class="tag tg" style="margin-left:6px" title="Closed in Sage register batch ${o.completedBatch}">Batch ${o.completedBatch}</span>`:''}</td>
     </tr>`;
   }
   html+=`<tr class="movelog-row"><td colspan="6">
@@ -2980,7 +2994,9 @@ function openSOModal(so){
     : someApproved
     ? `<span class="tag td">${approvedTravelers.length}/${travelers.length} approved</span>`
     : '';
-  const flaggedBadge = t0.flaggedMissingAt
+  const flaggedBadge = completedSOBatch[so]
+    ? `<span class="tag tg" title="Every traveler on this SO was closed in Sage">✔ COMPLETED · Batch ${completedSOBatch[so]}</span>`
+    : t0.flaggedMissingAt
     ? `<span class="tag ta" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
     : '';
   const printedBadge = soLabelPrintedBadge(so);
@@ -3966,7 +3982,7 @@ function generatePrintReport(startDate, endDate, deptSet){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
 
   const filtered = orders.filter(o=>{
-    if(o.flaggedMissingAt) return false; // possibly-completed — excluded entirely, not just uncounted
+    if(o.flaggedMissingAt || completedSOBatch[o.so]) return false; // possibly-completed / completed — excluded entirely, not just uncounted
     if(!o.soShipRaw || o.soShipRaw < startDate || o.soShipRaw > endDate) return false;
     const primaryVisible = !o.department || deptSet.has(o.department);
     const extraVisible = !!o.deptExtra && deptSet.has(o.deptExtra);
