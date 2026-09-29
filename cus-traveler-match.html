@@ -120,6 +120,7 @@ td{font-family:var(--mono)}
     <div class="tabs">
       <div class="tab active" id="tab-match" onclick="switchTab('match')">Match</div>
       <div class="tab" id="tab-history" onclick="switchTab('history')">History</div>
+      <div class="tab" id="tab-completions" onclick="switchTab('completions')">Completions</div>
     </div>
 
     <div id="view-match">
@@ -169,12 +170,6 @@ td{font-family:var(--mono)}
         </div>
 
         <div class="card">
-          <div class="section-title">Unmatched order lines <span class="badge badge-warn" id="count-unord"></span></div>
-          <div class="section-count">CUS lines from the order PDFs with no matching traveler ticket uploaded</div>
-          <table id="tbl-unord"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Qty</th><th>Source file</th></tr></thead><tbody></tbody></table>
-          <div class="empty-note hidden" id="empty-unord">None — every CUS line found a match.</div>
-        </div>
-        <div class="card">
           <div class="section-title">Unmatched traveler tickets <span class="badge badge-warn" id="count-untrav"></span></div>
           <div class="section-count">Traveler tickets with no matching order line uploaded</div>
           <table id="tbl-untrav"><thead><tr><th>SO</th><th>Item Code</th><th>Description</th><th>Traveler #</th><th>Source file</th></tr></thead><tbody></tbody></table>
@@ -184,6 +179,26 @@ td{font-family:var(--mono)}
           <div class="section-title">Unrecognized pages <span class="badge badge-warn" id="count-unrec"></span></div>
           <div class="section-count">Pages in the traveler PDFs that didn't match the expected ticket layout — check the file.</div>
           <table id="tbl-unrec"><thead><tr><th>File</th><th>Page</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-completions" class="hidden">
+      <div class="card">
+        <div class="section-title">Import Sage completion register</div>
+        <div class="section-count">Upload the daily Work Ticket Transaction Register PDF (text PDFs only, not scanned copies). Matching travelers in ProdTrack get tagged with the batch number. Nothing is saved until you press Tag.</div>
+        <div class="row" style="align-items:center;margin-top:12px">
+          <input type="file" id="f-register" accept=".pdf" multiple onchange="onRegisterChosen()">
+          <button id="comp-read-btn" onclick="readRegisters()" disabled>Read register</button>
+        </div>
+        <div class="err" id="comp-err"></div>
+      </div>
+      <div class="card hidden" id="comp-result-card">
+        <div id="comp-summary"></div>
+        <table id="tbl-comp"><thead><tr><th>Batch</th><th>Traveler #</th><th>SO</th><th>Item Code</th><th>Qty</th><th>Result</th></tr></thead><tbody></tbody></table>
+        <div class="row" style="margin-top:14px;align-items:center">
+          <button id="comp-apply-btn" onclick="applyCompletions()">Tag travelers</button>
+          <span id="comp-apply-msg" class="section-count"></span>
         </div>
       </div>
     </div>
@@ -338,8 +353,10 @@ tryRestoreSession();
 function switchTab(name){
   document.getElementById('tab-match').classList.toggle('active', name==='match');
   document.getElementById('tab-history').classList.toggle('active', name==='history');
+  document.getElementById('tab-completions').classList.toggle('active', name==='completions');
   document.getElementById('view-match').classList.toggle('hidden', name!=='match');
   document.getElementById('view-history').classList.toggle('hidden', name!=='history');
+  document.getElementById('view-completions').classList.toggle('hidden', name!=='completions');
 }
 
 // ── File selection ────────────────────────────────────────────────────────
@@ -419,6 +436,38 @@ function buildDeptBatchEntries(){
   return out;
 }
 
+// Builds `orders` rows for one department's matched CUS items — the same
+// shape ProdTrack's own CSV upload writes (see index.html's parseCSV), so a
+// later Sage CSV upload cleanly overwrites these via the same on_conflict=
+// traveler upsert instead of duplicating. `so` gets its leading zero
+// stripped here (orders.so is unpadded); it stays padded everywhere else in
+// this file (Inbox display, labels) since that mirrors Sage's own printout.
+function buildOrdersRowsForDept(dept){
+  return lastMatched.filter(m => m.dept && m.dept.primary === dept).map(m => ({
+    traveler: String(m.travelerNo),
+    so: String(m.so).replace(/^0+/,''),
+    item: m.itemCode,
+    description: m.description,
+    qty: m.qty,
+    line: m.prodLine,
+    so_ship: toISODateSlash(m.shipDate),
+    via: m.via || '',
+    customer: m.customer || '',
+    report_date: new Date().toISOString().slice(0,10)
+  }));
+}
+
+async function upsertOrdersRows(rows){
+  if(!rows.length) return;
+  for(let i=0;i<rows.length;i+=500){
+    const r = await fetch(`${SUPA_URL}/rest/v1/orders?on_conflict=traveler`, {
+      method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(rows.slice(i,i+500))
+    });
+    if(!r.ok) throw new Error(`Writing to orders failed: ${await r.text()}`);
+  }
+}
+
 // Extracts just the stamped pages relevant to one department out of the
 // already-built merged PDF, using the same fileName+page lookup the preview
 // filter uses. Returns null if that department has no pages. Also stamps
@@ -481,6 +530,66 @@ function onUbExtraFilesChosen(dept, input){
     ubExtraFiles[dept].length ? ubExtraFiles[dept].map(f=>f.name).join(', ') : 'No extra files';
 }
 
+// Compresses an image extra file before upload — same technique and same
+// settings as ProdTrack's own photo upload (resize to maxWidth/maxHeight,
+// re-encode as JPEG, drop quality once more if still over the size cap).
+// Only ever called on image/* files. CAD files pass through unchanged —
+// there's no safe way to shrink those client-side without a much heavier
+// dependency, and a compressed CAD file couldn't be opened directly from
+// the stored link anymore. PDFs get their own, more limited pass below.
+function compressExtraImage(file, maxSizeKB=800, maxWidth=1920, maxHeight=1920){
+  return new Promise((resolve)=>{
+    if(file.size <= maxSizeKB * 1024){ resolve(file); return; }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(url);
+      let w=img.width, h=img.height;
+      if(w>maxWidth||h>maxHeight){
+        const ratio=Math.min(maxWidth/w, maxHeight/h);
+        w=Math.round(w*ratio); h=Math.round(h*ratio);
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      canvas.toBlob(blob=>{
+        if(blob && blob.size <= maxSizeKB*1024){
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {type:'image/jpeg'}));
+        } else {
+          canvas.toBlob(blob2=>{
+            resolve(new File([blob2||blob], file.name.replace(/\.[^.]+$/, '.jpg'), {type:'image/jpeg'}));
+          },'image/jpeg', 0.65);
+        }
+      },'image/jpeg', 0.82);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); resolve(file); };
+    img.src=url;
+  });
+}
+
+// Best-effort PDF shrink: reload through pdf-lib (already a dependency of
+// this file) and re-save with object streams enabled. This is lossless —
+// no re-rendering, no downsampled images — so it only helps on PDFs with
+// duplicate/unused internal objects and won't meaningfully shrink a
+// scanned or image-heavy spec sheet. A real reduction there would need a
+// much heavier library (e.g. Ghostscript compiled to run in the browser),
+// which is too big a dependency to add for this alone without asking
+// first (Critical Rule 14). Falls back to the original file untouched if
+// pdf-lib can't parse it (encrypted, corrupt, etc.) or the result isn't
+// actually smaller.
+async function compressExtraPdf(file){
+  try{
+    const buf = await file.arrayBuffer();
+    const doc = await PDFLib.PDFDocument.load(buf);
+    const bytes = await doc.save({useObjectStreams:true});
+    if(bytes.length >= buf.byteLength) return file;
+    return new File([bytes], file.name, {type:'application/pdf'});
+  } catch(e){
+    return file;
+  }
+}
+
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeUploadBatchModal(); });
 
 async function confirmUploadBatch(){
@@ -519,7 +628,9 @@ async function confirmUploadBatch(){
 
       const files = ubExtraFiles[dept] || [];
       const extraFiles = [];
-      for(const f of files){
+      for(let f of files){
+        if(f.type && f.type.startsWith('image/')) f = await compressExtraImage(f);
+        else if(f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) f = await compressExtraPdf(f);
         const path = `${dept}/extra/${Date.now()}_${Math.random().toString(36).slice(2)}_${f.name}`;
         const buf = await f.arrayBuffer();
         const r = await fetch(`${SUPA_URL}/storage/v1/object/${BATCH_BUCKET}/${path}`,{
@@ -530,6 +641,11 @@ async function confirmUploadBatch(){
         if(!r.ok) throw new Error(`Extra file upload failed for ${DEPT_META[dept].label}: ${await r.text()}`);
         extraFiles.push({name:f.name, url:`${SUPA_URL}/storage/v1/object/public/${BATCH_BUCKET}/${path}`});
       }
+
+      // Feed these matched CUS lines into orders — same as a Sage CSV upload
+      // would, so they show up in All Orders immediately instead of waiting
+      // for tomorrow's CSV. A later CSV upload overwrites these cleanly.
+      await upsertOrdersRows(buildOrdersRowsForDept(dept));
 
       const insertBody = {department:dept, entries, pdf_url:pdfUrl, uploaded_by:uploadedBy};
       if(extraFiles.length) insertBody.extra_files = extraFiles;
@@ -605,6 +721,43 @@ const DEPT_META = {
   gear:  {label:'Gear',  css:'#ffd9a8', pdfColor:[1.00,0.87,0.68]},
 };
 
+// Splits a two-line table row (header line + values line, both already
+// reconstructed by pdfFileToPagesWithPos) into per-column text by x-position.
+// Header tokens are clustered into columns wherever the horizontal gap
+// exceeds gapThreshold; each value token is then assigned to its nearest
+// column start. Used for the Sold To/Ship To pair and the Customer P.O./
+// Ship VIA/Terms/Ship from Whse row, which share this exact layout.
+function splitRowByColumns(headerLine, valueLine, gapThreshold=30){
+  if(!headerLine || !valueLine) return [];
+  const hToks = (headerLine.tokens||[]).slice().sort((a,b)=>a.x-b.x);
+  if(!hToks.length) return [];
+  const cols = [];
+  let cur = [hToks[0]];
+  for(let i=1;i<hToks.length;i++){
+    const prevEnd = cur[cur.length-1].x + (cur[cur.length-1].width||0);
+    if(hToks[i].x - prevEnd > gapThreshold){ cols.push(cur); cur = [hToks[i]]; }
+    else cur.push(hToks[i]);
+  }
+  cols.push(cur);
+  const starts = cols.map(c=>c[0].x);
+  const buckets = starts.map(()=>[]);
+  (valueLine.tokens||[]).forEach(t=>{
+    let best=0, bestDist=Infinity;
+    starts.forEach((s,i)=>{ const d=Math.abs(t.x-s); if(d<bestDist){ bestDist=d; best=i; } });
+    buckets[best].push(t);
+  });
+  return buckets.map(b => b.sort((a,b)=>a.x-b.x).map(t=>t.str).join(' '));
+}
+
+// "9/17/2026" → "2026-09-17". Same conversion ProdTrack's own CSV parser uses.
+function toISODateSlash(ds){
+  if(!ds) return null;
+  const p = ds.trim().split('/');
+  if(p.length !== 3) return null;
+  const yr = p[2].length === 4 ? p[2].slice(2) : p[2];
+  return `20${yr}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
+}
+
 // ── Production Order PDF parsing ──────────────────────────────────────────
 // Every item (not just CUS) carries: dept (from its prod line), lineYs (the
 // y-position of its item-code line AND every wrapped description line — used
@@ -624,6 +777,26 @@ function parseOrderPDF(pages, fileName){
   for(const ln of allLines){
     const m = ln.text.match(/Ship\/PU Date:\s*([\d\/]+)/);
     if(m){ shipDate = m[1]; break; }
+  }
+  // Sold To name (used as orders.customer) and Ship VIA — both sit as a
+  // header line immediately followed by a values line, split into columns
+  // by x-position via splitRowByColumns(). Blank if the sheet doesn't match
+  // this layout — fails safe rather than guessing.
+  let customer = '';
+  for(let i=0;i<allLines.length-1;i++){
+    if(/Sold\s*To:/.test(allLines[i].text) && /Ship\s*To:/.test(allLines[i].text)){
+      const cols = splitRowByColumns(allLines[i], allLines[i+1]);
+      customer = (cols[0]||'').trim();
+      break;
+    }
+  }
+  let via = '';
+  for(let i=0;i<allLines.length-1;i++){
+    if(/Customer P\.O\./.test(allLines[i].text) && /Ship VIA/.test(allLines[i].text)){
+      const cols = splitRowByColumns(allLines[i], allLines[i+1]);
+      via = (cols[1]||'').trim();
+      break;
+    }
   }
   const itemLineRe = /^(\S+)\s+([A-Z]{1,4})\s+([\d,]+\.\d{1,2})\s+([\d,]+\.\d{1,2})$/;
   const prodLineRe = /^(\d{4})$/;
@@ -646,7 +819,7 @@ function parseOrderPDF(pages, fileName){
       const qtyBox  = toks[2] ? {x0:toks[2].x, x1:toks[2].x+toks[2].width} : null;
       cur = {so, itemCode:mItem[1], qty:parseFloat(mItem[3].replace(/,/g,'')), prodLine:currentProdLine,
              descLines:[], page:ln.page, y:ln.y, lineYs:[ln.y], fileName, dept:classifyDept(currentProdLine),
-             codeBox, qtyBox, shipDate};
+             codeBox, qtyBox, shipDate, customer, via};
       continue;
     }
     if(cur){
@@ -656,8 +829,14 @@ function parseOrderPDF(pages, fileName){
     }
   }
   flush();
-  const cusItems = items.filter(it=>/-CUS$/i.test(it.itemCode));
-  return {so, allItems:items, cusItems, skippedCount: items.length - cusItems.length, fileName};
+  // Every item on the sheet is a match candidate — there's no code pattern
+  // that reliably predicts whether Sage already assigned it a traveler.
+  // Real orders have shown non-"-CUS" codes (WNC4CBR-2, WIL4-3, etc.) also
+  // needing a manually created Work Ticket Traveler, so filtering to just
+  // "-CUS$" silently dropped those from the match pool entirely. An item
+  // with no matching ticket simply stays unmatched — that's the expected,
+  // common case for ordinary catalog items, not an error.
+  return {so, allItems:items, cusItems: items, fileName};
 }
 
 // ── Work Ticket Traveler PDF parsing ──────────────────────────────────────
@@ -1026,13 +1205,6 @@ function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized)
     boxesWrap.insertAdjacentHTML('beforeend', boxHtml('Unclassified (unrecognized prod line)', '#888', unclassified, 'unclassified'));
   }
 
-  document.getElementById('count-unord').textContent = unmatchedOrders.length;
-  const uoBody = document.querySelector('#tbl-unord tbody'); uoBody.innerHTML = '';
-  unmatchedOrders.forEach(m => {
-    uoBody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(m.so)}</td><td>${escapeHtml(m.itemCode)}</td><td>${escapeHtml(m.description)}</td><td>${Number(m.qty).toFixed(2)}</td><td>${escapeHtml(m.fileName)}</td></tr>`);
-  });
-  document.getElementById('empty-unord').classList.toggle('hidden', unmatchedOrders.length>0);
-
   document.getElementById('count-untrav').textContent = unmatchedTickets.length;
   const utBody = document.querySelector('#tbl-untrav tbody'); utBody.innerHTML = '';
   unmatchedTickets.forEach(t => {
@@ -1076,6 +1248,182 @@ async function loadHistory(q){
     });
     document.getElementById('empty-history').classList.toggle('hidden', (rows||[]).length>0);
   }catch(e){}
+}
+
+// ── Completions: Sage Work Ticket Transaction Register → tag orders ───────
+// Text-layer PDFs only (no OCR). Parser verified against register 15803:
+// 61/61 tickets, extended costs summed to the printed Total Cost exactly.
+let compFiles = [], compPlan = null;
+function onRegisterChosen(){
+  compFiles = Array.from(document.getElementById('f-register').files);
+  document.getElementById('comp-read-btn').disabled = !compFiles.length;
+}
+const stripZeros = v => String(v||'').replace(/^0+/,'');
+
+async function parseRegisterFile(file){
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  const lines = [];
+  for(let p=1;p<=doc.numPages;p++){
+    const page = await doc.getPage(p);
+    const tc = await page.getTextContent();
+    const byY = {};
+    for(const it of tc.items){
+      const y = Math.round(it.transform[5]);
+      (byY[y] = byY[y] || []).push({x:it.transform[4], s:it.str});
+    }
+    for(const y of Object.keys(byY).map(Number).sort((a,b)=>b-a)){
+      const toks = byY[y].sort((a,b)=>a.x-b.x).map(i=>i.s.trim()).filter(t=>t);
+      if(toks.length) lines.push({toks, raw:toks.join(' ')});
+    }
+  }
+  const full = lines.map(l=>l.raw).join('\n');
+  // Batch number: label and digits can land on separate lines in this PDF.
+  let batch = '';
+  for(let i=0;i<lines.length && !batch;i++){
+    const raw = lines[i].raw;
+    const inl = raw.match(/Batch\s+Number:\s*(\d{4,6})/i);
+    if(inl){ batch = inl[1]; break; }
+    if(/Batch\s+Number:?\s*$/i.test(raw)){
+      for(const adj of [lines[i-1],lines[i+1]]) if(adj && /^\d{4,6}$/.test(adj.raw.trim())){ batch = adj.raw.trim(); break; }
+    } else if(/^\d{4,6}$/.test(raw.trim())){
+      for(const adj of [lines[i-1],lines[i+1]]) if(adj && /batch/i.test(adj.raw)){ batch = raw.trim(); break; }
+    }
+  }
+  const jm = full.match(/Journal\s+Posting\s+Date:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+  const tm = full.match(/Total\s+Cost:\s*([\d,]+\.\d+)/i);
+  const printedTotal = tm ? parseFloat(tm[1].replace(/,/g,'')) : null;
+  const wti = [];
+  for(let i=0;i<lines.length;i++) if(lines[i].toks.some(t=>/^0{5,}\d{5,}$/.test(t))) wti.push(i);
+  const tickets = [], skipped = [];
+  let extSum = 0;
+  for(let wi=0;wi<wti.length;wi++){
+    const li = wti[wi], nx = wi+1<wti.length ? wti[wi+1] : lines.length;
+    const blk = lines.slice(li, Math.min(li+8, nx)), wl = blk[0];
+    const wtok = wl.toks.find(t=>/^0{5,}\d{5,}$/.test(t));
+    const code = wl.toks.find(t=>t!==wtok && /^[A-Z0-9][A-Z0-9\-]+$/.test(t) && t.length>=3 && !/^(Yes|EA|W\/T|S\/O|AII|WO|\d{3})$/.test(t)) || '';
+    const yi = wl.toks.indexOf('Yes');
+    if(yi===-1){ skipped.push({wt:stripZeros(wtok), why:'Not marked closed'}); continue; }
+    const an = wl.toks.slice(yi+1).filter(t=>/^[\d,]+\.?\d+$/.test(t));
+    if(an.length<2){ skipped.push({wt:stripZeros(wtok), why:'Could not read quantity/cost'}); continue; }
+    const qty = parseFloat(an[0].replace(/,/g,''));
+    const ext = parseFloat((an.length>=3 ? an[2] : an[1]).replace(/,/g,''));
+    extSum += ext;
+    let so = null, isInv = false;
+    for(let b=0;b<blk.length;b++){
+      const sm = blk[b].raw.match(/S\/O\s+(0\d{6,7})/);
+      if(sm){ so = sm[1]; break; }
+      if(/\bInventory\b/i.test(blk[b].raw)){ isInv = true; break; }
+    }
+    if(!so && !isInv){ skipped.push({wt:stripZeros(wtok), why:'No S/O or Inventory line found'}); continue; }
+    tickets.push({wt:stripZeros(wtok), so:so?stripZeros(so):null, isInv, code, qty});
+  }
+  const totalOk = printedTotal==null ? null : Math.abs(extSum - printedTotal) < 0.05;
+  const journalDate = jm ? new Date(+jm[3], +jm[1]-1, +jm[2], 12).toISOString() : new Date().toISOString();
+  return {file:file.name, batch, journalDate, tickets, skipped, printedTotal, extSum, totalOk, anchors:wti.length};
+}
+
+async function sbGetJson(path){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${path}`, {headers:H()});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function readRegisters(){
+  const err = document.getElementById('comp-err'); err.textContent = '';
+  document.getElementById('comp-result-card').classList.add('hidden');
+  document.getElementById('comp-apply-msg').textContent = '';
+  const btn = document.getElementById('comp-read-btn'); btn.disabled = true; btn.textContent = 'Reading…';
+  try{
+    const regs = [];
+    for(const f of compFiles){
+      const reg = await parseRegisterFile(f);
+      if(!reg.anchors){ throw new Error(`${f.name}: no work ticket numbers found. If this is a scanned copy, only text PDFs are supported.`); }
+      if(!reg.batch){ throw new Error(`${f.name}: could not find the Batch Number.`); }
+      regs.push(reg);
+    }
+    // Look the travelers up in orders (any archived state).
+    const wts = [...new Set(regs.flatMap(r=>r.tickets.filter(t=>!t.isInv).map(t=>t.wt)))];
+    const found = {};
+    for(let i=0;i<wts.length;i+=80){
+      const rows = await sbGetJson(`orders?select=traveler,so,completed_batch&traveler=in.(${wts.slice(i,i+80).join(',')})`);
+      rows.forEach(o=>{ found[String(o.traveler)] = o; });
+    }
+    // All travelers on the affected SOs, to report which SOs become fully completed.
+    const soList = [...new Set(regs.flatMap(r=>r.tickets.filter(t=>t.so).map(t=>t.so)))];
+    const soTravs = {};
+    for(let i=0;i<soList.length;i+=40){
+      const chunk = soList.slice(i,i+40).flatMap(s=>[s,'0'+s]).join(',');
+      const rows = await sbGetJson(`orders?select=traveler,so,completed_batch&so=in.(${chunk})`);
+      rows.forEach(o=>{ (soTravs[stripZeros(o.so)] = soTravs[stripZeros(o.so)] || []).push(o); });
+    }
+    const rowsOut = [], toTag = {};  // batch -> {journalDate, travelers:[]}
+    const willTag = new Set();
+    for(const reg of regs){
+      for(const t of reg.tickets){
+        let status, cls = '';
+        if(t.isInv){ status = 'Inventory ticket, skipped'; cls = 'muted'; }
+        else {
+          const o = found[t.wt];
+          if(!o){ status = 'Not found in ProdTrack'; cls = 'warn'; }
+          else if(stripZeros(o.so) !== t.so){ status = `SO mismatch (ProdTrack has ${stripZeros(o.so)})`; cls = 'warn'; }
+          else if(o.completed_batch){ status = `Already tagged (Batch ${o.completed_batch})`; cls = 'muted'; }
+          else { status = 'Will tag'; cls = 'ok'; (toTag[reg.batch] = toTag[reg.batch] || {journalDate:reg.journalDate, travelers:[]}).travelers.push(t.wt); willTag.add(t.wt); }
+        }
+        rowsOut.push({batch:reg.batch, t, status, cls});
+      }
+    }
+    let fullySOs = 0;
+    for(const so of soList){
+      const ts = soTravs[so] || [];
+      if(ts.length && ts.every(o=>o.completed_batch || willTag.has(String(o.traveler)))) fullySOs++;
+    }
+    compPlan = {toTag};
+    const count = s => rowsOut.filter(r=>r.status.startsWith(s)).length;
+    const warnLines = regs.map(r=> r.totalOk===false ? `<div class="err">Batch ${escapeHtml(r.batch)}: parsed costs (${r.extSum.toFixed(2)}) do not match the printed Total Cost (${r.printedTotal.toFixed(2)}). Check the PDF before tagging.</div>` : '').join('') +
+      regs.map(r=> r.skipped.length ? `<div class="err">Batch ${escapeHtml(r.batch)}: ${r.skipped.length} ticket(s) could not be read: ${escapeHtml(r.skipped.map(k=>k.wt+' ('+k.why+')').join(', '))}</div>` : '').join('');
+    document.getElementById('comp-summary').innerHTML =
+      `<div class="section-title">${regs.map(r=>'Batch '+escapeHtml(r.batch)).join(' · ')}</div>` +
+      `<div class="section-count">${rowsOut.length} tickets read · <b>${count('Will tag')}</b> will be tagged · ${count('Already')} already tagged · ${count('Not found')+count('SO mismatch')} not matched · ${count('Inventory')} inventory skipped · <b>${fullySOs}</b> SO(s) will show Completed</div>` + warnLines;
+    const body = document.querySelector('#tbl-comp tbody'); body.innerHTML = '';
+    rowsOut.forEach(r=>{
+      const color = r.cls==='ok' ? 'var(--green)' : r.cls==='warn' ? 'var(--amber)' : 'var(--text3)';
+      body.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(r.batch)}</td><td>${escapeHtml(r.t.wt)}</td><td>${escapeHtml(r.t.so||'')}</td><td>${escapeHtml(r.t.code)}</td><td>${r.t.qty.toFixed(2)}</td><td style="color:${color}">${escapeHtml(r.status)}</td></tr>`);
+    });
+    document.getElementById('comp-apply-btn').disabled = !willTag.size || regs.some(r=>r.totalOk===false);
+    document.getElementById('comp-apply-btn').textContent = `Tag ${willTag.size} traveler${willTag.size===1?'':'s'}`;
+    document.getElementById('comp-result-card').classList.remove('hidden');
+  }catch(e){
+    err.textContent = e.message || String(e);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Read register';
+  }
+}
+
+async function applyCompletions(){
+  if(!compPlan) return;
+  const btn = document.getElementById('comp-apply-btn'), msg = document.getElementById('comp-apply-msg');
+  btn.disabled = true; msg.textContent = 'Tagging…';
+  try{
+    let wanted = 0, done = 0;
+    for(const batch of Object.keys(compPlan.toTag)){
+      const {journalDate, travelers} = compPlan.toTag[batch];
+      for(let i=0;i<travelers.length;i+=80){
+        const chunk = travelers.slice(i,i+80); wanted += chunk.length;
+        const r = await fetch(`${SUPA_URL}/rest/v1/orders?traveler=in.(${chunk.join(',')})&completed_batch=is.null&select=traveler`, {
+          method:'PATCH', headers:{...H(),'Prefer':'return=representation'},
+          body:JSON.stringify({completed_batch:batch, completed_at:journalDate})
+        });
+        if(!r.ok) throw new Error(await r.text());
+        done += (await r.json()).length;
+      }
+    }
+    msg.textContent = done===wanted ? `Tagged ${done} traveler(s).` : `Tagged ${done} of ${wanted}. The rest were blocked or already tagged; re-read the register to check.`;
+    compPlan = null;
+  }catch(e){
+    msg.textContent = ''; document.getElementById('comp-err').textContent = 'Tagging failed: ' + (e.message||e);
+    btn.disabled = false;
+  }
 }
 </script>
 </body>
