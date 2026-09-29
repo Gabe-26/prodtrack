@@ -1840,7 +1840,7 @@ async function refreshData(){
   try{
     const ok = await refreshAuthToken();
     if(!ok){ await forceReauth('Session expired — please sign in again.'); btn.disabled=false; return; }
-    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadGearItemTypes(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadGearItemTypes(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]); lastDataFetchAt=Date.now(); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
   }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
@@ -5325,10 +5325,27 @@ function startAutoRefresh(){
         const ok = await refreshAuthToken();
         if(!ok){ await forceReauth('Session expired — please sign in again.'); return; }
       }
-      await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadGearItemTypes(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]);updateAll();render();
+      // No data is downloaded here any more (Supabase egress). This timer only keeps the login
+      // token fresh. Data reloads on boot, the Refresh button, or returning to the app (below).
     }catch(e){}
   },60000);
 }
+// Reload data when the app comes back to the foreground, but at most once every 5 minutes,
+// so switching away and back doesn't re-download everything each time.
+let lastDataFetchAt = Date.now();
+document.addEventListener('visibilitychange', async ()=>{
+  if(document.visibilityState!=='visible' || !currentProfile || !accessToken) return;
+  if(Date.now() - lastDataFetchAt < 5*60*1000) return;
+  lastDataFetchAt = Date.now();
+  try{
+    if(sessExpiresAt && sessExpiresAt - Date.now()/1000 < 300){
+      const ok = await refreshAuthToken();
+      if(!ok){ await forceReauth('Session expired — please sign in again.'); return; }
+    }
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]);
+    updateAll(); render();
+  }catch(e){}
+});
  
 // ── Loading ───────────────────────────────────────────────────────────────────
 function showLoading(m){document.getElementById('loading-text').textContent=m||'Loading…';document.getElementById('loading-overlay').classList.remove('hide');}
