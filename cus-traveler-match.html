@@ -187,10 +187,12 @@ td{font-family:var(--mono)}
       <div class="card">
         <div class="section-title">Import Sage completion register</div>
         <div class="section-count">Upload the daily Work Ticket Transaction Register PDF (text PDFs only, not scanned copies). Matching travelers in ProdTrack get tagged with the batch number. Nothing is saved until you press Tag.</div>
-        <div class="row" style="align-items:center;margin-top:12px">
+        <div class="row" id="comp-drop" style="align-items:center;margin-top:12px;padding:18px;border:2px dashed var(--border);border-radius:10px;flex-wrap:wrap;gap:12px">
           <input type="file" id="f-register" accept=".pdf" multiple onchange="onRegisterChosen()">
+          <span class="section-count">or drag and drop one or more PDFs here</span>
           <button id="comp-read-btn" onclick="readRegisters()" disabled>Read register</button>
         </div>
+        <div class="section-count" id="comp-files" style="margin-top:8px"></div>
         <div class="err" id="comp-err"></div>
       </div>
       <div class="card hidden" id="comp-result-card">
@@ -199,6 +201,7 @@ td{font-family:var(--mono)}
         <div class="row" style="margin-top:14px;align-items:center">
           <button id="comp-apply-btn" onclick="applyCompletions()">Tag travelers</button>
           <span id="comp-apply-msg" class="section-count"></span>
+          <button id="comp-another-btn" class="hidden" onclick="resetCompletions()">Load another register</button>
         </div>
       </div>
     </div>
@@ -1254,10 +1257,28 @@ async function loadHistory(q){
 // Text-layer PDFs only (no OCR). Parser verified against register 15803:
 // 61/61 tickets, extended costs summed to the printed Total Cost exactly.
 let compFiles = [], compPlan = null;
-function onRegisterChosen(){
-  compFiles = Array.from(document.getElementById('f-register').files);
+function setCompFiles(list){
+  const all = Array.from(list || []);
+  compFiles = all.filter(f=>/\.pdf$/i.test(f.name));
+  compPlan = null;
+  document.getElementById('comp-result-card').classList.add('hidden');
+  document.getElementById('comp-another-btn').classList.add('hidden');
+  document.getElementById('comp-apply-msg').textContent = '';
+  document.getElementById('comp-err').textContent = (all.length && !compFiles.length) ? 'Only PDF files can be read here.' : '';
+  document.getElementById('comp-files').textContent = compFiles.map(f=>f.name).join('  ·  ');
   document.getElementById('comp-read-btn').disabled = !compFiles.length;
 }
+function onRegisterChosen(){ setCompFiles(document.getElementById('f-register').files); }
+function resetCompletions(){ document.getElementById('f-register').value = ''; setCompFiles([]); }
+(function(){
+  const z = document.getElementById('comp-drop');
+  ['dragenter','dragover'].forEach(ev=>z.addEventListener(ev, e=>{ e.preventDefault(); z.style.borderColor = 'var(--accent)'; }));
+  ['dragleave','drop'].forEach(ev=>z.addEventListener(ev, e=>{ e.preventDefault(); z.style.borderColor = ''; }));
+  z.addEventListener('drop', e=>{
+    const fs = e.dataTransfer && e.dataTransfer.files;
+    if(fs && fs.length){ document.getElementById('f-register').value = ''; setCompFiles(fs); }
+  });
+})();
 const stripZeros = v => String(v||'').replace(/^0+/,'');
 
 async function parseRegisterFile(file){
@@ -1380,7 +1401,7 @@ async function readRegisters(){
     }
     compPlan = {toTag};
     const count = s => rowsOut.filter(r=>r.status.startsWith(s)).length;
-    const warnLines = regs.map(r=> r.totalOk===false ? `<div class="err">Batch ${escapeHtml(r.batch)}: parsed costs (${r.extSum.toFixed(2)}) do not match the printed Total Cost (${r.printedTotal.toFixed(2)}). Check the PDF before tagging.</div>` : '').join('') +
+    const warnLines = regs.map(r=> r.totalOk===false ? `<div class="err">Batch ${escapeHtml(r.batch)}: parsed costs (${r.extSum.toFixed(2)}) do not match the printed Total Cost (${r.printedTotal.toFixed(2)}). Tagging is still allowed.</div>` : '').join('') +
       regs.map(r=> r.skipped.length ? `<div class="err">Batch ${escapeHtml(r.batch)}: ${r.skipped.length} ticket(s) could not be read: ${escapeHtml(r.skipped.map(k=>k.wt+' ('+k.why+')').join(', '))}</div>` : '').join('');
     document.getElementById('comp-summary').innerHTML =
       `<div class="section-title">${regs.map(r=>'Batch '+escapeHtml(r.batch)).join(' · ')}</div>` +
@@ -1390,7 +1411,7 @@ async function readRegisters(){
       const color = r.cls==='ok' ? 'var(--green)' : r.cls==='warn' ? 'var(--amber)' : 'var(--text3)';
       body.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(r.batch)}</td><td>${escapeHtml(r.t.wt)}</td><td>${escapeHtml(r.t.so||'')}</td><td>${escapeHtml(r.t.code)}</td><td>${r.t.qty.toFixed(2)}</td><td style="color:${color}">${escapeHtml(r.status)}</td></tr>`);
     });
-    document.getElementById('comp-apply-btn').disabled = !willTag.size || regs.some(r=>r.totalOk===false);
+    document.getElementById('comp-apply-btn').disabled = !willTag.size;
     document.getElementById('comp-apply-btn').textContent = `Tag ${willTag.size} traveler${willTag.size===1?'':'s'}`;
     document.getElementById('comp-result-card').classList.remove('hidden');
   }catch(e){
@@ -1420,6 +1441,11 @@ async function applyCompletions(){
     }
     msg.textContent = done===wanted ? `Tagged ${done} traveler(s).` : `Tagged ${done} of ${wanted}. The rest were blocked or already tagged; re-read the register to check.`;
     compPlan = null;
+    btn.textContent = 'Tagged';
+    document.getElementById('f-register').value = ''; compFiles = [];
+    document.getElementById('comp-files').textContent = '';
+    document.getElementById('comp-read-btn').disabled = true;
+    document.getElementById('comp-another-btn').classList.remove('hidden');
   }catch(e){
     msg.textContent = ''; document.getElementById('comp-err').textContent = 'Tagging failed: ' + (e.message||e);
     btn.disabled = false;
