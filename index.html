@@ -1153,6 +1153,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
             <option value="approved">Approvals</option>
             <option value="unapproved">Approvals removed</option>
             <option value="date_change">Date changes</option>
+            <option value="revision">Revisions</option>
           </select>
           <span style="margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--text3)" id="log-count"></span>
         </div>
@@ -1613,7 +1614,8 @@ async function loadOrders(){
     qty:r.qty, line:r.line, soShip:r.so_ship?fmtDate(r.so_ship):'',
     soShipRaw:r.so_ship, via:r.via, location:r.location||'', customer:r.customer,
     department:r.department, deptExtra:r.department_extra, flaggedMissingAt:r.flagged_missing_at,
-    completedBatch:r.completed_batch||null, completedAt:r.completed_at||null
+    completedBatch:r.completed_batch||null, completedAt:r.completed_at||null,
+    revisedAt:r.revised_at||null
   }));
   // SO is "Completed" only when EVERY traveler on it carries a register batch tag.
   completedSOBatch={};
@@ -2192,6 +2194,7 @@ async function handleCSV(file){
 async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
     st.textContent='Uploading '+parsed.length+' travelers…';
     try{
+      await loadOrders(); // fresh baseline for change detection (data no longer auto-refreshes)
       const prevSODates={};
       orders.forEach(o=>{if(o.so&&o.soShipRaw) prevSODates[o.so]=o.soShipRaw;});
 
@@ -2252,6 +2255,50 @@ async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
           if(!lr.ok) throw new Error(await lr.text());
         }
       }catch(e){ console.warn('CSV date-change log write failed:', e.message); }
+
+      // Revisions: an EXISTING SO whose travelers were added/removed or whose item, description
+      // or qty changed. A brand-new SO is not a revision, and ship dates are logged separately.
+      // Tag stays on the order permanently; each revision is written to activity_log.
+      try{
+        const norm = v => String(v==null?'':v).replace(/\s+/g,' ').trim();
+        const prevBySO = {};
+        orders.forEach(o=>{ if(o.so) (prevBySO[o.so] = prevBySO[o.so] || {})[String(o.traveler)] = o; });
+        const revisions = {};
+        const note = (so,txt)=>{ (revisions[so] = revisions[so] || []).push(txt); };
+        for(const r of rowsToUpsert){
+          const prevSO = prevBySO[r.so]; if(!prevSO) continue;
+          const pv = prevSO[String(r.traveler)];
+          if(!pv){ note(r.so, `traveler ${r.traveler} added (${r.item} x ${r.qty})`); continue; }
+          if(norm(pv.item)!==norm(r.item)) note(r.so, `traveler ${r.traveler} item ${pv.item} -> ${r.item}`);
+          if(norm(pv.desc)!==norm(r.description)) note(r.so, `traveler ${r.traveler} description changed`);
+          if(Number(pv.qty)!==Number(r.qty)) note(r.so, `traveler ${r.traveler} qty ${pv.qty} -> ${r.qty}`);
+        }
+        for(const so of Object.keys(csvSOMap)){
+          const prevSO = prevBySO[so]; if(!prevSO) continue;
+          for(const trav of Object.keys(prevSO)){
+            if(!csvSOMap[so].has(trav) && !prevSO[trav].completedBatch) note(so, `traveler ${trav} removed (${prevSO[trav].item} x ${prevSO[trav].qty})`);
+          }
+        }
+        const revSOs = Object.keys(revisions);
+        if(revSOs.length){
+          const nowIso = new Date().toISOString();
+          for(let i=0;i<revSOs.length;i+=40){
+            const pr = await fetch(`${SUPA_URL}/rest/v1/orders?so=in.(${revSOs.slice(i,i+40).join(',')})&archived=eq.false`,{
+              method:'PATCH', headers:{...H(),'Prefer':'return=minimal'}, body:JSON.stringify({revised_at:nowIso})
+            });
+            if(!pr.ok) throw new Error(await pr.text());
+          }
+          const revActor = currentProfile?.full_name || 'unknown';
+          const revRows = revSOs.map(so=>({action:'revision', so, actor:revActor,
+            detail:`CSV upload (${revActor}): order ${so} revised - ${revisions[so].join('; ')}`}));
+          for(let i=0;i<revRows.length;i+=500){
+            const lr = await fetch(`${SUPA_URL}/rest/v1/activity_log`,{
+              method:'POST', headers:{...H(),'Prefer':'return=minimal'}, body:JSON.stringify(revRows.slice(i,i+500))
+            });
+            if(!lr.ok) throw new Error(await lr.text());
+          }
+        }
+      }catch(e){ console.warn('Revision tracking failed:', e.message); }
       // "Missing from CSV" must check presence in the FULL report, not just
       // the applied rows — an SO whose only rows were skipped for being
       // stale is still genuinely present in this report, not gone from Sage.
@@ -2705,6 +2752,9 @@ function render(){
       : '';
     const printedFull = soLabelPrintedBadge(so);
     const printedCheck = soLabelPrintedBadge(so,'check');
+    const revAt = travelers.map(t=>t.revisedAt).filter(Boolean).sort().pop();
+    const revFull = revAt ? `<span class="tag ta prn-full" title="Revised ${fmtDate(revAt)} - order changed after a CSV upload (see the order log)">↻ Revised</span>` : '';
+    const revCheck = revAt ? `<span class="tag ta prn-check" title="Revised ${fmtDate(revAt)}">↻</span>` : '';
  
     const canEditDate = document.body.classList.contains('can-edit-date');
     const dateCell = canEditDate
@@ -2716,7 +2766,7 @@ function render(){
          </td>`
       : `<td><span class="mono" style="color:var(--text);font-size:13px;font-weight:600">${fmtDate(soShipRaw)}</span></td>`;
  
-    html+=`<tr id="so-row-${so}" class="so-row ${hasPic?'done':'pending'}${(approvalFull||flagFull||printedFull)?' no-bb':''}" onclick="handleSORowClick('${so}')" onmouseenter="linkedHover('${so}',true)" onmouseleave="linkedHover('${so}',false)">
+    html+=`<tr id="so-row-${so}" class="so-row ${hasPic?'done':'pending'}${(approvalFull||flagFull||printedFull||revFull)?' no-bb':''}" onclick="handleSORowClick('${so}')" onmouseenter="linkedHover('${so}',true)" onmouseleave="linkedHover('${so}',false)">
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="chevron${isOpen?' open':''}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>
         <span class="so-num-text" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${so}</span>
@@ -2734,13 +2784,14 @@ function render(){
       </div></td>
     </tr>`;
 
-    if(approvalFull||flagFull||printedFull){
+    if(approvalFull||flagFull||printedFull||revFull){
       html+=`<tr id="so-badges-${so}" class="so-row so-badges-row ${hasPic?'done':'pending'}" onclick="handleSORowClick('${so}')" onmouseenter="linkedHover('${so}',true)" onmouseleave="linkedHover('${so}',false)">
         <td colspan="6" style="padding:0 12px 8px 0;border-top:none" class="so-badges-cell">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             ${printedFull}${printedCheck}
             ${approvalFull}${approvalCheck}
             ${flagFull}${flagCheck}
+            ${revFull}${revCheck}
           </div>
         </td>
       </tr>`;
@@ -3000,6 +3051,8 @@ function openSOModal(so){
     ? `<span class="tag ta" title="Missing from the last CSV upload after every prod line on this SO was covered — possibly completed or removed">POSSIBLY COMPLETED</span>`
     : '';
   const printedBadge = soLabelPrintedBadge(so);
+  const revAtM = travelers.map(t=>t.revisedAt).filter(Boolean).sort().pop();
+  const revisedBadge = revAtM ? `<span class="tag ta" title="Order changed after a CSV upload (see the order log)">↻ Revised ${fmtDate(revAtM)}</span>` : '';
   const hasWoodTravelers = activeDepts.has('wood') && orders.some(o=>o.so===so && o.department==='wood');
   const hasGateTravelers = activeDepts.has('gate') && orders.some(o=>o.so===so && o.department==='gate');
   const hasGearTravelers = activeDepts.has('gear') && orders.some(o=>o.so===so && o.department==='gear');
@@ -3017,6 +3070,7 @@ function openSOModal(so){
       <span class="mono" style="font-size:13px;font-weight:600;color:var(--text)">${fmtDate(t0.soShipRaw)}</span>
       ${approvalBadge}
       ${flaggedBadge}
+      ${revisedBadge}
       ${isMgr && !allApproved ? `<button class="approve-btn" onclick="confirmColorThenApproveAll('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
     </div>` : `
     <div class="so-modal-header-desktop">
@@ -3036,7 +3090,7 @@ function openSOModal(so){
           <span class="so-modal-eyebrow">Ship Date</span>
           <span class="mono so-modal-ship-date">${fmtDate(t0.soShipRaw)}</span>
         </div>
-        <div class="so-modal-header-status">${approvalBadge}${flaggedBadge}${printedBadge}</div>
+        <div class="so-modal-header-status">${approvalBadge}${flaggedBadge}${printedBadge}${revisedBadge}</div>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
           ${printLabelBtn}
           ${isMgr && !allApproved ? `<button class="approve-btn" onclick="confirmColorThenApproveAll('${so}')" style="font-size:11px;padding:4px 9px">Approve all</button>` : ''}
@@ -3227,7 +3281,7 @@ async function logActivity(action, so, detail){
 // there's no reason to pull it all up front like photos/comments are.
 async function loadMoveLogForSO(so){
   try{
-    const rows = await sbGet('activity_log', `so=eq.${so}&action=eq.date_change&order=created_at.desc`);
+    const rows = await sbGet('activity_log', `so=eq.${so}&action=in.(date_change,revision)&order=created_at.desc`);
     moveLogCache[so] = rows;
     renderMoveLogSummary(so);
   } catch(e){
@@ -3239,7 +3293,11 @@ function renderMoveLogSummary(so){
   const el = document.getElementById('movelog-summary-'+so);
   if(!el) return; // row was collapsed again before the fetch finished
   const rows = moveLogCache[so] || [];
-  el.textContent = rows.length ? `Moved ${rows.length} time${rows.length>1?'s':''} — click to view` : 'No date changes yet';
+  const nMoves = rows.filter(r=>r.action==='date_change').length, nRevs = rows.length - nMoves;
+  const parts = [];
+  if(nMoves) parts.push(`Moved ${nMoves} time${nMoves>1?'s':''}`);
+  if(nRevs) parts.push(`Revised ${nRevs} time${nRevs>1?'s':''}`);
+  el.textContent = rows.length ? parts.join(' · ') + ' — click to view' : 'No changes yet';
   el.style.cursor = rows.length ? 'pointer' : 'default';
 }
 function toggleMoveLog(so){
@@ -3289,6 +3347,7 @@ function renderLog(){
     approved:     {label:'Approved',         cls:'tb', icon:'✓'},
     unapproved:   {label:'Approval removed', cls:'td', icon:'↩'},
     date_change:  {label:'Date changed',     cls:'ta', icon:'📅'},
+    revision:     {label:'Order revised',    cls:'ta', icon:'↻'},
   };
  
   // Group by date
@@ -4337,11 +4396,25 @@ function setPrintLabelDept(dept){
       });
     }
     labelSkids = savedSkids.filter(sk=>sk.items.length);
+    // Departments that can't combine items (Gate) always get one skid per `cap` units, even when
+    // the saved layout (or a qty change) put several units on one skid.
+    let resplit = false;
+    if(!LABEL_DEPT_CONFIG[dept].allowCombine){
+      const flat = [];
+      labelSkids.forEach(sk=>sk.items.forEach(it=>{
+        if(it.qty <= cap){ flat.push({items:[{...it}]}); if(sk.items.length>1) resplit = true; return; }
+        resplit = true;
+        let rem = it.qty;
+        while(rem > 0){ const q = Math.min(cap, rem); flat.push({items:[{...it, qty:q}]}); rem -= q; }
+      }));
+      labelSkids = flat;
+    }
     document.getElementById('pl-cust').value = prevPrint.cust || custMatch || '';
     document.getElementById('pl-po').value = prevPrint.po || '';
     const when = new Date(prevPrint.printed_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     statusEl.innerHTML = `🖨 Already printed for ${DEPT_META[dept]?.label||dept} on ${when} by ${escapeHtml(prevPrint.printed_by||'worker')} — this will be a reprint.`
-      + (changed ? ` <strong style="color:var(--amber)">Quantities have changed since then — review the skids below.</strong>` : '');
+      + (changed ? ` <strong style="color:var(--amber)">Quantities have changed since then — review the skids below.</strong>` : '')
+      + (resplit ? ` <strong style="color:var(--amber)">Split into one skid per gate.</strong>` : '');
     statusEl.style.display = '';
   } else {
     document.getElementById('pl-cust').value = custMatch || '';
