@@ -1617,16 +1617,21 @@ async function loadOrders(){
     completedBatch:r.completed_batch||null, completedAt:r.completed_at||null,
     revisedAt:r.revised_at||null
   }));
-  // SO is "Completed" only when EVERY traveler on it carries a register batch tag.
-  completedSOBatch={};
-  const _bySO={};
-  orders.forEach(o=>{ (_bySO[o.so]=_bySO[o.so]||[]).push(o); });
-  for(const so in _bySO){
-    const ts=_bySO[so];
-    if(ts.length && ts.every(t=>t.completedBatch)) completedSOBatch[so]=[...new Set(ts.map(t=>t.completedBatch))].join(', ');
-  }
+  recomputeCompletedSOBatch();
 }
 let completedSOBatch = {};
+// An SO is "Completed" when EVERY traveler in the departments currently toggled on carries a
+// register batch tag. So it changes as departments are toggled (Gate-only can be complete
+// while Gear on the same SO is not). Recomputed at the start of render() and openSOModal().
+function recomputeCompletedSOBatch(){
+  completedSOBatch = {};
+  const bySO = {};
+  orders.forEach(o=>{ if(isOrderVisible(o)) (bySO[o.so] = bySO[o.so] || []).push(o); });
+  for(const so in bySO){
+    const ts = bySO[so];
+    if(ts.length && ts.every(t=>t.completedBatch)) completedSOBatch[so] = [...new Set(ts.map(t=>t.completedBatch))].join(', ');
+  }
+}
 let archivedLoaded = false;
 async function loadArchivedOrders(){
   const arch = await sbGet('orders','select=*&archived=eq.true&order=so_ship.desc,so.asc');
@@ -2640,6 +2645,7 @@ function renderCategoryBreakdown(groups){
   wrap.innerHTML = blocks.join('');
 }
 function render(){
+  recomputeCompletedSOBatch();
   if(!['tomorrow','all','pending','done'].includes(activeView)) return;
   const q=document.getElementById('search').value.toLowerCase();
   const via=document.getElementById('f-via').value;
@@ -3030,6 +3036,7 @@ function handleSORowClick(so){
 }
 let currentModalSO = null;
 function openSOModal(so){
+  recomputeCompletedSOBatch();
   const travelers = orders.filter(o=>o.so===so && isOrderVisible(o));
   if(!travelers.length) return;
   currentModalSO = so;
@@ -4040,8 +4047,13 @@ function classifyGearItem(itemCode){
 function generatePrintReport(startDate, endDate, deptSet){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
 
+  // "Completed" for the report is judged on the departments chosen in the report modal.
+  const printCompleted = {};
+  { const by = {};
+    orders.forEach(o=>{ if((!o.department || deptSet.has(o.department)) || (!!o.deptExtra && deptSet.has(o.deptExtra))) (by[o.so] = by[o.so] || []).push(o); });
+    for(const so in by) if(by[so].every(t=>t.completedBatch)) printCompleted[so] = true; }
   const filtered = orders.filter(o=>{
-    if(o.flaggedMissingAt || completedSOBatch[o.so]) return false; // possibly-completed / completed — excluded entirely, not just uncounted
+    if(o.flaggedMissingAt || printCompleted[o.so]) return false; // possibly-completed / completed — excluded entirely, not just uncounted
     if(!o.soShipRaw || o.soShipRaw < startDate || o.soShipRaw > endDate) return false;
     const primaryVisible = !o.department || deptSet.has(o.department);
     const extraVisible = !!o.deptExtra && deptSet.has(o.deptExtra);
