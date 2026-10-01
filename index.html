@@ -2269,12 +2269,23 @@ async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
         const norm = v => String(v==null?'':v).replace(/\s+/g,' ').trim();
         const prevBySO = {};
         orders.forEach(o=>{ if(o.so) (prevBySO[o.so] = prevBySO[o.so] || {})[String(o.traveler)] = o; });
+        // Prod lines this report actually contained. A partial report (e.g. only line 150) says
+        // nothing about travelers on other lines, so those can't be "removed" by it.
+        const coveredLines = new Set(parsed.filter(r=>r.line).map(r=>r.line));
         const events = [];            // {so, trav, dept (undefined = look up later), text, removed}
         const touched = new Set();    // travelers that were added or changed
         for(const r of rowsToUpsert){
           const prevSO = prevBySO[r.so]; if(!prevSO) continue;
           const tr = String(r.traveler), pv = prevSO[tr];
-          if(!pv){ events.push({so:r.so, trav:tr, dept:undefined, text:`traveler ${tr} added (${r.item} x ${r.qty})`}); touched.add(tr); continue; }
+          if(!pv){
+            // Only a revision if this SO already had travelers on the SAME prod line. The first
+            // traveler(s) on a line the SO didn't have yet is that line's first load (e.g. a full
+            // report arriving after a Gate-only one), not a change to the order.
+            if(Object.values(prevSO).some(o=>o.line===r.line)){
+              events.push({so:r.so, trav:tr, dept:undefined, text:`traveler ${tr} added (${r.item} x ${r.qty})`}); touched.add(tr);
+            }
+            continue;
+          }
           const dept = pv.department || null;
           if(norm(pv.item)!==norm(r.item)){ events.push({so:r.so, trav:tr, dept, text:`traveler ${tr} item ${pv.item} -> ${r.item}`}); touched.add(tr); }
           if(norm(pv.desc)!==norm(r.description)){ events.push({so:r.so, trav:tr, dept, text:`traveler ${tr} description changed`}); touched.add(tr); }
@@ -2284,7 +2295,7 @@ async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
           const prevSO = prevBySO[so]; if(!prevSO) continue;
           for(const trav of Object.keys(prevSO)){
             const pv = prevSO[trav];
-            if(!csvSOMap[so].has(trav) && !pv.completedBatch) events.push({so, trav, dept:pv.department||null, removed:true, text:`traveler ${trav} removed (${pv.item} x ${pv.qty})`});
+            if(!csvSOMap[so].has(trav) && !pv.completedBatch && coveredLines.has(pv.line)) events.push({so, trav, dept:pv.department||null, removed:true, text:`traveler ${trav} removed (${pv.item} x ${pv.qty})`});
           }
         }
         if(events.length){
