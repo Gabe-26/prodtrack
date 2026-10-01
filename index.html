@@ -2263,39 +2263,64 @@ async function performCSVUpload(parsed, newReportTime, prodLineTimes, st){
 
       // Revisions: an EXISTING SO whose travelers were added/removed or whose item, description
       // or qty changed. A brand-new SO is not a revision, and ship dates are logged separately.
-      // Tag stays on the order permanently; each revision is written to activity_log.
+      // The tag is stored PER TRAVELER (revised_at) and each log row carries its department, so
+      // both follow the departments toggled in the sidebar. Tags stay permanently.
       try{
         const norm = v => String(v==null?'':v).replace(/\s+/g,' ').trim();
         const prevBySO = {};
         orders.forEach(o=>{ if(o.so) (prevBySO[o.so] = prevBySO[o.so] || {})[String(o.traveler)] = o; });
-        const revisions = {};
-        const note = (so,txt)=>{ (revisions[so] = revisions[so] || []).push(txt); };
+        const events = [];            // {so, trav, dept (undefined = look up later), text, removed}
+        const touched = new Set();    // travelers that were added or changed
         for(const r of rowsToUpsert){
           const prevSO = prevBySO[r.so]; if(!prevSO) continue;
-          const pv = prevSO[String(r.traveler)];
-          if(!pv){ note(r.so, `traveler ${r.traveler} added (${r.item} x ${r.qty})`); continue; }
-          if(norm(pv.item)!==norm(r.item)) note(r.so, `traveler ${r.traveler} item ${pv.item} -> ${r.item}`);
-          if(norm(pv.desc)!==norm(r.description)) note(r.so, `traveler ${r.traveler} description changed`);
-          if(Number(pv.qty)!==Number(r.qty)) note(r.so, `traveler ${r.traveler} qty ${pv.qty} -> ${r.qty}`);
+          const tr = String(r.traveler), pv = prevSO[tr];
+          if(!pv){ events.push({so:r.so, trav:tr, dept:undefined, text:`traveler ${tr} added (${r.item} x ${r.qty})`}); touched.add(tr); continue; }
+          const dept = pv.department || null;
+          if(norm(pv.item)!==norm(r.item)){ events.push({so:r.so, trav:tr, dept, text:`traveler ${tr} item ${pv.item} -> ${r.item}`}); touched.add(tr); }
+          if(norm(pv.desc)!==norm(r.description)){ events.push({so:r.so, trav:tr, dept, text:`traveler ${tr} description changed`}); touched.add(tr); }
+          if(Number(pv.qty)!==Number(r.qty)){ events.push({so:r.so, trav:tr, dept, text:`traveler ${tr} qty ${pv.qty} -> ${r.qty}`}); touched.add(tr); }
         }
         for(const so of Object.keys(csvSOMap)){
           const prevSO = prevBySO[so]; if(!prevSO) continue;
           for(const trav of Object.keys(prevSO)){
-            if(!csvSOMap[so].has(trav) && !prevSO[trav].completedBatch) note(so, `traveler ${trav} removed (${prevSO[trav].item} x ${prevSO[trav].qty})`);
+            const pv = prevSO[trav];
+            if(!csvSOMap[so].has(trav) && !pv.completedBatch) events.push({so, trav, dept:pv.department||null, removed:true, text:`traveler ${trav} removed (${pv.item} x ${pv.qty})`});
           }
         }
-        const revSOs = Object.keys(revisions);
-        if(revSOs.length){
+        if(events.length){
           const nowIso = new Date().toISOString();
-          for(let i=0;i<revSOs.length;i+=40){
-            const pr = await fetch(`${SUPA_URL}/rest/v1/orders?so=in.(${revSOs.slice(i,i+40).join(',')})&archived=eq.false`,{
-              method:'PATCH', headers:{...H(),'Prefer':'return=minimal'}, body:JSON.stringify({revised_at:nowIso})
+          const deptByTraveler = {};
+          const tList = [...touched];
+          for(let i=0;i<tList.length;i+=80){
+            const pr = await fetch(`${SUPA_URL}/rest/v1/orders?traveler=in.(${tList.slice(i,i+80).join(',')})&archived=eq.false&select=traveler,department`,{
+              method:'PATCH', headers:{...H(),'Prefer':'return=representation'}, body:JSON.stringify({revised_at:nowIso})
             });
             if(!pr.ok) throw new Error(await pr.text());
+            (await pr.json()).forEach(row=>{ deptByTraveler[String(row.traveler)] = row.department || null; });
           }
+          // A removed traveler no longer exists, so tag the surviving travelers of the same department.
+          const doneRemoval = new Set();
+          for(const ev of events.filter(e=>e.removed)){
+            const key = ev.so+'|'+(ev.dept||'');
+            if(doneRemoval.has(key)) continue; doneRemoval.add(key);
+            const deptFilter = ev.dept ? `&department=eq.${ev.dept}` : `&department=is.null`;
+            const rr = await fetch(`${SUPA_URL}/rest/v1/orders?so=eq.${ev.so}${deptFilter}&archived=eq.false`,{
+              method:'PATCH', headers:{...H(),'Prefer':'return=minimal'}, body:JSON.stringify({revised_at:nowIso})
+            });
+            if(!rr.ok) throw new Error(await rr.text());
+          }
+          // One log row per SO + department, listing only that department's changes.
           const revActor = currentProfile?.full_name || 'unknown';
-          const revRows = revSOs.map(so=>({action:'revision', so, actor:revActor,
-            detail:`CSV upload (${revActor}): order ${so} revised - ${revisions[so].join('; ')}`}));
+          const grouped = {};
+          events.forEach(ev=>{
+            const dept = ev.dept !== undefined ? ev.dept : (deptByTraveler[ev.trav] || null);
+            const k = ev.so+'|'+(dept||'');
+            (grouped[k] = grouped[k] || {so:ev.so, dept, texts:[]}).texts.push(ev.text);
+          });
+          const revRows = Object.values(grouped).map(g=>({
+            action:'revision', so:g.so, department:g.dept, actor:revActor,
+            detail:`CSV upload (${revActor}): order ${g.so} revised${g.dept?` (${DEPT_META[g.dept]?.label||g.dept})`:''} - ${g.texts.join('; ')}`
+          }));
           for(let i=0;i<revRows.length;i+=500){
             const lr = await fetch(`${SUPA_URL}/rest/v1/activity_log`,{
               method:'POST', headers:{...H(),'Prefer':'return=minimal'}, body:JSON.stringify(revRows.slice(i,i+500))
@@ -3286,6 +3311,10 @@ async function logActivity(action, so, detail){
 // time the row/modal opens rather than preloaded with everything else —
 // activity_log grows unbounded and most orders are never expanded, so
 // there's no reason to pull it all up front like photos/comments are.
+// Revision rows carry a department; show only those for departments currently toggled on.
+function moveLogRowsFor(so){
+  return (moveLogCache[so] || []).filter(r=> r.action!=='revision' || !r.department || activeDepts.has(r.department));
+}
 async function loadMoveLogForSO(so){
   try{
     const rows = await sbGet('activity_log', `so=eq.${so}&action=in.(date_change,revision)&order=created_at.desc`);
@@ -3299,7 +3328,7 @@ async function loadMoveLogForSO(so){
 function renderMoveLogSummary(so){
   const el = document.getElementById('movelog-summary-'+so);
   if(!el) return; // row was collapsed again before the fetch finished
-  const rows = moveLogCache[so] || [];
+  const rows = moveLogRowsFor(so);
   const nMoves = rows.filter(r=>r.action==='date_change').length, nRevs = rows.length - nMoves;
   const parts = [];
   if(nMoves) parts.push(`Moved ${nMoves} time${nMoves>1?'s':''}`);
@@ -3308,7 +3337,7 @@ function renderMoveLogSummary(so){
   el.style.cursor = rows.length ? 'pointer' : 'default';
 }
 function toggleMoveLog(so){
-  const rows = moveLogCache[so] || [];
+  const rows = moveLogRowsFor(so);
   if(!rows.length) return;
   const listEl = document.getElementById('movelog-list-'+so);
   if(!listEl) return;
