@@ -4569,6 +4569,7 @@ function renderPrintLabelSkids(){
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
         <span style="flex:1;font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(it.item)} · ${escapeHtml(it.desc)}</span>
         <input type="number" min="0" step="1" value="${it.qty}" class="modal-input" style="width:64px;padding:4px 6px" onchange="updateSkidItemQty(${si},${ii},this.value)">
+        <input type="number" min="6" max="60" step="0.5" value="${it.px>0 ? it.px : Math.round(itemDefaultPx(si,ii)*10)/10}" class="modal-input" style="width:56px;padding:4px 4px;font-size:11px${it.px>0?';border-color:var(--accent)':''}" title="Text size in px for this item (clear the box to go back to automatic)" onchange="updateSkidItemPx(${si},${ii},this.value)">
         <button class="btn" style="padding:2px 8px;font-size:11px" onclick="toggleEditSkidItem(${si},${ii})" title="Edit wording">✎</button>
         <select class="modal-input" style="width:auto;padding:2px 2px;font-size:11px" title="Move to another skid" onchange="moveItemToSkid(${si},${ii},this.value);this.value=''">
           <option value="">Move</option>
@@ -4596,9 +4597,29 @@ function labelScaleForItemCount(n){
   // Gear and Wood labels (same 4x6 layout) get larger item text at 2-4 items (they had a lot of
   // empty room); 2-7 were then raised another 15%. Gate keeps the original table.
   const table = (typeof labelDept!=='undefined' && (labelDept==='gear' || labelDept==='wood'))
-    ? {1:1, 2:1.15, 3:0.98, 4:0.75, 5:0.55, 6:0.48, 7:0.43}
+    ? {1:1, 2:1.15, 3:0.85, 4:0.75, 5:0.55, 6:0.48, 7:0.43}
     : {1:1, 2:0.8, 3:0.66, 4:0.56, 5:0.48, 6:0.42, 7:0.37};
   return table[n] || 0.37;
+}
+// Per-item text size override (px of the item code/qty; description scales with it).
+// Items without `px` use the automatic size from the item-count ladder.
+function itemDefaultPx(si,ii){
+  const n = labelSkids[si].items.length;
+  const start = Math.floor(ii/MAX_ITEMS_PER_LABEL_PAGE)*MAX_ITEMS_PER_LABEL_PAGE;
+  const len = Math.min(MAX_ITEMS_PER_LABEL_PAGE, n - start);
+  return 30 * labelScaleForItemCount(len) * LABEL_DEPT_CONFIG[labelDept].printItemScale;
+}
+function itemScaleStyle(it, deptItemScale){
+  const px = parseFloat(it.px);
+  if(!(px>0)) return '';
+  return ` style="--lbl-scale:${(px/(30*deptItemScale)).toFixed(4)}"`;
+}
+function updateSkidItemPx(si,ii,val){
+  const it = labelSkids[si].items[ii];
+  const v = parseFloat(val);
+  if(!(v>0)) delete it.px;                         // cleared = back to automatic
+  else it.px = Math.min(60, Math.max(6, v));
+  renderPrintLabelSkids();
 }
 function custNameFontSize(name){
   const len = (name||'').length;
@@ -4649,7 +4670,7 @@ function renderPrintLabelPreview(){
   validSkids.forEach((skid,i)=>{
     chunkSkidItems(skid.items).forEach(chunk=>{
       const itemsHtml = chunk.map(it=>`
-      <div class="lbl-item">
+      <div class="lbl-item"${itemScaleStyle(it, cfg.previewItemScale)}>
         <div class="lbl-item-row">
           <div class="lbl-item-code">${escapeHtml(it.item)}</div>
           <div class="lbl-item-qty">${(parseFloat(it.qty)||0).toFixed(2)}</div>
@@ -4759,7 +4780,7 @@ function generateLabelDocument(so, cust, po, skids){
   skids.forEach((skid,i)=>{
     chunkSkidItems(skid.items).forEach(chunk=>{
       const itemsHtml = chunk.map(it=>`
-      <div class="lbl-item">
+      <div class="lbl-item"${itemScaleStyle(it, cfg.printItemScale)}>
         <div class="lbl-item-row">
           <div class="lbl-item-code">${escapeHtml(it.item)}</div>
           <div class="lbl-item-qty">${it.qty.toFixed(2)}</div>
