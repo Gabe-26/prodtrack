@@ -3026,7 +3026,7 @@ async function unapproveTraveler(traveler){
  
 async function approveAllTravelers(so){
   if(currentProfile?.role !== 'manager'){ toast('Access denied','Only managers can approve travelers.','red'); return; }
-  const soTravelers = orders.filter(o => o.so === so);
+  const soTravelers = orders.filter(o => o.so === so && isOrderVisible(o));
   const unapproved = soTravelers.filter(o => !approvals[o.traveler]);
   if(!unapproved.length){ toast('Already approved','All travelers are already approved.','amber'); return; }
   try{
@@ -3054,7 +3054,7 @@ function openDeepLinkedSO(){
   const so = new URLSearchParams(location.search).get('so');
   if(!so) return;
   history.replaceState({}, '', location.pathname);
-  if(!orders.some(o=>o.so===so)) return;
+  if(!orders.some(o=>o.so===so && isOrderVisible(o))) return;
   document.getElementById('search').value='';
   document.getElementById('f-via').value='';
   const df=document.getElementById('f-date'); if(df) df.value='';
