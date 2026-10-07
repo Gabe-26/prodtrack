@@ -4653,7 +4653,7 @@ function viaColorWord(via, location){
   if(via==='INSTALL/REPAIR') return 'BLACK';
   if(via==='PICK UP'){
     const loc=(location||'').toLowerCase();
-    if(loc.includes('amityville')) return labelDept==='gear' ? 'BLACK' : 'BLUE'; // Gear prints Amendolas pick up as BLACK
+    if(loc.includes('amityville')) return (labelDept==='gear' || labelDept==='gate') ? 'BLACK' : 'BLUE'; // Gear and Gate print Amendolas pick up as BLACK
     return 'ORANGE';
   }
   return '';
