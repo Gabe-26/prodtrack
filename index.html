@@ -279,6 +279,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .photo-del{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;background:var(--red);border:2px solid var(--bg);display:none;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:12px;font-weight:700;z-index:2;transition:transform 0.15s}
 .photo-del:hover{transform:scale(1.15)}
 .manager .photo-del{display:flex}
+.photo-del.photo-del-own{display:flex}
 .viewer .upload-zone{display:none}
 .viewer .photo-bar .upload-zone{display:none}
 .upload-zone{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px dashed var(--border2);border-radius:8px;cursor:pointer;transition:all 0.15s;position:relative;font-size:13px;color:var(--text3);width:fit-content}
@@ -2894,7 +2895,7 @@ function buildSODetailRows(so, travelers, soPhotos, isMgr){
         title="${p.filename} · ${p.uploaded_by} · ${new Date(p.uploaded_at).toLocaleString()}"
         onclick="openLB('${p.url}','${p.filename}','${p.uploaded_by||''}','${new Date(p.uploaded_at).toLocaleString()}','${p.id}','${p.storage_path||''}','${so}')">
       ${p.department?`<div style="position:absolute;bottom:-6px;left:-6px">${makeDeptPill(p.department)}</div>`:''}
-      <div class="photo-del" onclick="event.stopPropagation();askDelPhoto('${p.id}','${p.storage_path||''}','${so}','${(p.filename||'').replace(/'/g,"\\'")}')">✕</div>
+      <div class="photo-del${(currentProfile?.role==='worker' && currentProfile?.full_name && p.uploaded_by===currentProfile.full_name)?' photo-del-own':''}" onclick="event.stopPropagation();askDelPhoto('${p.id}','${p.storage_path||''}','${so}','${(p.filename||'').replace(/'/g,"\\'")}')">✕</div>
     </div>`).join('');
   html+=`<tr class="photo-row"><td colspan="6">
     <div class="photo-section">
@@ -3801,11 +3802,18 @@ async function doDeletePhoto(){
   const btn=document.getElementById('confirm-photo-yes');
   btn.disabled=true; btn.textContent='Deleting…';
   try{
+    // Delete the database row FIRST: for a worker the database checks ownership through the stored
+    // file, so the file must still exist. Ask for the deleted row back to confirm it really happened
+    // (a refused delete is otherwise a silent no-op).
+    const dr = await fetch(`${SUPA_URL}/rest/v1/photos?id=eq.${pendingDelPhotoId}`,
+      {method:'DELETE',headers:{...H(),'Prefer':'return=representation'}});
+    if(!dr.ok) throw new Error(await dr.text());
+    const goneRows = await dr.json();
+    if(!goneRows.length) throw new Error('You can only delete photos that you uploaded yourself.');
     if(pendingDelStoragePath){
       await fetch(`${SUPA_URL}/storage/v1/object/${BUCKET}/${pendingDelStoragePath}`,
         {method:'DELETE',headers:{'apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY)}}).catch(()=>{});
     }
-    await sbDelete('photos', pendingDelPhotoId);
     await logActivity('photo_delete', pendingDelSO, `Deleted "${pendingDelFilename||'photo'}"`);
     for(const so of Object.keys(photos)) photos[so]=photos[so].filter(p=>p.id!==pendingDelPhotoId);
     closeConfirmPhoto(); closeLB(); updateAll(); render();
@@ -3821,7 +3829,7 @@ function openLB(url,filename,by,ts,pid,sp,so){
   document.getElementById('lb-img').src=url;
   document.getElementById('lb-meta').textContent=`${filename} · uploaded by ${by} · ${ts}`;
   const act=document.getElementById('lb-actions');
-  if(currentProfile?.role==='manager'){
+  if(currentProfile?.role==='manager' || (currentProfile?.role==='worker' && currentProfile?.full_name && by===currentProfile.full_name)){
     act.innerHTML=`<button class="btn danger" onclick="askDelPhoto('${pid}','${sp}','${so}','${(filename||'').replace(/'/g,"\\'")}')">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>
       Delete photo</button>`;
