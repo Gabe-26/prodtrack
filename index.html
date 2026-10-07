@@ -646,6 +646,13 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <button class="btn" id="pl-dept-gear-btn" onclick="setPrintLabelDept('gear')">Gear</button>
       </div>
     </div>
+    <div class="modal-field" id="pl-format-picker" style="display:none">
+      <div class="modal-label">Label size</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn primary" id="pl-format-gear-btn" onclick="setLabelFormat('gear')">Gear label (4×6)</button>
+        <button class="btn" id="pl-format-gate-btn" onclick="setLabelFormat('gate')">Gate label (4×3)</button>
+      </div>
+    </div>
     <div id="pl-print-status" style="display:none;font-size:12px;padding:8px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);margin-bottom:12px"></div>
     <div style="display:flex;gap:20px;align-items:flex-start">
       <div id="pl-preview" style="max-height:65vh;overflow-y:auto"></div>
@@ -4385,6 +4392,7 @@ ${(() => { let lastWoodDayShown = null; let lastGearDayShown = null; let lastGat
 // ── Print label (Wood only, per SO, skid-based) ────────────────────────────────
 let labelSO = null;
 let labelDept = 'wood';
+let labelFormat = 'wood'; // which label LOOK (size/text scale) to use; equals labelDept except a Gear order can use the Gate look
 let labelDeptTravelers = [];
 let labelSkids = []; // [{ items: [{traveler,item,desc,qty}] }]
 let labelEditingItems = new Set(); // keys "si-ii" currently in wording-edit mode
@@ -4428,6 +4436,8 @@ function setPrintLabelDept(dept){
   const cap = LABEL_DEPT_CONFIG[dept].cap;
   const statusEl = document.getElementById('pl-print-status');
   const prevPrint = labelPrints[labelSO+'|'+dept];
+  labelFormat = (dept==='gear' && prevPrint && (prevPrint.skids||[])[0]?.fmt==='gate') ? 'gate' : dept;
+  updateLabelFormatToggle();
   labelSkids = [];
   if(prevPrint){
     // Reconcile the saved layout (including any manual wording/qty edits) against the
@@ -4552,6 +4562,21 @@ function setPrintLabelDept(dept){
   document.getElementById('pl-err').textContent = '';
   renderPrintLabelSkids();
 }
+function updateLabelFormatToggle(){
+  const wrap = document.getElementById('pl-format-picker');
+  if(!wrap) return;
+  wrap.style.display = labelDept==='gear' ? '' : 'none';
+  document.getElementById('pl-format-gear-btn')?.classList.toggle('primary', labelFormat!=='gate');
+  document.getElementById('pl-format-gate-btn')?.classList.toggle('primary', labelFormat==='gate');
+}
+function setLabelFormat(fmt){
+  if(labelDept!=='gear' || labelFormat===fmt) return;
+  labelFormat = fmt;
+  // hand-set text sizes were tuned for the other label size, so return every item to automatic
+  labelSkids.forEach(sk=>sk.items.forEach(it=>{ delete it.px; }));
+  updateLabelFormatToggle();
+  renderPrintLabelSkids();
+}
 function closePrintLabelModal(){ document.getElementById('print-label-modal').classList.remove('open'); }
 
 function renderPrintLabelSkids(){
@@ -4605,7 +4630,7 @@ function renderPrintLabelSkids(){
 function labelScaleForItemCount(n){
   // Gear and Wood labels (same 4x6 layout) get larger item text at 2-4 items (they had a lot of
   // empty room); 2-7 were then raised another 15%. Gate keeps the original table.
-  const table = (typeof labelDept!=='undefined' && (labelDept==='gear' || labelDept==='wood'))
+  const table = (typeof labelFormat!=='undefined' && (labelFormat==='gear' || labelFormat==='wood'))
     ? {1:1, 2:1.15, 3:0.85, 4:0.75, 5:0.55, 6:0.48, 7:0.43}
     : {1:1, 2:0.8, 3:0.66, 4:0.56, 5:0.48, 6:0.42, 7:0.37};
   return table[n] || 0.37;
@@ -4616,7 +4641,7 @@ function itemDefaultPx(si,ii){
   const n = labelSkids[si].items.length;
   const start = Math.floor(ii/MAX_ITEMS_PER_LABEL_PAGE)*MAX_ITEMS_PER_LABEL_PAGE;
   const len = Math.min(MAX_ITEMS_PER_LABEL_PAGE, n - start);
-  return 30 * labelScaleForItemCount(len) * LABEL_DEPT_CONFIG[labelDept].printItemScale;
+  return 30 * labelScaleForItemCount(len) * LABEL_DEPT_CONFIG[labelFormat].printItemScale;
 }
 function itemScaleStyle(it, deptItemScale){
   const px = parseFloat(it.px);
@@ -4667,11 +4692,11 @@ function renderPrintLabelPreview(){
   const wrap = document.getElementById('pl-preview');
   const t0 = labelDeptTravelers[0];
   if(!wrap || !t0) return;
-  const cfg = LABEL_DEPT_CONFIG[labelDept];
+  const cfg = LABEL_DEPT_CONFIG[labelFormat];
   const wrapW = cfg.widthIn*72, wrapH = cfg.heightIn*72; // 96px/in * 0.75 scale
   const cust = document.getElementById('pl-cust')?.value.trim() || '';
   const po = document.getElementById('pl-po')?.value.trim() || '';
-  const custLineSize = labelDept==='gate' ? cfg.lineSizePreview : custNameFontSize(cust);
+  const custLineSize = labelFormat==='gate' ? cfg.lineSizePreview : custNameFontSize(cust);
   const shipDate = fmtDate(t0.soShipRaw);
   const validSkids = labelSkids.filter(s=>s.items.length);
   const total = validSkids.length;
@@ -4695,8 +4720,8 @@ function renderPrintLabelPreview(){
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
-        ${LABEL_DEPT_CONFIG[labelDept].colorTagStyle==='text'
-          ? `<div class="lbl-color-tag lbl-color-tag-text${labelDept==='gate'?' lbl-color-tag-plain':''}">${viaColorWord(t0.via, t0.location)}</div>`
+        ${LABEL_DEPT_CONFIG[labelFormat].colorTagStyle==='text'
+          ? `<div class="lbl-color-tag lbl-color-tag-text${labelFormat==='gate'?' lbl-color-tag-plain':''}">${viaColorWord(t0.via, t0.location)}</div>`
           : `<div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>`}
         <div class="lbl-page">${i+1} of ${total}</div>
       </div>
@@ -4768,7 +4793,7 @@ async function doPrintLabels(){
   if(!validSkids.length){ err.textContent = 'Add at least one item to a skid.'; return; }
   err.textContent = '';
   generateLabelDocument(labelSO, cust, po, validSkids);
-  const record = {so:labelSO, department:labelDept, printed_by:currentProfile?.full_name||'worker', printed_at:new Date().toISOString(), cust, po, skids:validSkids};
+  const record = {so:labelSO, department:labelDept, printed_by:currentProfile?.full_name||'worker', printed_at:new Date().toISOString(), cust, po, skids:(labelDept==='gear' && labelFormat==='gate') ? validSkids.map(sk=>({...sk, fmt:'gate'})) : validSkids};
   try{
     const r = await fetch(`${SUPA_URL}/rest/v1/label_prints?on_conflict=so,department`, {
       method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates,return=minimal'},
@@ -4781,9 +4806,9 @@ async function doPrintLabels(){
 }
 function generateLabelDocument(so, cust, po, skids){
   const t0 = labelDeptTravelers[0];
-  const cfg = LABEL_DEPT_CONFIG[labelDept];
+  const cfg = LABEL_DEPT_CONFIG[labelFormat];
   const shipDate = fmtDate(t0.soShipRaw);
-  const custLineSize = labelDept==='gate' ? cfg.lineSizePrint : custNameFontSize(cust);
+  const custLineSize = labelFormat==='gate' ? cfg.lineSizePrint : custNameFontSize(cust);
   const total = skids.length;
   let pages = '';
   skids.forEach((skid,i)=>{
@@ -4805,8 +4830,8 @@ function generateLabelDocument(so, cust, po, skids){
       <div class="lbl-divider"></div>
       ${itemsHtml}
       <div class="lbl-bottom-row">
-        ${LABEL_DEPT_CONFIG[labelDept].colorTagStyle==='text'
-          ? `<div class="lbl-color-tag lbl-color-tag-text${labelDept==='gate'?' lbl-color-tag-plain':''}">${viaColorWord(t0.via, t0.location)}</div>`
+        ${LABEL_DEPT_CONFIG[labelFormat].colorTagStyle==='text'
+          ? `<div class="lbl-color-tag lbl-color-tag-text${labelFormat==='gate'?' lbl-color-tag-plain':''}">${viaColorWord(t0.via, t0.location)}</div>`
           : `<div class="lbl-color-tag" style="background:${viaColorHex(t0.via, t0.location)}"></div>`}
         <div class="lbl-page">${i+1} of ${total}</div>
       </div>
