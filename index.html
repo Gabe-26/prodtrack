@@ -1856,7 +1856,7 @@ async function refreshData(){
   try{
     const ok = await refreshAuthToken();
     if(!ok){ await forceReauth('Session expired — please sign in again.'); btn.disabled=false; return; }
-    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadGearItemTypes(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]); lastDataFetchAt=Date.now(); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadLastCsvUpload(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadGearItemTypes(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]); lastDataFetchAt=Date.now(); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
   }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
