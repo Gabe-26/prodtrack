@@ -833,7 +833,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       Metal codes
       <button class="modal-close" onclick="closeMetalCodesModal()">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Classify each Metal item code as Pipe, Frame, Canti, Barrier, or Rolling. Re-uploading the code list only adds/updates codes — it never resets a classification you have already set. Anything not classified counts as Misc.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Classify each Metal item code as Pipe, Frame, Canti, Barrier, or Rolling. Re-uploading the code list only adds/updates codes — it never resets a classification you have already set. Anything not classified counts as Misc. The 10 generic -CUS codes (CP, CPI, CLGBGG, CLGFG158, CLGG, CLGG158, CLGBGC, CLGC, CLGC158, CLGFC158) are classified from each order&#39;s own description first; the buttons here are only their fallback.</div>
     <div class="modal-field">
       <div class="modal-label">Metal codes CSV (needs "Item Code" and "Description" columns)</div>
       <input type="file" accept=".csv" id="mc-file-input" onchange="handleMetalCodesCSVUpload(this.files[0])">
@@ -2724,7 +2724,7 @@ function renderCategoryBreakdown(groups){
       if(o.department==='wood') woodTotals[classifyWoodTraveler(o.line, o.item, o.desc)] += qty;
       else if(o.department==='gear') gearTotals[classifyGearItem(o.item)] += qty;
       else if(o.department==='gate') gateTotals[classifyGearItem(o.item)==='gate' ? 'gate' : 'misc'] += qty;
-      else if(o.department==='metal') metalTotals[classifyMetalItem(o.item)] += qty;
+      else if(o.department==='metal') metalTotals[classifyMetalItem(o.item, o.desc)] += qty;
     });
   });
   const blocks = [];
@@ -4185,9 +4185,26 @@ function classifyGearItem(itemCode){
   const codeKey = String(itemCode||'').trim().toUpperCase();
   return gearCodesMap[codeKey] || 'misc';
 }
-// Metal classification — manual only, same idea as Gear: no heuristic, anything untagged is Misc.
-function classifyMetalItem(itemCode){
+// Metal classification — manual (Metal codes modal), anything untagged is Misc. EXCEPTION: the
+// generic -CUS codes below can be a different product on every order, so for those the order's own
+// description decides first (word-start matching, so shortened/misspelled words still hit: CANTI,
+// CANTILEVER, BARIER, ROLNG, FRM...). No match → falls back to the manual tag, then Misc.
+const METAL_DESC_RULE_CODES = new Set(['CP-CUS','CPI-CUS','CLGBGG-CUS','CLGFG158-CUS','CLGG-CUS','CLGG158-CUS','CLGBGC-CUS','CLGC-CUS','CLGC158-CUS','CLGFC158-CUS']);
+function classifyMetalByDesc(desc){
+  const d = ' ' + String(desc||'').toUpperCase().replace(/[^A-Z0-9]+/g,' ') + ' ';
+  if(/ CANT/.test(d)) return 'canti';                      // wins over Frame ("CANTI FRAME")
+  if(/ (BARR(?!EL)|BARI)/.test(d)) return 'barrier';
+  if(/ (ROLL(?!ER)|ROLN|RLNG|RLG)/.test(d)) return 'rolling';
+  if(/ FRA?M/.test(d)) return 'frame';
+  if(/ PIPE/.test(d)) return 'pipe';
+  return null;
+}
+function classifyMetalItem(itemCode, desc){
   const codeKey = String(itemCode||'').trim().toUpperCase();
+  if(METAL_DESC_RULE_CODES.has(codeKey)){
+    const byDesc = classifyMetalByDesc(desc);
+    if(byDesc) return byDesc;
+  }
   return metalCodesMap[codeKey] || 'misc';
 }
 function generatePrintReport(startDate, endDate, deptSet){
