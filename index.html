@@ -356,6 +356,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 #print-label-modal .modal-card{max-width:840px}
 #wood-codes-modal .modal-card{max-width:1100px}
 #gear-codes-modal .modal-card{max-width:1300px}
+#metal-codes-modal .modal-card{max-width:1100px}
 .wc-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .wc-bulkbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;margin-bottom:10px}
 .wc-table-wrap{max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px}
@@ -377,6 +378,11 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 .wc-type-btn.active.gc-arbperg{background:var(--purple-dim);color:var(--purple);border-color:var(--purple)}
 .wc-type-btn.active.gc-postandrail{background:var(--orange-dim);color:var(--orange);border-color:var(--orange)}
 .wc-type-btn.active.gc-gate{background:var(--yellow-dim);color:var(--yellow);border-color:var(--yellow)}
+.wc-type-btn.active.mc-pipe{background:var(--blue-dim);color:var(--blue);border-color:var(--blue)}
+.wc-type-btn.active.mc-frame{background:var(--green-dim);color:var(--green);border-color:var(--green)}
+.wc-type-btn.active.mc-canti{background:var(--amber-dim);color:var(--amber);border-color:var(--amber)}
+.wc-type-btn.active.mc-barrier{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+.wc-type-btn.active.mc-rolling{background:var(--purple-dim);color:var(--purple);border-color:var(--purple)}
 .pl-preview-wrap{width:288px;height:432px;overflow:hidden;position:relative;border:1px solid var(--border2);border-radius:4px;background:#fff;margin-bottom:12px;flex-shrink:0}
 .pl-preview-page{position:absolute;top:0;left:0;width:4in;height:6in;padding:calc(0.22in - var(--lbl-top-reduce,5px)) 0.22in 0.22in 0.22in;box-sizing:border-box;transform:scale(0.75);transform-origin:top left;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
 .pl-preview-page .lbl-so{font-size:65px;font-weight:800;margin-bottom:0;letter-spacing:1px;text-align:center}
@@ -819,6 +825,53 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     </div>
   </div>
 </div>
+
+<!-- Metal codes modal (owner only) — manually classify Metal item codes -->
+<div class="modal-overlay" id="metal-codes-modal">
+  <div class="modal-card">
+    <div class="modal-title">
+      Metal codes
+      <button class="modal-close" onclick="closeMetalCodesModal()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Classify each Metal item code as Pipe, Frame, Canti, Barrier, or Rolling. Re-uploading the code list only adds/updates codes — it never resets a classification you have already set. Anything not classified counts as Misc.</div>
+    <div class="modal-field">
+      <div class="modal-label">Metal codes CSV (needs "Item Code" and "Description" columns)</div>
+      <input type="file" accept=".csv" id="mc-file-input" onchange="handleMetalCodesCSVUpload(this.files[0])">
+    </div>
+    <div id="mc-status" style="font-size:12px;font-family:var(--mono);color:var(--text3);margin:6px 0 14px"></div>
+    <div class="wc-toolbar">
+      <input class="modal-input" style="max-width:240px" type="text" placeholder="Search code or description" oninput="onMetalCodesSearch(this.value)">
+      <select class="modal-input" style="max-width:180px" onchange="onMetalCodesFilterChange(this.value)">
+        <option value="all">All codes</option>
+        <option value="unclassified">Unclassified only</option>
+      </select>
+      <select class="modal-input" style="max-width:140px" id="mc-prod-filter" onchange="onMetalCodesProdFilterChange(this.value)">
+        <option value="">All Prod lines</option>
+      </select>
+      <span id="mc-count" style="font-size:11px;font-family:var(--mono);color:var(--text3)"></span>
+    </div>
+    <div class="wc-bulkbar">
+      <input type="checkbox" id="mc-selectall" onchange="toggleMetalCodeSelectAll(this.checked)">
+      <span id="mc-selected-count" style="font-size:11px;font-family:var(--mono);color:var(--text3)">0 selected</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--text3)">Set selected to:</span>
+      <button class="wc-type-btn mc-pipe" onclick="applyTypeToSelectedMetal('pipe')">Pipe</button>
+      <button class="wc-type-btn mc-frame" onclick="applyTypeToSelectedMetal('frame')">Frame</button>
+      <button class="wc-type-btn mc-canti" onclick="applyTypeToSelectedMetal('canti')">Canti</button>
+      <button class="wc-type-btn mc-barrier" onclick="applyTypeToSelectedMetal('barrier')">Barrier</button>
+      <button class="wc-type-btn mc-rolling" onclick="applyTypeToSelectedMetal('rolling')">Rolling</button>
+      <button class="wc-type-btn wc-misc" onclick="applyTypeToSelectedMetal('misc')">Misc</button>
+    </div>
+    <div class="wc-table-wrap">
+      <table class="wc-table">
+        <thead><tr><th></th><th>Item Code</th><th>Description</th><th>Prod</th><th>Type</th></tr></thead>
+        <tbody id="mc-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeMetalCodesModal()">Close</button>
+    </div>
+  </div>
+</div>
  
 <!-- Add user modal -->
 <div class="modal-overlay" id="add-user-modal">
@@ -957,6 +1010,10 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
       <div class="nav-item" id="nav-gear-codes" onclick="openGearCodesModal()" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         Gear codes
+      </div>
+      <div class="nav-item" id="nav-metal-codes" onclick="openMetalCodesModal()" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        Metal codes
       </div>
       <div class="nav-item" id="nav-changedates" onclick="sv('changedates')" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 15l2 2 4-4"/></svg>
@@ -1423,6 +1480,7 @@ function showApp(){
   document.getElementById('nav-holidays').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-wood-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-gear-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
+  document.getElementById('nav-metal-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('archive-box-bydate').style.display = uname === 'zgta26' ? '' : 'none';
   document.getElementById('archive-box-restore-range').style.display = uname === 'zgta26' ? '' : 'none';
   document.getElementById('nav-cus-traveler').style.display = (isProd || uname === 'zgta26') ? 'flex' : 'none';
@@ -1556,6 +1614,20 @@ async function loadGearItemTypes(){
     rows.forEach(r=>{ if(r.type) gearCodesMap[r.item_code.trim().toUpperCase()] = r.type; });
   } catch(e){}
 }
+let metalCodes = [];
+let metalCodesMap = {}; // item_code (uppercase, trimmed) -> type, Gabriel's manual classification
+let selectedMetalCodes = new Set();
+let metalCodesFilter = 'all';
+let metalCodesSearch = '';
+let metalCodesProdFilter = '';
+async function loadMetalItemTypes(){
+  try{
+    const rows = await sbGet('metal_item_types','select=item_code,description,prod,type&order=prod.asc,item_code.asc');
+    metalCodes = rows;
+    metalCodesMap = {};
+    rows.forEach(r=>{ if(r.type) metalCodesMap[r.item_code.trim().toUpperCase()] = r.type; });
+  } catch(e){}
+}
 async function loadDepartmentBatches(){
   try{ departmentBatches = await sbGet('department_batches','select=*&order=created_at.desc'); }
   catch(e){}
@@ -1605,7 +1677,7 @@ async function sbUpdate(table, id, data){
 // ── Load data ─────────────────────────────────────────────────────────────────
 async function loadAll(){
   showLoading('Loading orders…');
-  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload(), loadHolidays(), loadCustomers(), loadWoodItemTypes(), loadGearItemTypes(), loadDepartmentBatches(), loadBatchReads(), loadLabelPrints()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
+  try{ await Promise.all([loadOrders(), loadPhotos(), loadApprovals(), loadComments(), loadLastCsvUpload(), loadHolidays(), loadCustomers(), loadWoodItemTypes(), loadGearItemTypes(), loadMetalItemTypes(), loadDepartmentBatches(), loadBatchReads(), loadLabelPrints()]); updateAll(); sv('tomorrow'); openDeepLinkedSO(); }
   catch(e){ toast('Error',e.message,'red'); }
   hideLoading();
 }
@@ -1856,7 +1928,7 @@ async function refreshData(){
   try{
     const ok = await refreshAuthToken();
     if(!ok){ await forceReauth('Session expired — please sign in again.'); btn.disabled=false; return; }
-    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadLastCsvUpload(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadGearItemTypes(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]); lastDataFetchAt=Date.now(); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadLastCsvUpload(),loadHolidays(),loadCustomers(),loadWoodItemTypes(),loadGearItemTypes(),loadMetalItemTypes(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]); lastDataFetchAt=Date.now(); updateAll(); render(); toast('Refreshed','Data is up to date.','green'); startAutoRefresh();
   }
   catch(e){ toast('Error',e.message,'red'); }
   btn.disabled=false;
@@ -2645,12 +2717,14 @@ function renderCategoryBreakdown(groups){
   const woodTotals = {section:0, gate:0, post:0, arb_perg:0, misc:0};
   const gearTotals = {section:0, post:0, profile:0, lattice_profile:0, topper:0, bend:0, arb_perg:0, post_and_rail:0, misc:0};
   const gateTotals = {gate:0, misc:0};
+  const metalTotals = {pipe:0, frame:0, canti:0, barrier:0, rolling:0, misc:0};
   activeGroups.forEach(g=>{
     g.travelers.forEach(o=>{
       const qty = Number(o.qty)||0;
       if(o.department==='wood') woodTotals[classifyWoodTraveler(o.line, o.item, o.desc)] += qty;
       else if(o.department==='gear') gearTotals[classifyGearItem(o.item)] += qty;
       else if(o.department==='gate') gateTotals[classifyGearItem(o.item)==='gate' ? 'gate' : 'misc'] += qty;
+      else if(o.department==='metal') metalTotals[classifyMetalItem(o.item)] += qty;
     });
   });
   const blocks = [];
@@ -2683,6 +2757,17 @@ function renderCategoryBreakdown(groups){
     blocks.push(`<div class="cb-block"><div class="cb-label"${c?' style="margin-bottom:0"':''} onclick="toggleBreakdownDept('gate')">${c?'▸':'▾'} Gate</div>${c?'':`<div class="cb-tiles">
     <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val yellow">${gateTotals.gate}</div></div>
     <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${gateTotals.misc}</div></div>
+  </div>`}</div>`);
+  }
+  if(Object.values(metalTotals).some(v=>v>0)){
+    const c = collapsedBreakdownDepts.has('metal');
+    blocks.push(`<div class="cb-block"><div class="cb-label"${c?' style="margin-bottom:0"':''} onclick="toggleBreakdownDept('metal')">${c?'▸':'▾'} Metal</div>${c?'':`<div class="cb-tiles">
+    <div class="sum-item"><div class="sum-label">Pipe</div><div class="sum-val blue">${metalTotals.pipe}</div></div>
+    <div class="sum-item"><div class="sum-label">Frame</div><div class="sum-val green">${metalTotals.frame}</div></div>
+    <div class="sum-item"><div class="sum-label">Canti</div><div class="sum-val amber">${metalTotals.canti}</div></div>
+    <div class="sum-item"><div class="sum-label">Barrier</div><div class="sum-val red">${metalTotals.barrier}</div></div>
+    <div class="sum-item"><div class="sum-label">Rolling</div><div class="sum-val purple">${metalTotals.rolling}</div></div>
+    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${metalTotals.misc}</div></div>
   </div>`}</div>`);
   }
   if(!blocks.length){ wrap.style.display='none'; return; }
@@ -4100,6 +4185,11 @@ function classifyGearItem(itemCode){
   const codeKey = String(itemCode||'').trim().toUpperCase();
   return gearCodesMap[codeKey] || 'misc';
 }
+// Metal classification — manual only, same idea as Gear: no heuristic, anything untagged is Misc.
+function classifyMetalItem(itemCode){
+  const codeKey = String(itemCode||'').trim().toUpperCase();
+  return metalCodesMap[codeKey] || 'misc';
+}
 function generatePrintReport(startDate, endDate, deptSet){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
 
@@ -5295,6 +5385,168 @@ function openGearCodesModal(){
   document.getElementById('gear-codes-modal').classList.add('open');
 }
 function closeGearCodesModal(){ document.getElementById('gear-codes-modal').classList.remove('open'); }
+function parseMetalCodesCSV(txt){
+  const lines = splitCSVRecords(txt).filter(l=>l.trim());
+  if(!lines.length) return null;
+  let headerIdx=-1, codeIdx=-1, descIdx=-1, prodIdx=-1;
+  for(let i=0;i<Math.min(5,lines.length);i++){
+    const header = parseRow(lines[i]).map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]/g,''));
+    const c = header.findIndex(h=>h.includes('itemcode'));
+    const d = header.findIndex(h=>h==='description');
+    if(c!==-1 && d!==-1){ headerIdx=i; codeIdx=c; descIdx=d; prodIdx=header.findIndex(h=>h==='prod'||h.includes('prodline')); break; }
+  }
+  if(headerIdx===-1) return null;
+  const out=[];
+  for(let i=headerIdx+1;i<lines.length;i++){
+    const r = parseRow(lines[i]);
+    const item_code = (r[codeIdx]||'').trim();
+    const description = (r[descIdx]||'').trim();
+    if(!item_code) continue;
+    const prod = prodIdx>=0 ? (r[prodIdx]||'').trim() : '';
+    out.push({item_code, description, prod});
+  }
+  return out;
+}
+async function handleMetalCodesCSVUpload(file){
+  if(!file) return;
+  const status = document.getElementById('mc-status');
+  status.textContent = 'Reading file…';
+  try{
+    const txt = await file.text();
+    const rows = parseMetalCodesCSV(txt);
+    if(rows===null){ status.textContent = 'Could not find "Item Code" and "Description" columns in this file.'; return; }
+    if(!rows.length){ status.textContent = 'No code rows found in this file.'; return; }
+    status.textContent = `Uploading ${rows.length} codes…`;
+    const BATCH = 500;
+    for(let i=0;i<rows.length;i+=BATCH){
+      const batch = rows.slice(i,i+BATCH);
+      const r = await fetch(`${SUPA_URL}/rest/v1/metal_item_types?on_conflict=item_code`, {
+        method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify(batch)
+      });
+      if(!r.ok) throw new Error(await r.text());
+    }
+    await loadMetalItemTypes();
+    renderMetalCodesProdOptions();
+    renderMetalCodesList();
+    status.textContent = `Done — ${metalCodes.length} codes loaded.`;
+    toast('Metal codes updated', `${rows.length} codes added/updated.`, 'green');
+  } catch(e){
+    status.textContent = 'Error: '+e.message;
+    toast('Error', e.message, 'red');
+  }
+  document.getElementById('mc-file-input').value = '';
+}
+async function setMetalCodeTypes(codes, type){
+  const dbType = type==='misc' ? null : type;
+  const filter = codes.length===1
+    ? `item_code=eq.${encodeURIComponent(codes[0])}`
+    : `item_code=in.(${codes.map(c=>encodeURIComponent(c)).join(',')})`;
+  const r = await fetch(`${SUPA_URL}/rest/v1/metal_item_types?${filter}`, {
+    method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
+    body: JSON.stringify({type: dbType})
+  });
+  if(!r.ok) throw new Error(await r.text());
+}
+async function applyTypeToRowMetal(itemCode, type){
+  try{
+    await setMetalCodeTypes([itemCode], type);
+    const dbType = type==='misc' ? null : type;
+    const row = metalCodes.find(r=>r.item_code===itemCode);
+    if(row) row.type = dbType;
+    const key = itemCode.trim().toUpperCase();
+    if(dbType) metalCodesMap[key] = dbType; else delete metalCodesMap[key];
+    renderMetalCodesList();
+  }catch(e){ toast('Error', e.message, 'red'); }
+}
+async function applyTypeToSelectedMetal(type){
+  if(!selectedMetalCodes.size) return;
+  const codes = [...selectedMetalCodes];
+  try{
+    await setMetalCodeTypes(codes, type);
+    const dbType = type==='misc' ? null : type;
+    codes.forEach(code=>{
+      const row = metalCodes.find(r=>r.item_code===code);
+      if(row) row.type = dbType;
+      const key = code.trim().toUpperCase();
+      if(dbType) metalCodesMap[key] = dbType; else delete metalCodesMap[key];
+    });
+    selectedMetalCodes.clear();
+    renderMetalCodesList();
+    toast('Updated', `${codes.length} codes set to ${type}.`, 'green');
+  }catch(e){ toast('Error', e.message, 'red'); }
+}
+let mcLastClickIndex = null;
+function toggleMetalCodeSelect(itemCode, checked, evt){
+  const list = filteredMetalCodes();
+  const idx = list.findIndex(r=>r.item_code===itemCode);
+  if(evt && evt.shiftKey && mcLastClickIndex!==null && idx!==-1){
+    const [a,b] = [mcLastClickIndex, idx].sort((x,y)=>x-y);
+    for(let i=a;i<=b;i++){
+      if(checked) selectedMetalCodes.add(list[i].item_code); else selectedMetalCodes.delete(list[i].item_code);
+    }
+  } else {
+    if(checked) selectedMetalCodes.add(itemCode); else selectedMetalCodes.delete(itemCode);
+  }
+  if(idx!==-1) mcLastClickIndex = idx;
+  renderMetalCodesList();
+}
+function toggleMetalCodeSelectAll(checked){
+  const filtered = filteredMetalCodes();
+  if(checked) filtered.forEach(r=>selectedMetalCodes.add(r.item_code));
+  else filtered.forEach(r=>selectedMetalCodes.delete(r.item_code));
+  renderMetalCodesList();
+}
+function filteredMetalCodes(){
+  const q = metalCodesSearch.trim().toUpperCase();
+  return metalCodes.filter(r=>{
+    if(metalCodesFilter==='unclassified' && r.type) return false;
+    if(metalCodesProdFilter && r.prod!==metalCodesProdFilter) return false;
+    if(q && !r.item_code.toUpperCase().includes(q) && !r.description.toUpperCase().includes(q)) return false;
+    return true;
+  });
+}
+function onMetalCodesProdFilterChange(v){ metalCodesProdFilter=v; mcLastClickIndex=null; renderMetalCodesList(); }
+function renderMetalCodesProdOptions(){
+  const sel = document.getElementById('mc-prod-filter');
+  const prods = [...new Set(metalCodes.map(r=>r.prod).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All Prod lines</option>' + prods.map(p=>`<option value="${p}">${p}</option>`).join('');
+  sel.value = metalCodesProdFilter;
+}
+function onMetalCodesSearch(v){ metalCodesSearch=v; mcLastClickIndex=null; renderMetalCodesList(); }
+function onMetalCodesFilterChange(v){ metalCodesFilter=v; mcLastClickIndex=null; renderMetalCodesList(); }
+function renderMetalCodesList(){
+  const list = filteredMetalCodes();
+  const body = document.getElementById('mc-tbody');
+  const typeBtn = (row,t,label,cls)=>{
+    const isActive = t==='misc' ? !row.type : row.type===t;
+    return `<button class="wc-type-btn ${cls}${isActive?' active':''}" onclick="applyTypeToRowMetal('${row.item_code}','${t}')">${label}</button>`;
+  };
+  body.innerHTML = list.map(r=>`
+    <tr>
+      <td><input type="checkbox" ${selectedMetalCodes.has(r.item_code)?'checked':''} onclick="toggleMetalCodeSelect('${r.item_code}', this.checked, event)"></td>
+      <td style="font-family:var(--mono)">${escapeHtml(r.item_code)}</td>
+      <td>${escapeHtml(r.description)}</td>
+      <td style="font-family:var(--mono);color:var(--text3)">${escapeHtml(r.prod||'')}</td>
+      <td>${typeBtn(r,'pipe','Pipe','mc-pipe')}${typeBtn(r,'frame','Frame','mc-frame')}${typeBtn(r,'canti','Canti','mc-canti')}${typeBtn(r,'barrier','Barrier','mc-barrier')}${typeBtn(r,'rolling','Rolling','mc-rolling')}${typeBtn(r,'misc','Misc','wc-misc')}</td>
+    </tr>`).join('');
+  document.getElementById('mc-count').textContent = `${list.length} of ${metalCodes.length} codes`;
+  document.getElementById('mc-selected-count').textContent = `${selectedMetalCodes.size} selected`;
+  document.getElementById('mc-selectall').checked = list.length>0 && list.every(r=>selectedMetalCodes.has(r.item_code));
+}
+function openMetalCodesModal(){
+  if(currentProfile?.username !== 'zgta26') return;
+  selectedMetalCodes.clear();
+  mcLastClickIndex = null;
+  metalCodesSearch = '';
+  metalCodesFilter = 'all';
+  metalCodesProdFilter = '';
+  document.getElementById('mc-status').textContent = '';
+  renderMetalCodesProdOptions();
+  renderMetalCodesList();
+  document.getElementById('metal-codes-modal').classList.add('open');
+}
+function closeMetalCodesModal(){ document.getElementById('metal-codes-modal').classList.remove('open'); }
 async function doDeleteHoliday(id){
   try{
     await sbDelete('holidays', id);
@@ -5549,7 +5801,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();closeGearCodesModal();colorCheckRespond(false);staleCsvRespond(false);
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();closeGearCodesModal();closeMetalCodesModal();colorCheckRespond(false);staleCsvRespond(false);
   }
 });
  
