@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
 <style>
 :root{
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#26262b;
@@ -186,7 +187,7 @@ td{font-family:var(--mono)}
     <div id="view-completions" class="hidden">
       <div class="card">
         <div class="section-title">Import Sage completion register</div>
-        <div class="section-count">Upload the daily Work Ticket Transaction Register PDF (text PDFs only, not scanned copies). Matching travelers in ProdTrack get tagged with the batch number. Nothing is saved until you press Tag.</div>
+        <div class="section-count">Upload the daily Work Ticket Transaction Register PDF (text PDFs are read directly; scanned copies are read by OCR and need your confirmation). Matching travelers in ProdTrack get tagged with the batch number. Nothing is saved until you press Tag.</div>
         <div class="row" id="comp-drop" style="align-items:center;margin-top:12px;padding:18px;border:2px dashed var(--border);border-radius:10px;flex-wrap:wrap;gap:12px">
           <input type="file" id="f-register" accept=".pdf" multiple onchange="onRegisterChosen()">
           <span class="section-count">or drag and drop one or more PDFs here</span>
@@ -198,6 +199,7 @@ td{font-family:var(--mono)}
       <div class="card hidden" id="comp-result-card">
         <div id="comp-summary"></div>
         <table id="tbl-comp"><thead><tr><th>Batch</th><th>Traveler #</th><th>SO</th><th>Item Code</th><th>Qty</th><th>Result</th></tr></thead><tbody></tbody></table>
+        <label id="comp-ocr-box" class="hidden" style="display:flex;gap:8px;align-items:center;margin-top:12px;color:var(--amber);font-size:13px"><input type="checkbox" id="comp-ocr-ok" onchange="onOcrOkChange()"> I checked these numbers against the paper register</label>
         <div class="row" style="margin-top:14px;align-items:center">
           <button id="comp-apply-btn" onclick="applyCompletions()">Tag travelers</button>
           <span id="comp-apply-msg" class="section-count"></span>
@@ -1256,7 +1258,8 @@ async function loadHistory(q){
 // ── Completions: Sage Work Ticket Transaction Register → tag orders ───────
 // Text-layer PDFs only (no OCR). Parser verified against register 15803:
 // 61/61 tickets, extended costs summed to the printed Total Cost exactly.
-let compFiles = [], compPlan = null;
+let compFiles = [], compPlan = null, compWillTag = 0;
+function onOcrOkChange(){ document.getElementById('comp-apply-btn').disabled = !(compWillTag && document.getElementById('comp-ocr-ok').checked); }
 function setCompFiles(list){
   const all = Array.from(list || []);
   compFiles = all.filter(f=>/\.pdf$/i.test(f.name));
@@ -1281,13 +1284,48 @@ function resetCompletions(){ document.getElementById('f-register').value = ''; s
 })();
 const stripZeros = v => String(v||'').replace(/^0+/,'');
 
-async function parseRegisterFile(file){
+// Scanned registers have no text layer. They are read by OCR and ALWAYS need the user's
+// confirmation before anything is tagged (see readRegisters / comp-ocr-ok).
+function ocrTextToLines(text){
+  // OCR sometimes reads the decimal point in a cost as a comma ("409,21"); real thousands
+  // separators are followed by 3 digits, so ",dd" at the end of a token is a misread period.
+  const fixTok = t => /^\d+,\d{2}$/.test(t) ? t.replace(',', '.') : t;
+  const out = [];
+  String(text||'').split('\n').forEach(l=>{
+    const toks = l.trim().split(/\s+/).filter(t=>t).map(fixTok);
+    if(toks.length) out.push({toks, raw:toks.join(' ')});
+  });
+  return out;
+}
+async function ocrRegisterLines(doc, onProgress){
+  if(typeof Tesseract === 'undefined') throw new Error('The OCR library did not load. Check the connection and reload this page.');
+  const worker = await Tesseract.createWorker('eng');
+  try{
+    await worker.setParameters({tessedit_pageseg_mode:'6'});
+    let all = [];
+    for(let p=1;p<=doc.numPages;p++){
+      if(onProgress) onProgress(`OCR page ${p} of ${doc.numPages}…`);
+      const page = await doc.getPage(p);
+      const vp = page.getViewport({scale:3});
+      const cv = document.createElement('canvas');
+      cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+      await page.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise;
+      const res = await worker.recognize(cv);
+      all = all.concat(ocrTextToLines(res.data.text));
+    }
+    return all;
+  } finally { await worker.terminate(); }
+}
+
+async function parseRegisterFile(file, onProgress){
   const buf = await file.arrayBuffer();
   const doc = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
   const lines = [];
+  let textItems = 0;
   for(let p=1;p<=doc.numPages;p++){
     const page = await doc.getPage(p);
     const tc = await page.getTextContent();
+    textItems += tc.items.filter(it=>it.str && it.str.trim()).length;
     const byY = {};
     for(const it of tc.items){
       const y = Math.round(it.transform[5]);
@@ -1298,6 +1336,11 @@ async function parseRegisterFile(file){
       if(toks.length) lines.push({toks, raw:toks.join(' ')});
     }
   }
+  if(textItems === 0) return parseRegisterLines(await ocrRegisterLines(doc, onProgress), file.name, true);
+  return parseRegisterLines(lines, file.name, false);
+}
+
+function parseRegisterLines(lines, fileName, ocr){
   const full = lines.map(l=>l.raw).join('\n');
   // Batch number: label and digits can land on separate lines in this PDF.
   let batch = '';
@@ -1316,6 +1359,8 @@ async function parseRegisterFile(file){
   const printedTotal = tm ? parseFloat(tm[1].replace(/,/g,'')) : null;
   const wti = [];
   for(let i=0;i<lines.length;i++) if(lines[i].toks.some(t=>/^0{5,}\d{5,}$/.test(t))) wti.push(i);
+  // every real ticket is followed by an S/O line or an Inventory line; a mismatch means a ticket number was missed
+  const markerCount = lines.filter(l=>!l.toks.some(t=>/^0{5,}\d{5,}$/.test(t)) && (/(^|\s)S\/O\s+\S+/.test(l.raw) || /\bInventory\b/i.test(l.raw))).length;
   const tickets = [], skipped = [];
   let extSum = 0;
   for(let wi=0;wi<wti.length;wi++){
@@ -1341,7 +1386,7 @@ async function parseRegisterFile(file){
   }
   const totalOk = printedTotal==null ? null : Math.abs(extSum - printedTotal) < 0.05;
   const journalDate = jm ? new Date(+jm[3], +jm[1]-1, +jm[2], 12).toISOString() : new Date().toISOString();
-  return {file:file.name, batch, journalDate, tickets, skipped, printedTotal, extSum, totalOk, anchors:wti.length};
+  return {file:fileName, ocr:!!ocr, batch, journalDate, tickets, skipped, printedTotal, extSum, totalOk, anchors:wti.length, markerCount};
 }
 
 async function sbGetJson(path){
@@ -1358,8 +1403,8 @@ async function readRegisters(){
   try{
     const regs = [];
     for(const f of compFiles){
-      const reg = await parseRegisterFile(f);
-      if(!reg.anchors){ throw new Error(`${f.name}: no work ticket numbers found. If this is a scanned copy, only text PDFs are supported.`); }
+      const reg = await parseRegisterFile(f, msg=>{ btn.textContent = msg; });
+      if(!reg.anchors){ throw new Error(`${f.name}: no work ticket numbers found.` + (reg.ocr ? ' It was read by OCR, so the scan may be too faint or skewed.' : '')); }
       if(!reg.batch){ throw new Error(`${f.name}: could not find the Batch Number.`); }
       regs.push(reg);
     }
@@ -1401,7 +1446,7 @@ async function readRegisters(){
     }
     compPlan = {toTag};
     const count = s => rowsOut.filter(r=>r.status.startsWith(s)).length;
-    const warnLines = regs.map(r=> r.totalOk===false ? `<div class="err">Batch ${escapeHtml(r.batch)}: parsed costs (${r.extSum.toFixed(2)}) do not match the printed Total Cost (${r.printedTotal.toFixed(2)}). Tagging is still allowed.</div>` : '').join('') +
+    const warnLines = regs.map(r=> r.ocr ? `<div class="err">Batch ${escapeHtml(r.batch)}: this is a scan, read by OCR. Check the numbers below against the paper register before tagging.${r.markerCount!==r.anchors ? ' OCR found '+r.anchors+' work ticket numbers but '+r.markerCount+' S/O or Inventory lines, so a ticket may have been missed.' : ''}</div>` : '').join('') + regs.map(r=> r.totalOk===false ? `<div class="err">Batch ${escapeHtml(r.batch)}: parsed costs (${r.extSum.toFixed(2)}) do not match the printed Total Cost (${r.printedTotal.toFixed(2)}). Tagging is still allowed.</div>` : '').join('') +
       regs.map(r=> r.skipped.length ? `<div class="err">Batch ${escapeHtml(r.batch)}: ${r.skipped.length} ticket(s) could not be read: ${escapeHtml(r.skipped.map(k=>k.wt+' ('+k.why+')').join(', '))}</div>` : '').join('');
     document.getElementById('comp-summary').innerHTML =
       `<div class="section-title">${regs.map(r=>'Batch '+escapeHtml(r.batch)).join(' · ')}</div>` +
@@ -1411,7 +1456,11 @@ async function readRegisters(){
       const color = r.cls==='ok' ? 'var(--green)' : r.cls==='warn' ? 'var(--amber)' : 'var(--text3)';
       body.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(r.batch)}</td><td>${escapeHtml(r.t.wt)}</td><td>${escapeHtml(r.t.so||'')}</td><td>${escapeHtml(r.t.code)}</td><td>${r.t.qty.toFixed(2)}</td><td style="color:${color}">${escapeHtml(r.status)}</td></tr>`);
     });
-    document.getElementById('comp-apply-btn').disabled = !willTag.size;
+    compWillTag = willTag.size;
+    const needsOcrOk = regs.some(r=>r.ocr);
+    document.getElementById('comp-ocr-box').classList.toggle('hidden', !needsOcrOk);
+    document.getElementById('comp-ocr-ok').checked = false;
+    document.getElementById('comp-apply-btn').disabled = !willTag.size || needsOcrOk;
     document.getElementById('comp-apply-btn').textContent = `Tag ${willTag.size} traveler${willTag.size===1?'':'s'}`;
     document.getElementById('comp-result-card').classList.remove('hidden');
   }catch(e){
