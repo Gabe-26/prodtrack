@@ -1369,7 +1369,10 @@ function mergeOcrTicketLines(lines){
 
 function parseRegisterLines(lines, fileName, ocr){
   if(ocr) lines = mergeOcrTicketLines(lines);
-  const soRe = ocr ? /(?:^|\s)S[\/\\.|IlO1]?\s?[O0]\s+(0\d{6,7})/ : /S\/O\s+(0\d{6,7})/;
+  const soRe = ocr ? /(?:^|\s)[S5$8][\/\\.|IlO1]?\s?[O0QDo]\s*(0\d{6,7})/i : /S\/O\s+(0\d{6,7})/;
+  // OCR fallback: a short (misread) "S/O" prefix, or none, followed by a 7-character SO number. Digits are normalised (O->0, I/l->1).
+  const soLoose = /^(?:\S{1,4}\s+)?([0Oo][0-9OoIl]{6})(?![0-9A-Za-z])/;
+  const headerLine = /Trans|Number|Date|Batch|Register|Journal|Amendola|Page|Total|Work\s+Ticket/i;
   const full = lines.map(l=>l.raw).join('\n');
   // Batch number: label and digits can land on separate lines in this PDF.
   let batch = '';
@@ -1389,7 +1392,7 @@ function parseRegisterLines(lines, fileName, ocr){
   const wti = [];
   for(let i=0;i<lines.length;i++) if(lines[i].toks.some(t=>/^0{5,}\d{5,}$/.test(t))) wti.push(i);
   // every real ticket is followed by an S/O line or an Inventory line; a mismatch means a ticket number was missed
-  const markerCount = lines.filter(l=>!l.toks.some(t=>/^0{5,}\d{5,}$/.test(t)) && (/(^|\s)S[\/\\.|IlO1]?\s?[O0]\s+\S+/.test(l.raw) || /\bInventory\b/i.test(l.raw))).length;
+  const markerCount = lines.filter(l=>!l.toks.some(t=>/^0{5,}\d{5,}$/.test(t)) && (/(^|\s)[S5$8][\/\\.|IlO1]?\s?[O0QDo]\s*\S+/i.test(l.raw) || /\bInventory\b/i.test(l.raw) || (ocr && !headerLine.test(l.raw) && soLoose.test(l.raw)))).length;
   const tickets = [], skipped = [];
   let extSum = 0;
   for(let wi=0;wi<wti.length;wi++){
@@ -1409,8 +1412,12 @@ function parseRegisterLines(lines, fileName, ocr){
       const sm = blk[b].raw.match(soRe);
       if(sm){ so = sm[1]; break; }
       if(/\bInventory\b/i.test(blk[b].raw)){ isInv = true; break; }
+      if(ocr && b>0 && !headerLine.test(blk[b].raw)){
+        const fm = blk[b].raw.match(soLoose);
+        if(fm){ so = fm[1].replace(/[Oo]/g,'0').replace(/[Il]/g,'1'); break; }
+      }
     }
-    if(!so && !isInv){ skipped.push({wt:stripZeros(wtok), why:'No S/O or Inventory line found'}); continue; }
+    if(!so && !isInv){ skipped.push({wt:stripZeros(wtok), why:'No S/O or Inventory line found' + (ocr ? ' - OCR read: ' + blk.slice(1,4).map(b=>b.raw).join(' | ').slice(0,140) : '')}); continue; }
     tickets.push({wt:stripZeros(wtok), so:so?stripZeros(so):null, isInv, code, qty});
   }
   const totalOk = printedTotal==null ? null : Math.abs(extSum - printedTotal) < 0.05;
