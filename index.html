@@ -1402,6 +1402,7 @@ function linkedHover(so, on){
   if(b) b.classList.toggle('hovered', on);
 }
 function soLabelPrintedBadge(so, mode){
+  if(currentProfile?.role==='production') return ''; // Production doesn't need to see label-print status
   const depts = ['wood','gate','gear'].filter(d=>labelPrints[so+'|'+d] && activeDepts.has(d));
   if(!depts.length) return '';
   const title = depts.map(d=>{
