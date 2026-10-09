@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <style>
 :root{
   --bg:#0f0f11;--surface:#17171a;--surface2:#1e1e22;--surface3:#26262b;
@@ -1289,10 +1289,14 @@ const stripZeros = v => String(v||'').replace(/^0+/,'');
 function ocrTextToLines(text){
   // OCR sometimes reads the decimal point in a cost as a comma ("409,21"); real thousands
   // separators are followed by 3 digits, so ",dd" at the end of a token is a misread period.
-  const fixTok = t => /^\d+,\d{2}$/.test(t) ? t.replace(',', '.') : t;
+  const fixTok = t => {
+    t = t.replace(/^[|~'"`*]+|[.,;|~'"`]+$/g, '');                  // stray punctuation OCR glues onto a token ("000000448944." / "0700567:")
+    if(/^[0Oo]{5,}\d{5,}$/.test(t)) t = t.replace(/[Oo]/g, '0');      // letter O read instead of a leading zero
+    return /^\d+,\d{2}$/.test(t) ? t.replace(',', '.') : t;
+  };
   const out = [];
   String(text||'').split('\n').forEach(l=>{
-    const toks = l.trim().split(/\s+/).filter(t=>t).map(fixTok);
+    const toks = l.trim().split(/\s+/).map(fixTok).filter(t=>t);
     if(toks.length) out.push({toks, raw:toks.join(' ')});
   });
   return out;
@@ -1340,7 +1344,32 @@ async function parseRegisterFile(file, onProgress){
   return parseRegisterLines(lines, file.name, false);
 }
 
+// OCR sometimes splits one ticket row over 2-3 lines. Join an anchor line that is missing its
+// "Yes" / numbers with the lines that follow, stopping at the next ticket or an S/O / Inventory line.
+function mergeOcrTicketLines(lines){
+  const anchor = l => l.toks.some(t=>/^0{5,}\d{5,}$/.test(t));
+  const marker = l => /(^|\s)S[\/\\.|IlO1]?\s?[O0]\s+\d/.test(l.raw) || /^Inventory\b/i.test(l.raw);
+  const complete = toks => { const y = toks.indexOf('Yes'); return y!==-1 && toks.slice(y+1).filter(t=>/^[\d,]+\.?\d+$/.test(t)).length>=2; };
+  const out = [];
+  for(let i=0;i<lines.length;i++){
+    const l = lines[i];
+    if(anchor(l) && !complete(l.toks)){
+      let toks = l.toks.slice(), k = 1;
+      for(; k<=3 && i+k<lines.length; k++){
+        const n = lines[i+k];
+        if(anchor(n) || marker(n)) break;
+        toks = toks.concat(n.toks);
+        if(complete(toks)){ i += k; break; }
+      }
+      out.push({toks, raw:toks.join(' ')});
+    } else out.push(l);
+  }
+  return out;
+}
+
 function parseRegisterLines(lines, fileName, ocr){
+  if(ocr) lines = mergeOcrTicketLines(lines);
+  const soRe = ocr ? /(?:^|\s)S[\/\\.|IlO1]?\s?[O0]\s+(0\d{6,7})/ : /S\/O\s+(0\d{6,7})/;
   const full = lines.map(l=>l.raw).join('\n');
   // Batch number: label and digits can land on separate lines in this PDF.
   let batch = '';
@@ -1360,7 +1389,7 @@ function parseRegisterLines(lines, fileName, ocr){
   const wti = [];
   for(let i=0;i<lines.length;i++) if(lines[i].toks.some(t=>/^0{5,}\d{5,}$/.test(t))) wti.push(i);
   // every real ticket is followed by an S/O line or an Inventory line; a mismatch means a ticket number was missed
-  const markerCount = lines.filter(l=>!l.toks.some(t=>/^0{5,}\d{5,}$/.test(t)) && (/(^|\s)S\/O\s+\S+/.test(l.raw) || /\bInventory\b/i.test(l.raw))).length;
+  const markerCount = lines.filter(l=>!l.toks.some(t=>/^0{5,}\d{5,}$/.test(t)) && (/(^|\s)S[\/\\.|IlO1]?\s?[O0]\s+\S+/.test(l.raw) || /\bInventory\b/i.test(l.raw))).length;
   const tickets = [], skipped = [];
   let extSum = 0;
   for(let wi=0;wi<wti.length;wi++){
@@ -1377,7 +1406,7 @@ function parseRegisterLines(lines, fileName, ocr){
     extSum += ext;
     let so = null, isInv = false;
     for(let b=0;b<blk.length;b++){
-      const sm = blk[b].raw.match(/S\/O\s+(0\d{6,7})/);
+      const sm = blk[b].raw.match(soRe);
       if(sm){ so = sm[1]; break; }
       if(/\bInventory\b/i.test(blk[b].raw)){ isInv = true; break; }
     }
@@ -1446,7 +1475,7 @@ async function readRegisters(){
     }
     compPlan = {toTag};
     const count = s => rowsOut.filter(r=>r.status.startsWith(s)).length;
-    const warnLines = regs.map(r=> r.ocr ? `<div class="err">Batch ${escapeHtml(r.batch)}: this is a scan, read by OCR. Check the numbers below against the paper register before tagging.${r.markerCount!==r.anchors ? ' OCR found '+r.anchors+' work ticket numbers but '+r.markerCount+' S/O or Inventory lines, so a ticket may have been missed.' : ''}</div>` : '').join('') + regs.map(r=> r.totalOk===false ? `<div class="err">Batch ${escapeHtml(r.batch)}: parsed costs (${r.extSum.toFixed(2)}) do not match the printed Total Cost (${r.printedTotal.toFixed(2)}). Tagging is still allowed.</div>` : '').join('') +
+    const warnLines = regs.map(r=> r.ocr ? `<div class="err">Batch ${escapeHtml(r.batch)}: this is a scan, read by OCR. Check the numbers below against the paper register before tagging.${r.markerCount!==r.anchors ? ' OCR found '+r.anchors+' work ticket numbers but '+r.markerCount+' S/O or Inventory lines, so a ticket may have been missed.' : ''}</div>` : '').join('') + regs.map(r=> r.totalOk===false ? `<div class="err">Batch ${escapeHtml(r.batch)}: parsed costs (${r.extSum.toFixed(2)}) do not match the printed Total Cost (${r.printedTotal.toFixed(2)}). Tagging is still allowed.${r.ocr ? ' OCR often misreads a digit in a cost; tagging only uses the traveler and SO numbers.' : ''}</div>` : '').join('') +
       regs.map(r=> r.skipped.length ? `<div class="err">Batch ${escapeHtml(r.batch)}: ${r.skipped.length} ticket(s) could not be read: ${escapeHtml(r.skipped.map(k=>k.wt+' ('+k.why+')').join(', '))}</div>` : '').join('');
     document.getElementById('comp-summary').innerHTML =
       `<div class="section-title">${regs.map(r=>'Batch '+escapeHtml(r.batch)).join(' · ')}</div>` +
