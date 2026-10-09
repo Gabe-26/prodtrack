@@ -1479,7 +1479,7 @@ function showApp(){
   document.getElementById('nav-upload').style.display  = isMgr ? 'flex' : 'none';
   document.getElementById('nav-customer-list').style.display = isMgr ? 'flex' : 'none';
   document.getElementById('nav-users').style.display   = isMgr ? 'flex' : 'none';
-  document.getElementById('nav-archive').style.display = isMgr ? 'flex' : 'none';
+  document.getElementById('nav-archive').style.display = (isMgr || isProd) ? 'flex' : 'none'; // Production can browse the Archive; restore/archive stay owner-only
   document.getElementById('nav-holidays').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-wood-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-gear-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
