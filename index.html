@@ -612,6 +612,17 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
     </div>
   </div>
 </div>
+
+<div class="confirm-overlay" id="confirm-share-report">
+  <div class="confirm-card">
+    <div class="confirm-title">Check before sharing</div>
+    <div class="confirm-body" id="sw-body"></div>
+    <div class="confirm-btns">
+      <button class="btn" onclick="shareWarnRespond(false)">Cancel</button>
+      <button class="btn primary" onclick="shareWarnRespond(true)">Share anyway</button>
+    </div>
+  </div>
+</div>
  
 <!-- Print report modal -->
 <div class="modal-overlay" id="print-report-modal">
@@ -3996,12 +4007,36 @@ window.addEventListener('mousemove', e=>{
 window.addEventListener('mouseup', ()=>{ lbDragging=false; document.getElementById('lb-img').classList.remove('dragging'); });
  
 // ── Share report ──────────────────────────────────────────────────────────────
-function generateReport(){
+// Share Report scope: tomorrow's orders in the toggled-on departments, minus any SO that is
+// COMPLETED (every visible traveler tagged) or POSSIBLY COMPLETED. Also works out what to warn about.
+function shareReportPlan(nextDays){
+  recomputeCompletedSOBatch();
+  const all = orders.filter(o => o.soShipRaw && nextDays.includes(o.soShipRaw) && isOrderVisible(o));
+  const groups = groupBySO(all.filter(o => !o.flaggedMissingAt && !completedSOBatch[o.so]));
+  const unapproved = groups.filter(g=>g.travelers.some(t=>!approvals[t.traveler]))
+    .map(g=>({so:g.so, a:g.travelers.filter(t=>approvals[t.traveler]).length, n:g.travelers.length}));
+  const noPhoto = groups.filter(g=>!(photos[g.so]||[]).length).map(g=>g.so);
+  return {allCount: all.length, groups, unapproved, noPhoto};
+}
+function showShareWarnModal(plan){
+  const block = (title, items) => `<div style="margin-bottom:12px"><div style="font-weight:700;color:var(--text)">${title}</div><div class="mono" style="font-size:12px;color:var(--text2);margin-top:4px;max-height:110px;overflow:auto">${items.map(escapeHtml).join(', ')}</div></div>`;
+  let h='';
+  if(plan.unapproved.length) h += block(plan.unapproved.length+(plan.unapproved.length===1?' order is':' orders are')+' not fully approved', plan.unapproved.map(u=>u.so+' ('+u.a+'/'+u.n+')'));
+  if(plan.noPhoto.length) h += block(plan.noPhoto.length+(plan.noPhoto.length===1?' order has':' orders have')+' no photo', plan.noPhoto);
+  document.getElementById('sw-body').innerHTML = h;
+  document.getElementById('confirm-share-report').classList.add('open');
+}
+function shareWarnRespond(confirmed){
+  document.getElementById('confirm-share-report').classList.remove('open');
+  if(confirmed) generateReport(true);
+}
+function generateReport(skipWarn){
   if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can share reports.','red'); return; }
   const nextDays = getNextWorkingDays();
-  const tomorrowOrders = orders.filter(o => o.soShipRaw && nextDays.includes(o.soShipRaw) && isOrderVisible(o));
-  const groups = groupBySO(tomorrowOrders);
-  if(!groups.length){ toast('No orders','No orders found for tomorrow.','amber'); return; }
+  const plan = shareReportPlan(nextDays);
+  const groups = plan.groups;
+  if(!groups.length){ toast('No orders', plan.allCount ? 'Every order for tomorrow is completed or possibly completed.' : 'No orders found for tomorrow.','amber'); return; }
+  if(skipWarn!==true && (plan.unapproved.length || plan.noPhoto.length)){ showShareWarnModal(plan); return; }
  
   const soData = groups.map(({so, travelers}) => {
     const soPhotos = photos[so] || [];
@@ -5969,7 +6004,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();closeGearCodesModal();closeMetalCodesModal();colorCheckRespond(false);staleCsvRespond(false);
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();closeGearCodesModal();closeMetalCodesModal();colorCheckRespond(false);staleCsvRespond(false);shareWarnRespond(false);
   }
 });
  
