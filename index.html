@@ -1380,7 +1380,8 @@ async function loadProfile(){
     username: p.username || fromEmail(currentUser.email),
     pref_lang: p.pref_lang || 'none',
     theme: p.theme || 'dark',
-    departments: p.departments || []
+    departments: p.departments || [],
+    canViewArchive: !!p.can_view_archive
   };
 }
 
@@ -1410,7 +1411,7 @@ function linkedHover(so, on){
   if(b) b.classList.toggle('hovered', on);
 }
 function soLabelPrintedBadge(so, mode){
-  if(currentProfile?.role==='production') return ''; // Production doesn't need to see label-print status
+  if(currentProfile?.role==='production' || currentProfile?.role==='viewer') return ''; // Production and Viewers don't need to see label-print status
   const depts = ['wood','gate','gear'].filter(d=>labelPrints[so+'|'+d] && activeDepts.has(d));
   if(!depts.length) return '';
   const title = depts.map(d=>{
@@ -1493,7 +1494,7 @@ function showApp(){
   document.getElementById('nav-upload').style.display  = isMgr ? 'flex' : 'none';
   document.getElementById('nav-customer-list').style.display = isMgr ? 'flex' : 'none';
   document.getElementById('nav-users').style.display   = isMgr ? 'flex' : 'none';
-  document.getElementById('nav-archive').style.display = (isMgr || isProd) ? 'flex' : 'none'; // Production can browse the Archive; restore/archive stay owner-only
+  document.getElementById('nav-archive').style.display = (uname === 'zgta26' || currentProfile?.canViewArchive) ? 'flex' : 'none'; // per-user view access granted by the owner in Manage Users; restore/archive stay owner-only
   document.getElementById('nav-holidays').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-wood-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
   document.getElementById('nav-gear-codes').style.display = uname === 'zgta26' ? 'flex' : 'none';
@@ -1987,6 +1988,7 @@ function renderUsers(){
             const on=(u.departments||[]).includes(d);
             return `<span class="dept-pill ${on?m.cls:'td'}" style="cursor:pointer;opacity:${on?'1':'0.45'}" title="${on?'Click to remove '+m.label:'Click to grant '+m.label}" onclick="toggleUserDept('${u.id}','${d}')">${m.label[0]}${d==='gate'?'T':''}</span>`;
           }).join('')}
+          <span class="tag ${u.can_view_archive?'tb':'td'}" style="cursor:pointer;opacity:${u.can_view_archive?'1':'0.45'}" title="${isOwner?(u.can_view_archive?'Click to remove view-only Archive access':'Click to grant view-only Archive access'):'Only the owner account can change Archive access'}" onclick="toggleUserArchive('${u.id}')">Archive</span>
         </div>
       </div>
       <div class="uc-actions">
@@ -2021,6 +2023,21 @@ async function toggleUserDept(userId, dept){
   }
 }
  
+async function toggleUserArchive(userId){
+  if(currentProfile?.username !== 'zgta26'){ toast('Not allowed', 'Only the owner account can change Archive access.', 'red'); return; }
+  const u = allUsers.find(x=>x.id===userId);
+  if(!u) return;
+  const next = !u.can_view_archive;
+  u.can_view_archive = next; // optimistic
+  renderUsers();
+  try{
+    await sbUpdate('profiles', userId, {can_view_archive: next});
+  } catch(e){
+    toast('Error', e.message, 'red');
+    await loadUsers();
+  }
+}
+
 async function toggleRole(userId, currentRole){
   if(currentProfile?.username !== 'zgta26'){ toast('Not allowed', 'Only the owner account can change roles.', 'red'); return; }
   const cycle = {manager:'worker', worker:'production', production:'viewer', viewer:'manager'};
