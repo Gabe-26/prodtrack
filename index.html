@@ -508,6 +508,9 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 #category-breakdown .sum-item{min-width:80px;text-align:center;padding:0 14px;border-right:1px solid var(--border)}
 #category-breakdown .sum-item:last-child{border-right:none;padding-right:0}
 #category-breakdown .sum-item:first-child{padding-left:0}
+#category-breakdown .cb-prog{height:3px;background:var(--border);border-radius:2px;margin:6px 0 0;overflow:hidden}
+#category-breakdown .cb-prog-bar{height:100%;background:var(--green)}
+#category-breakdown .cb-prog-txt{font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:3px}
 #category-breakdown .sum-label{font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:2px}
 #category-breakdown .sum-val{font-size:16px;font-weight:700;letter-spacing:-0.02em;font-family:var(--mono);color:var(--text)}
 #category-breakdown .sum-val.green{color:var(--green)}
@@ -532,6 +535,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
   #category-breakdown .sum-item{min-width:0;padding:0 6px}
   #category-breakdown .sum-label{font-size:8px}
   #category-breakdown .sum-val{font-size:13px}
+  #category-breakdown .cb-prog-txt{font-size:8px}
 }
 </style>
 </head>
@@ -2779,56 +2783,63 @@ function renderCategoryBreakdown(groups){
   const gearTotals = {section:0, post:0, profile:0, lattice_profile:0, topper:0, bend:0, arb_perg:0, post_and_rail:0, misc:0};
   const gateTotals = {gate:0, misc:0};
   const metalTotals = {pipe:0, frame:0, canti:0, barrier:0, rolling:0, misc:0};
+  // Approved qty per category (a manager approved the traveler that carries the item)
+  const woodDone = {section:0, gate:0, post:0, arb_perg:0, misc:0};
+  const gearDone = {section:0, post:0, profile:0, lattice_profile:0, topper:0, bend:0, arb_perg:0, post_and_rail:0, misc:0};
+  const gateDone = {gate:0, misc:0};
+  const metalDone = {pipe:0, frame:0, canti:0, barrier:0, rolling:0, misc:0};
+  const prog = (done,total)=> total>0 ? `<div class="cb-prog" title="${done} of ${total} approved"><div class="cb-prog-bar" style="width:${Math.min(100,Math.round(done/total*100))}%"></div></div><div class="cb-prog-txt">${done}/${total}</div>` : '';
   activeGroups.forEach(g=>{
     g.travelers.forEach(o=>{
       const qty = Number(o.qty)||0;
-      if(o.department==='wood') woodTotals[classifyWoodTraveler(o.line, o.item, o.desc)] += qty;
-      else if(o.department==='gear') gearTotals[classifyGearItem(o.item)] += qty;
-      else if(o.department==='gate') gateTotals[classifyGearItem(o.item)==='gate' ? 'gate' : 'misc'] += qty;
-      else if(o.department==='metal') metalTotals[classifyMetalItem(o.item, o.desc)] += qty;
+      const ap = approvals[o.traveler] ? qty : 0;
+      if(o.department==='wood'){ const k = classifyWoodTraveler(o.line, o.item, o.desc); woodTotals[k] += qty; woodDone[k] += ap; }
+      else if(o.department==='gear'){ const k = classifyGearItem(o.item); gearTotals[k] += qty; gearDone[k] += ap; }
+      else if(o.department==='gate'){ const k = classifyGearItem(o.item)==='gate' ? 'gate' : 'misc'; gateTotals[k] += qty; gateDone[k] += ap; }
+      else if(o.department==='metal'){ const k = classifyMetalItem(o.item, o.desc); metalTotals[k] += qty; metalDone[k] += ap; }
     });
   });
   const blocks = [];
   if(Object.values(woodTotals).some(v=>v>0)){
     const c = collapsedBreakdownDepts.has('wood');
     blocks.push(`<div class="cb-block"><div class="cb-label"${c?' style="margin-bottom:0"':''} onclick="toggleBreakdownDept('wood')">${c?'▸':'▾'} Wood</div>${c?'':`<div class="cb-tiles">
-    <div class="sum-item"><div class="sum-label">Sections</div><div class="sum-val green">${woodTotals.section}</div></div>
-    <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val">${woodTotals.gate}</div></div>
-    <div class="sum-item"><div class="sum-label">Posts</div><div class="sum-val amber">${woodTotals.post}</div></div>
-    <div class="sum-item"><div class="sum-label">Arb/Perg</div><div class="sum-val purple">${woodTotals.arb_perg}</div></div>
-    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${woodTotals.misc}</div></div>
+    <div class="sum-item"><div class="sum-label">Sections</div><div class="sum-val green">${woodTotals.section}</div>${prog(woodDone.section, woodTotals.section)}</div>
+    <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val">${woodTotals.gate}</div>${prog(woodDone.gate, woodTotals.gate)}</div>
+    <div class="sum-item"><div class="sum-label">Posts</div><div class="sum-val amber">${woodTotals.post}</div>${prog(woodDone.post, woodTotals.post)}</div>
+    <div class="sum-item"><div class="sum-label">Arb/Perg</div><div class="sum-val purple">${woodTotals.arb_perg}</div>${prog(woodDone.arb_perg, woodTotals.arb_perg)}</div>
+    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${woodTotals.misc}</div>${prog(woodDone.misc, woodTotals.misc)}</div>
   </div>`}</div>`);
   }
   if(Object.values(gearTotals).some(v=>v>0)){
     const c = collapsedBreakdownDepts.has('gear');
     blocks.push(`<div class="cb-block"><div class="cb-label"${c?' style="margin-bottom:0"':''} onclick="toggleBreakdownDept('gear')">${c?'▸':'▾'} Gear</div>${c?'':`<div class="cb-tiles">
-    <div class="sum-item"><div class="sum-label">Sections</div><div class="sum-val green">${gearTotals.section}</div></div>
-    <div class="sum-item"><div class="sum-label">Posts</div><div class="sum-val amber">${gearTotals.post}</div></div>
-    <div class="sum-item"><div class="sum-label">Profiles</div><div class="sum-val blue">${gearTotals.profile}</div></div>
-    <div class="sum-item"><div class="sum-label">Lat-Profiles</div><div class="sum-val pink">${gearTotals.lattice_profile}</div></div>
-    <div class="sum-item"><div class="sum-label">Topper</div><div class="sum-val red">${gearTotals.topper}</div></div>
-    <div class="sum-item"><div class="sum-label">Bends</div><div class="sum-val teal">${gearTotals.bend}</div></div>
-    <div class="sum-item"><div class="sum-label">Arb/Perg</div><div class="sum-val purple">${gearTotals.arb_perg}</div></div>
-    <div class="sum-item"><div class="sum-label">Post &amp; Rail</div><div class="sum-val orange">${gearTotals.post_and_rail}</div></div>
-    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${gearTotals.misc}</div></div>
+    <div class="sum-item"><div class="sum-label">Sections</div><div class="sum-val green">${gearTotals.section}</div>${prog(gearDone.section, gearTotals.section)}</div>
+    <div class="sum-item"><div class="sum-label">Posts</div><div class="sum-val amber">${gearTotals.post}</div>${prog(gearDone.post, gearTotals.post)}</div>
+    <div class="sum-item"><div class="sum-label">Profiles</div><div class="sum-val blue">${gearTotals.profile}</div>${prog(gearDone.profile, gearTotals.profile)}</div>
+    <div class="sum-item"><div class="sum-label">Lat-Profiles</div><div class="sum-val pink">${gearTotals.lattice_profile}</div>${prog(gearDone.lattice_profile, gearTotals.lattice_profile)}</div>
+    <div class="sum-item"><div class="sum-label">Topper</div><div class="sum-val red">${gearTotals.topper}</div>${prog(gearDone.topper, gearTotals.topper)}</div>
+    <div class="sum-item"><div class="sum-label">Bends</div><div class="sum-val teal">${gearTotals.bend}</div>${prog(gearDone.bend, gearTotals.bend)}</div>
+    <div class="sum-item"><div class="sum-label">Arb/Perg</div><div class="sum-val purple">${gearTotals.arb_perg}</div>${prog(gearDone.arb_perg, gearTotals.arb_perg)}</div>
+    <div class="sum-item"><div class="sum-label">Post &amp; Rail</div><div class="sum-val orange">${gearTotals.post_and_rail}</div>${prog(gearDone.post_and_rail, gearTotals.post_and_rail)}</div>
+    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${gearTotals.misc}</div>${prog(gearDone.misc, gearTotals.misc)}</div>
   </div>`}</div>`);
   }
   if(Object.values(gateTotals).some(v=>v>0)){
     const c = collapsedBreakdownDepts.has('gate');
     blocks.push(`<div class="cb-block"><div class="cb-label"${c?' style="margin-bottom:0"':''} onclick="toggleBreakdownDept('gate')">${c?'▸':'▾'} Gate</div>${c?'':`<div class="cb-tiles">
-    <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val yellow">${gateTotals.gate}</div></div>
-    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${gateTotals.misc}</div></div>
+    <div class="sum-item"><div class="sum-label">Gates</div><div class="sum-val yellow">${gateTotals.gate}</div>${prog(gateDone.gate, gateTotals.gate)}</div>
+    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${gateTotals.misc}</div>${prog(gateDone.misc, gateTotals.misc)}</div>
   </div>`}</div>`);
   }
   if(Object.values(metalTotals).some(v=>v>0)){
     const c = collapsedBreakdownDepts.has('metal');
     blocks.push(`<div class="cb-block"><div class="cb-label"${c?' style="margin-bottom:0"':''} onclick="toggleBreakdownDept('metal')">${c?'▸':'▾'} Metal</div>${c?'':`<div class="cb-tiles">
-    <div class="sum-item"><div class="sum-label">Pipe</div><div class="sum-val blue">${metalTotals.pipe}</div></div>
-    <div class="sum-item"><div class="sum-label">Frame</div><div class="sum-val green">${metalTotals.frame}</div></div>
-    <div class="sum-item"><div class="sum-label">Canti</div><div class="sum-val amber">${metalTotals.canti}</div></div>
-    <div class="sum-item"><div class="sum-label">Barrier</div><div class="sum-val red">${metalTotals.barrier}</div></div>
-    <div class="sum-item"><div class="sum-label">Rolling</div><div class="sum-val purple">${metalTotals.rolling}</div></div>
-    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${metalTotals.misc}</div></div>
+    <div class="sum-item"><div class="sum-label">Pipe</div><div class="sum-val blue">${metalTotals.pipe}</div>${prog(metalDone.pipe, metalTotals.pipe)}</div>
+    <div class="sum-item"><div class="sum-label">Frame</div><div class="sum-val green">${metalTotals.frame}</div>${prog(metalDone.frame, metalTotals.frame)}</div>
+    <div class="sum-item"><div class="sum-label">Canti</div><div class="sum-val amber">${metalTotals.canti}</div>${prog(metalDone.canti, metalTotals.canti)}</div>
+    <div class="sum-item"><div class="sum-label">Barrier</div><div class="sum-val red">${metalTotals.barrier}</div>${prog(metalDone.barrier, metalTotals.barrier)}</div>
+    <div class="sum-item"><div class="sum-label">Rolling</div><div class="sum-val purple">${metalTotals.rolling}</div>${prog(metalDone.rolling, metalTotals.rolling)}</div>
+    <div class="sum-item"><div class="sum-label">Misc</div><div class="sum-val">${metalTotals.misc}</div>${prog(metalDone.misc, metalTotals.misc)}</div>
   </div>`}</div>`);
   }
   if(!blocks.length){ wrap.style.display='none'; return; }
