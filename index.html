@@ -2820,12 +2820,12 @@ function renderCategoryBreakdown(groups){
   const woodTotals = {section:0, gate:0, post:0, arb_perg:0, misc:0};
   const gearTotals = {section:0, post:0, profile:0, lattice_profile:0, topper:0, bend:0, arb_perg:0, post_and_rail:0, misc:0};
   const gateTotals = {gate:0, misc:0};
-  const metalTotals = {pipe:0, frame:0, canti:0, barrier:0, rolling:0, misc:0};
+  const metalTotals = {pipe:0, frame:0, alum_frame:0, canti:0, barrier:0, rolling:0, misc:0};
   // Approved qty per category (a manager approved the traveler that carries the item)
   const woodDone = {section:0, gate:0, post:0, arb_perg:0, misc:0};
   const gearDone = {section:0, post:0, profile:0, lattice_profile:0, topper:0, bend:0, arb_perg:0, post_and_rail:0, misc:0};
   const gateDone = {gate:0, misc:0};
-  const metalDone = {pipe:0, frame:0, canti:0, barrier:0, rolling:0, misc:0};
+  const metalDone = {pipe:0, frame:0, alum_frame:0, canti:0, barrier:0, rolling:0, misc:0};
   const prog = (done,total)=>{
     if(!(total>0)) return '';
     const pct = Math.min(100,Math.round(done/total*100));
@@ -2840,6 +2840,9 @@ function renderCategoryBreakdown(groups){
       else if(o.department==='gear'){ const k = classifyGearItem(o.item); gearTotals[k] += qty; gearDone[k] += ap; }
       else if(o.department==='gate'){ const k = classifyGearItem(o.item)==='gate' ? 'gate' : 'misc'; gateTotals[k] += qty; gateDone[k] += ap; }
       else if(o.department==='metal'){ const k = classifyMetalItem(o.item, o.desc); metalTotals[k] += qty; metalDone[k] += ap; }
+      // Alum Frame: lines 151 (Gate) and 516 (Wood) are built by their own shop, but Metal makes the frame.
+      // Automatic by prod line (department_extra), never manual. Counted in addition to the Gate/Wood tiles, and only when Metal is toggled on.
+      if(o.deptExtra==='metal' && activeDepts.has('metal')){ metalTotals.alum_frame += qty; metalDone.alum_frame += ap; }
     });
   });
   const blocks = [];
@@ -2879,6 +2882,7 @@ function renderCategoryBreakdown(groups){
     blocks.push(`<div class="cb-block"><div class="cb-label"${c?' style="margin-bottom:0"':''} onclick="toggleBreakdownDept('metal')">${c?'▸':'▾'} Metal</div>${c?'':`<div class="cb-tiles">
     <div class="sum-item"><div class="sum-label">Pipe</div><div class="sum-val blue">${metalTotals.pipe}</div>${prog(metalDone.pipe, metalTotals.pipe)}</div>
     <div class="sum-item"><div class="sum-label">Frame</div><div class="sum-val green">${metalTotals.frame}</div>${prog(metalDone.frame, metalTotals.frame)}</div>
+    <div class="sum-item"><div class="sum-label">Alum Frame</div><div class="sum-val teal">${metalTotals.alum_frame}</div>${prog(metalDone.alum_frame, metalTotals.alum_frame)}</div>
     <div class="sum-item"><div class="sum-label">Canti</div><div class="sum-val amber">${metalTotals.canti}</div>${prog(metalDone.canti, metalTotals.canti)}</div>
     <div class="sum-item"><div class="sum-label">Barrier</div><div class="sum-val red">${metalTotals.barrier}</div>${prog(metalDone.barrier, metalTotals.barrier)}</div>
     <div class="sum-item"><div class="sum-label">Rolling</div><div class="sum-val purple">${metalTotals.rolling}</div>${prog(metalDone.rolling, metalTotals.rolling)}</div>
