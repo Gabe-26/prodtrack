@@ -2781,8 +2781,8 @@ function renderOrdersSummary(groups){
   wrap.style.display='';
   wrap.innerHTML = `
     <div class="sum-item clickable${!summaryPhotoFilter?' active':''}" onclick="setSummaryPhotoFilter(null)"><div class="sum-label">Orders</div><div class="sum-val amber">${activeGroups.length}</div></div>
-    <div class="sum-item clickable${summaryPhotoFilter==='photo'?' active':''}" onclick="setSummaryPhotoFilter('photo')"><div class="sum-label">Photo uploaded</div><div class="sum-val green">${totalPhotos}</div></div>
-    <div class="sum-item clickable${summaryPhotoFilter==='nophoto'?' active':''}" onclick="setSummaryPhotoFilter('nophoto')"><div class="sum-label">No photo yet</div><div class="sum-val red">${totalNone}</div></div>
+    <div class="sum-item clickable${summaryPhotoFilter==='photo'?' active':''}" onclick="setSummaryPhotoFilter('photo')"><div class="sum-label">Orders with photos</div><div class="sum-val green">${totalPhotos}</div></div>
+    <div class="sum-item clickable${summaryPhotoFilter==='nophoto'?' active':''}" onclick="setSummaryPhotoFilter('nophoto')"><div class="sum-label">Orders without photos</div><div class="sum-val red">${totalNone}</div></div>
     <div class="sum-item"><div class="sum-label">Travelers</div><div class="sum-val">${totalTravelers}</div></div>
   `;
 }
