@@ -1618,6 +1618,7 @@ async function sbGet(table, params=''){
 async function loadLastCsvUpload(){
   try{
     const rows = await sbGet('app_meta','select=value&key=eq.last_csv_upload');
+    csvSeenStamp = (rows.length && rows[0].value) ? rows[0].value : '';
     const el = document.getElementById('last-csv-line');
     if(!el) return;
     if(rows.length && rows[0].value){
@@ -3395,6 +3396,7 @@ function layoutSOModalDesktopColumns(so){
 function closeSOModal(){
   currentModalSO = null;
   document.getElementById('so-modal').classList.remove('open');
+  if(pendingCsvReload) checkCsvUploaded();
 }
 function refreshSOModalIfOpen(){ if(currentModalSO) openSOModal(currentModalSO); }
  
@@ -6299,10 +6301,36 @@ function startAutoRefresh(){
         const ok = await refreshAuthToken();
         if(!ok){ await forceReauth('Session expired — please sign in again.'); return; }
       }
-      // No data is downloaded here any more (Supabase egress). This timer only keeps the login
-      // token fresh. Data reloads on boot, the Refresh button, or returning to the app (below).
+      // No bulk data is downloaded here (Supabase egress). The only fetch is ONE tiny app_meta row
+      // (see checkCsvUploaded); a full reload happens only when a new CSV upload is detected.
+      checkCsvUploaded();
     }catch(e){}
   },60000);
+}
+// ── CSV-upload auto-refresh ───────────────────────────────────────────────────
+// Each open screen peeks at app_meta.last_csv_upload once a minute. If it is newer than the value
+// this screen last saw, reload the data. The reload is held while an order is open (currentModalSO)
+// and released when it closes, so nobody loses their place or a half-typed comment.
+let csvSeenStamp = null, pendingCsvReload = false, csvCheckBusy = false;
+async function checkCsvUploaded(){
+  if(csvCheckBusy || document.visibilityState!=='visible' || !currentProfile || !accessToken) return;
+  csvCheckBusy = true;
+  try{
+    if(!pendingCsvReload){
+      const rows = await sbGet('app_meta','select=value&key=eq.last_csv_upload');
+      const stamp = (rows.length && rows[0].value) ? rows[0].value : '';
+      if(csvSeenStamp===null){ csvSeenStamp = stamp; return; }
+      if(stamp===csvSeenStamp) return;
+      pendingCsvReload = true;
+    }
+    if(currentModalSO) return;
+    await Promise.all([loadOrders(),loadPhotos(),loadApprovals(),loadComments(),loadLastCsvUpload(),loadDepartmentBatches(),loadBatchReads(),loadLabelPrints()]);
+    pendingCsvReload = false;
+    lastDataFetchAt = Date.now();
+    updateAll(); render(); refreshNewCodes(true);
+    toast('Updated','A new CSV was uploaded. Data refreshed.','green');
+  }catch(e){}
+  finally{ csvCheckBusy = false; }
 }
 // Reload data when the app comes back to the foreground, but at most once every 5 minutes,
 // so switching away and back doesn't re-download everything each time.
