@@ -2920,7 +2920,8 @@ function render(){
     if(activeView==='tomorrow'&&(!o.soShipRaw||!nextDays.includes(o.soShipRaw))) return false;
     if(activeView==='pending'&&photos[o.so]?.length>0) return false;
     if(activeView==='done'&&!photos[o.so]?.length) return false;
-    if(q&&![o.traveler,o.so,o.item,o.desc,o.customer].join(' ').toLowerCase().includes(q)) return false;
+    if(q&&![o.traveler,o.so,o.item,o.desc,o.customer].join(' ').toLowerCase().includes(q)
+       && !visibleCommentsFor(o.so).some(c=>(c.body||'').toLowerCase().includes(q))) return false;
     return true;
   });
  
@@ -6049,7 +6050,7 @@ function renderArchive(){
   const q=(document.getElementById('archive-search')?.value||'').toLowerCase();
   const filtered = archivedOrders.filter(g=>{
     if(!q) return true;
-    return [g.so, g.customer, g.via, g.soShip, ...g.travelers.map(t=>t.item+' '+t.desc)].join(' ').toLowerCase().includes(q);
+    return [g.so, g.customer, g.via, g.soShip, ...g.travelers.map(t=>t.item+' '+t.desc), ...visibleCommentsFor(g.so).map(c=>c.body||'')].join(' ').toLowerCase().includes(q);
   });
   const tbody=document.getElementById('archive-tbody');
   const empty=document.getElementById('archive-empty');
