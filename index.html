@@ -775,6 +775,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <option value="">All Prod lines</option>
       </select>
       <span id="wc-count" style="font-size:11px;font-family:var(--mono);color:var(--text3)"></span>
+      <button class="btn" style="margin-left:auto" onclick="openProdlineDefaults('wood')">Prod line defaults</button>
     </div>
     <div class="wc-bulkbar">
       <input type="checkbox" id="wc-selectall" onchange="toggleWoodCodeSelectAll(this.checked)">
@@ -821,6 +822,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <option value="">All Prod lines</option>
       </select>
       <span id="gc-count" style="font-size:11px;font-family:var(--mono);color:var(--text3)"></span>
+      <button class="btn" style="margin-left:auto" onclick="openProdlineDefaults('gear')">Prod line defaults</button>
     </div>
     <div class="wc-bulkbar">
       <input type="checkbox" id="gc-selectall" onchange="toggleGearCodeSelectAll(this.checked)">
@@ -850,6 +852,21 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
 </div>
 
 <!-- Metal codes modal (owner only) — manually classify Metal item codes -->
+<div class="modal-overlay" id="prodline-defaults-modal" style="z-index:850" onclick="if(event.target===this) closeProdlineDefaults()">
+  <div class="modal-card" style="max-width:900px">
+    <div class="modal-title">
+      <span id="pl-title">Prod line defaults</span>
+      <button class="modal-close" onclick="closeProdlineDefaults()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Pick a default category for a prod line. Click the highlighted one again to clear it (no default). <b>Apply</b> only fills codes that have no category yet — it never changes a code you have already classified.</div>
+    <div id="pl-list" style="max-height:55vh;overflow:auto"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="btn" onclick="closeProdlineDefaults()">Close</button>
+      <button class="btn primary" id="pl-apply-btn" onclick="applyProdlineDefaults()">Apply</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="new-codes-modal" style="z-index:850" onclick="if(event.target===this) closeNewCodesModal()">
   <div class="modal-card" style="max-width:980px">
     <div class="modal-title">
@@ -883,6 +900,7 @@ thead th{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom
         <option value="">All Prod lines</option>
       </select>
       <span id="mc-count" style="font-size:11px;font-family:var(--mono);color:var(--text3)"></span>
+      <button class="btn" style="margin-left:auto" onclick="openProdlineDefaults('metal')">Prod line defaults</button>
     </div>
     <div class="wc-bulkbar">
       <input type="checkbox" id="mc-selectall" onchange="toggleMetalCodeSelectAll(this.checked)">
@@ -5362,6 +5380,109 @@ async function classifyNewCode(i, type){
   }catch(e){ toast('Error', e.message, 'red'); }
   ncBusy = false;
 }
+// ── Prod line defaults (owner only) ─────────────────────────────────────────
+// A default category per prod line, per code list. Apply fills ONLY codes whose type is still NULL
+// (the PATCH carries type=is.null), so a manual classification can never be overwritten.
+const PL_CFG = {
+  wood:  {label:'Wood',       table:'wood_item_types',  arr:()=>woodCodes,  map:()=>woodCodesMap,  btns:'wood',  rerender:()=>renderWoodCodesList()},
+  gear:  {label:'Gear / PVC', table:'gear_item_types',  arr:()=>gearCodes,  map:()=>gearCodesMap,  btns:'gear',  rerender:()=>renderGearCodesList()},
+  metal: {label:'Metal',      table:'metal_item_types', arr:()=>metalCodes, map:()=>metalCodesMap, btns:'metal', rerender:()=>renderMetalCodesList()}
+};
+let plDefaults = {wood:{}, gear:{}, metal:{}};
+let plLoaded = false, plDept = null, plBusy = false;
+async function loadProdlineDefaults(){
+  try{
+    const rows = await sbGet('app_meta','select=value&key=eq.prodline_defaults');
+    if(rows && rows[0] && rows[0].value){
+      const v = JSON.parse(rows[0].value);
+      plDefaults = {wood:v.wood||{}, gear:v.gear||{}, metal:v.metal||{}};
+    }
+  }catch(e){}
+  plLoaded = true;
+}
+async function saveProdlineDefaults(){
+  const r = await fetch(`${SUPA_URL}/rest/v1/app_meta?on_conflict=key`, {
+    method:'POST', headers:{...H(),'Prefer':'resolution=merge-duplicates,return=minimal'},
+    body: JSON.stringify([{key:'prodline_defaults', value:JSON.stringify(plDefaults), updated_at:new Date().toISOString()}])
+  });
+  if(!r.ok) throw new Error(await r.text());
+}
+function plSummary(dept){
+  const by = {};
+  PL_CFG[dept].arr().forEach(r=>{
+    const prod = r.prod; if(!prod) return;
+    const g = by[prod] || (by[prod] = {prod, total:0, unclassified:0, byType:{}});
+    g.total++;
+    if(r.type) g.byType[r.type] = (g.byType[r.type]||0)+1; else g.unclassified++;
+  });
+  return Object.values(by).sort((a,b)=>a.prod.localeCompare(b.prod));
+}
+function plPendingCount(dept){
+  const d = plDefaults[dept] || {};
+  return plSummary(dept).reduce((n,g)=> n + (d[g.prod] ? g.unclassified : 0), 0);
+}
+async function openProdlineDefaults(dept){
+  if(currentProfile?.username !== 'zgta26'){ toast('Not allowed','Only the owner account can do this.','red'); return; }
+  plDept = dept;
+  if(!plLoaded) await loadProdlineDefaults();
+  renderProdlineDefaults();
+  document.getElementById('prodline-defaults-modal').classList.add('open');
+}
+function closeProdlineDefaults(){ document.getElementById('prodline-defaults-modal').classList.remove('open'); }
+function renderProdlineDefaults(){
+  const dept = plDept; if(!dept) return;
+  const cfg = PL_CFG[dept], btns = NC_BUTTONS[cfg.btns], d = plDefaults[dept] || {};
+  const labelOf = Object.fromEntries(btns.map(b=>[b[0],b[1]]));
+  document.getElementById('pl-title').textContent = cfg.label + ' — prod line defaults';
+  const rows = plSummary(dept);
+  document.getElementById('pl-list').innerHTML = rows.length ? rows.map(g=>{
+    const existing = Object.keys(g.byType).map(t=>`${labelOf[t]||t} ${g.byType[t]}`).join(' · ');
+    const b = btns.map(([val,label,cls])=>`<button class="wc-type-btn ${cls}${d[g.prod]===val?' active':''}" onclick="setProdlineDefault('${escapeHtml(g.prod)}','${val}')">${label}</button>`).join('');
+    return `<div class="nc-row">
+      <div class="nc-top"><span class="mono nc-code">${escapeHtml(g.prod)}</span><span class="nc-sos">${g.total} codes · ${g.unclassified} unclassified</span>${existing?`<span class="nc-sos">already: ${escapeHtml(existing)}</span>`:''}</div>
+      <div style="margin-top:6px">${b}</div>
+    </div>`;
+  }).join('') : '<div class="empty"><div class="empty-title">No codes loaded</div></div>';
+  const n = plPendingCount(dept);
+  const btn = document.getElementById('pl-apply-btn');
+  btn.textContent = n ? `Apply to ${n} unclassified code${n>1?'s':''}` : 'Nothing to apply';
+  btn.disabled = !n;
+}
+async function setProdlineDefault(prod, type){
+  if(plBusy || !plDept) return;
+  const d = plDefaults[plDept];
+  if(d[prod]===type) delete d[prod]; else d[prod] = type;
+  renderProdlineDefaults();
+  try{ await saveProdlineDefaults(); }catch(e){ toast('Could not save defaults', e.message, 'red'); }
+}
+async function applyProdlineDefaults(){
+  if(plBusy || !plDept) return;
+  if(currentProfile?.username !== 'zgta26'){ toast('Not allowed','Only the owner account can do this.','red'); return; }
+  const cfg = PL_CFG[plDept], d = plDefaults[plDept] || {};
+  const todo = plSummary(plDept).filter(g=>d[g.prod] && g.unclassified>0);
+  if(!todo.length) return;
+  plBusy = true;
+  let done = 0;
+  try{
+    for(const g of todo){
+      const type = d[g.prod];
+      const r = await fetch(`${SUPA_URL}/rest/v1/${cfg.table}?prod=eq.${encodeURIComponent(g.prod)}&type=is.null`, {
+        method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
+        body: JSON.stringify({type})
+      });
+      if(!r.ok) throw new Error(await r.text());
+      cfg.arr().forEach(row=>{
+        if(row.prod===g.prod && !row.type){ row.type = type; cfg.map()[String(row.item_code).trim().toUpperCase()] = type; done++; }
+      });
+    }
+    toast('Defaults applied', `${done} codes categorized by prod line.`, 'green');
+  }catch(e){ toast('Error', e.message, 'red'); }
+  plBusy = false;
+  renderProdlineDefaults();
+  cfg.rerender();
+  refreshNewCodes(false);
+  render();
+}
 async function setWoodCodeTypes(codes, type){
   const dbType = type==='misc' ? null : type;
   const filter = codes.length===1
@@ -6160,7 +6281,7 @@ function toast(title,body,type){
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();closeGearCodesModal();closeMetalCodesModal();closeNewCodesModal();colorCheckRespond(false);staleCsvRespond(false);shareWarnRespond(false);
+    closeLB();closeConfirmPhoto();closeConfirmUser();closeAddUser();closeSOModal();closePrintReportModal();closePrintLabelModal();closeHolidaysModal();closeCustomerListModal();closeWoodCodesModal();closeGearCodesModal();closeMetalCodesModal();closeNewCodesModal();closeProdlineDefaults();colorCheckRespond(false);staleCsvRespond(false);shareWarnRespond(false);
   }
 });
  
