@@ -68,6 +68,12 @@ td{font-family:var(--mono)}
 .results-columns > .card{margin-top:18px}
 #preview-card{position:sticky;top:16px}
 #preview-pages{max-height:900px;overflow-y:auto}
+.rv-block{border-left:4px solid var(--amber);background:var(--surface2);border-radius:6px;padding:12px 14px;margin-top:12px}
+.rv-head{font-size:13px;font-family:var(--mono);font-weight:700}
+.rv-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.rv-hint{font-size:10px;font-weight:700;color:var(--amber);margin-left:6px;font-family:var(--sans)}
+.rv-block table{margin-top:8px;font-size:12px}
+.rv-block button{padding:5px 12px;font-size:12px}
 .dept-box-title{font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px}
 .dept-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
 .preview-page{border:1px solid var(--border2);border-radius:6px;margin-top:10px;max-width:100%;display:block}
@@ -170,6 +176,11 @@ td{font-family:var(--mono)}
           </div>
         </div>
 
+        <div class="card hidden" id="review-card">
+          <div class="section-title">Needs your review <span class="badge badge-warn" id="count-review"></span></div>
+          <div class="section-count">These tickets didn't match exactly, but an order line on the same SO looks close. Pick the line each one belongs to, or choose None of these.</div>
+          <div id="review-body"></div>
+        </div>
         <div class="card">
           <div class="section-title">Unmatched traveler tickets <span class="badge badge-warn" id="count-untrav"></span></div>
           <div class="section-count">Traveler tickets with no matching order line uploaded</div>
@@ -246,6 +257,7 @@ let currentUser = null, currentProfile = null;
 let ordersFiles = [], travelersFiles = [];
 let historyTimer = null;
 let lastMatched = [], lastOrderBytesByFile = {}, lastAllItemsByFile = {}, lastStampedPdfBytes = null, lastStampedPageMap = null;
+let lastUnmatchedOrders = [], lastUnmatchedTickets = [], lastUnrecognized = [], reviewDismissed = new Set(), reviewBusy = false;
 
 const H = () => ({'Content-Type':'application/json','apikey':ANON_KEY,'Authorization':'Bearer '+(accessToken||ANON_KEY)});
 
@@ -377,6 +389,7 @@ function resetBatch(){
   ordersFiles = []; travelersFiles = [];
   lastMatched = []; lastOrderBytesByFile = {}; lastAllItemsByFile = {}; lastStampedPdfBytes = null; lastStampedPageMap = null;
   activeDeptFilter = null; soClassifications = {};
+  lastUnmatchedOrders = []; lastUnmatchedTickets = []; lastUnrecognized = []; reviewDismissed = new Set();
   document.getElementById('f-orders').value = '';
   document.getElementById('f-travelers').value = '';
   document.getElementById('fl-orders').textContent = 'No files chosen';
@@ -890,6 +903,72 @@ function runMatchLogic(orderResults, travelerResults){
   return {matched, unmatchedOrders, unmatchedTickets: ticketPool};
 }
 
+// ── Review: a ticket that didn't match exactly but has a close order line ──
+// "Close" = an unmatched line on the SAME SO with the same item code, or the same
+// description (spaces ignored). Nothing is matched until the user clicks.
+const noSpaces = s => normText(s).replace(/\s+/g,'');
+const reviewKey = t => t.fileName + '|' + t.page;
+function reviewHint(o, t){
+  const h = [];
+  if(o.itemCode.toUpperCase() === t.itemCode.toUpperCase()) h.push('same item code');
+  if(noSpaces(o.description) === noSpaces(t.description)) h.push('same description');
+  return h;
+}
+function reviewCandidates(t){
+  const pool = lastUnmatchedOrders.filter(o => o.so === t.so);
+  if(!pool.some(o => reviewHint(o, t).length)) return [];
+  return pool.slice().sort((a,b) => Number(reviewHint(b,t).length>0) - Number(reviewHint(a,t).length>0));
+}
+function renderReview(){
+  const blocks = [];
+  lastUnmatchedTickets.forEach((t, ti) => {
+    if(reviewDismissed.has(reviewKey(t))) return;
+    const cands = reviewCandidates(t);
+    if(!cands.length) return;
+    const rows = cands.map(o => {
+      const hint = reviewHint(o, t).join(', ');
+      return `<tr><td>${escapeHtml(o.itemCode)}${hint ? `<span class="rv-hint">${escapeHtml(hint)}</span>` : ''}</td><td>${escapeHtml(o.description)}</td><td>${Number(o.qty).toFixed(2)}</td><td><button onclick="confirmReviewMatch(${ti},${lastUnmatchedOrders.indexOf(o)})">Match this one</button></td></tr>`;
+    }).join('');
+    blocks.push(`<div class="rv-block"><div class="rv-head">Traveler ${escapeHtml(t.travelerNo)} · SO ${escapeHtml(t.so)} · ${escapeHtml(t.itemCode)} · qty ${t.qty==null?'?':Number(t.qty).toFixed(2)}</div><div class="rv-sub">${escapeHtml(t.description)} <span style="opacity:.6">(${escapeHtml(t.fileName)})</span></div><table><thead><tr><th>Order line item</th><th>Order line description</th><th>Qty</th><th></th></tr></thead><tbody>${rows}</tbody></table><div style="margin-top:8px"><button class="secondary" onclick="dismissReview(${ti})">None of these</button></div></div>`);
+  });
+  document.getElementById('review-card').classList.toggle('hidden', !blocks.length);
+  document.getElementById('count-review').textContent = blocks.length;
+  document.getElementById('review-body').innerHTML = blocks.join('');
+}
+function dismissReview(ti){
+  const t = lastUnmatchedTickets[ti]; if(!t) return;
+  reviewDismissed.add(reviewKey(t));
+  renderReview();
+}
+async function confirmReviewMatch(ti, oi){
+  const t = lastUnmatchedTickets[ti], it = lastUnmatchedOrders[oi];
+  if(!t || !it || it.so !== t.so || reviewBusy) return;
+  reviewBusy = true;
+  const errEl = document.getElementById('run-err'); errEl.textContent = '';
+  try{
+    const matchedBy = currentProfile.full_name || currentProfile.username || 'unknown';
+    const r = await fetch(`${SUPA_URL}/rest/v1/cus_traveler_matches`,{
+      method:'POST', headers:{...H(), 'Prefer':'return=minimal'},
+      body:JSON.stringify([{so:it.so, item_code:it.itemCode, description:it.description, qty:it.qty, prod_line:it.prodLine, traveler_no:t.travelerNo, matched_by:matchedBy}])
+    });
+    if(!r.ok) throw new Error('Could not save this match to the log. Nothing was changed. Try again.');
+    lastUnmatchedTickets.splice(ti,1); lastUnmatchedOrders.splice(oi,1);
+    lastMatched.push({...it, travelerNo:t.travelerNo});
+    lastStampedPdfBytes = null; lastStampedPageMap = null;
+    document.getElementById('download-stamped-btn').classList.remove('hidden');
+    document.getElementById('upload-batch-btn').classList.remove('hidden');
+    renderResults(lastMatched, lastUnmatchedOrders, lastUnmatchedTickets, lastUnrecognized);
+    const built = await buildStampedPdf(lastOrderBytesByFile, lastMatched, lastAllItemsByFile);
+    lastStampedPdfBytes = built.bytes; lastStampedPageMap = built.pageMap;
+    await renderPdfPreview(lastStampedPdfBytes, lastStampedPageMap, lastMatched);
+    if(document.getElementById('view-history') && !document.getElementById('view-history').classList.contains('hidden')) loadHistory(document.getElementById('history-search').value);
+  }catch(e){
+    errEl.textContent = e.message || 'Something went wrong saving this match.';
+  }finally{
+    reviewBusy = false;
+  }
+}
+
 // ── Recolor highlight rectangles in the source PDF by department ──────────
 // The yellow highlight behind each CUS line is a real filled rectangle drawn
 // in the page's content stream (not an annotation). This finds those
@@ -1117,6 +1196,7 @@ async function runBatch(){
     }
     const {matched, unmatchedOrders, unmatchedTickets} = runMatchLogic(orderResults, travelerResults);
     lastMatched = matched;
+    lastUnmatchedOrders = unmatchedOrders; lastUnmatchedTickets = unmatchedTickets; lastUnrecognized = unrecognizedAll; reviewDismissed = new Set();
     lastOrderBytesByFile = orderBytesByFile;
     lastAllItemsByFile = allItemsByFile;
     lastStampedPdfBytes = null;
@@ -1216,6 +1296,7 @@ function renderResults(matched, unmatchedOrders, unmatchedTickets, unrecognized)
     utBody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(t.so)}</td><td>${escapeHtml(t.itemCode)}</td><td>${escapeHtml(t.description)}</td><td>${escapeHtml(t.travelerNo)}</td><td>${escapeHtml(t.fileName)}</td></tr>`);
   });
   document.getElementById('empty-untrav').classList.toggle('hidden', unmatchedTickets.length>0);
+  renderReview();
 
   const unrecCard = document.getElementById('unrecognized-card');
   if(unrecognized.length){
