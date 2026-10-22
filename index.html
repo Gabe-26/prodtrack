@@ -2826,7 +2826,12 @@ function renderCategoryBreakdown(groups){
   const gearDone = {section:0, post:0, profile:0, lattice_profile:0, topper:0, bend:0, arb_perg:0, post_and_rail:0, misc:0};
   const gateDone = {gate:0, misc:0};
   const metalDone = {pipe:0, frame:0, canti:0, barrier:0, rolling:0, misc:0};
-  const prog = (done,total)=> total>0 ? `<div class="cb-prog" title="${done} of ${total} approved"><div class="cb-prog-bar" style="width:${Math.min(100,Math.round(done/total*100))}%"></div></div><div class="cb-prog-txt">${done}/${total}</div>` : '';
+  const prog = (done,total)=>{
+    if(!(total>0)) return '';
+    const pct = Math.min(100,Math.round(done/total*100));
+    const col = pct>=75 ? '--green' : pct>=50 ? '--yellow' : pct>=25 ? '--orange' : '--red'; // red <25, orange <50, yellow <75, green 75+
+    return `<div class="cb-prog" title="${done} of ${total} approved"><div class="cb-prog-bar" style="width:${pct}%;background:var(${col})"></div></div><div class="cb-prog-txt">${done}/${total}</div>`;
+  };
   activeGroups.forEach(g=>{
     g.travelers.forEach(o=>{
       const qty = Number(o.qty)||0;
