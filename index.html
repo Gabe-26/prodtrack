@@ -5274,7 +5274,7 @@ async function handleWoodCodesCSVUpload(file){
       });
       if(!r.ok) throw new Error(await r.text());
     }
-    await loadWoodItemTypes(); refreshNewCodes(false);
+    await loadWoodItemTypes(); await autoApplyAfterCodeUpload('wood'); refreshNewCodes(false);
     renderWoodCodesProdOptions();
     renderWoodCodesList();
     status.textContent = `Done — ${woodCodes.length} codes loaded.`;
@@ -5317,11 +5317,46 @@ function computeNewCodes(){
   });
   return Object.values(found).sort((a,b)=> a.tbl.localeCompare(b.tbl) || a.code.localeCompare(b.code));
 }
-function refreshNewCodes(autoPopup){
+let ncAutoTried = new Set(), ncAutoRunning = false;
+// New codes that sit on a prod line with a default are saved automatically (ignore-duplicates, so a code
+// someone else already classified is never overwritten). Anything without a default goes to the popup.
+async function autoClassifyNewCodes(list){
+  const rows = {wood:[], gear:[], metal:[]};
+  list.forEach(n=>{ ncAutoTried.add(n.key); rows[n.tbl].push({item_code:n.code, description:n.desc, prod:n.prod, type:plDefaults[n.tbl][n.prod]}); });
+  let saved = 0;
+  for(const tbl of ['wood','gear','metal']){
+    if(!rows[tbl].length) continue;
+    const r = await fetch(`${SUPA_URL}/rest/v1/${PL_CFG[tbl].table}?on_conflict=item_code`, {
+      method:'POST', headers:{...H(),'Prefer':'resolution=ignore-duplicates,return=minimal'},
+      body: JSON.stringify(rows[tbl])
+    });
+    if(!r.ok) throw new Error(await r.text());
+    rows[tbl].forEach(row=>{
+      PL_CFG[tbl].arr().push({item_code:row.item_code, description:row.description, prod:row.prod, type:row.type});
+      PL_CFG[tbl].map()[row.item_code.trim().toUpperCase()] = row.type;
+      saved++;
+    });
+  }
+  return saved;
+}
+async function refreshNewCodes(autoPopup){
   const nav = document.getElementById('nav-new-codes');
   if(!nav) return;
   if(currentProfile?.username !== 'zgta26'){ nav.style.display = 'none'; return; }
   newCodesList = computeNewCodes();
+  if(newCodesList.length && !ncAutoRunning){
+    if(!plLoaded) await loadProdlineDefaults();
+    const auto = newCodesList.filter(n=>plDefaults[n.tbl] && plDefaults[n.tbl][n.prod] && !ncAutoTried.has(n.key));
+    if(auto.length){
+      ncAutoRunning = true;
+      try{
+        const n = await autoClassifyNewCodes(auto);
+        if(n){ toast('New codes categorized', `${n} new code${n>1?'s':''} categorized by prod line default.`, 'green'); render(); }
+      }catch(e){ toast('Could not auto-categorize new codes', e.message, 'red'); }
+      ncAutoRunning = false;
+      newCodesList = computeNewCodes();
+    }
+  }
   document.getElementById('b-new-codes').textContent = newCodesList.length;
   nav.style.display = newCodesList.length ? 'flex' : 'none';
   if(document.getElementById('new-codes-modal').classList.contains('open')) renderNewCodesList();
@@ -5455,33 +5490,46 @@ async function setProdlineDefault(prod, type){
   renderProdlineDefaults();
   try{ await saveProdlineDefaults(); }catch(e){ toast('Could not save defaults', e.message, 'red'); }
 }
+// Core: fill unclassified codes on every prod line that has a default. Returns how many codes were set.
+async function runProdlineDefaults(dept){
+  if(!plLoaded) await loadProdlineDefaults();
+  const cfg = PL_CFG[dept], d = plDefaults[dept] || {};
+  const todo = plSummary(dept).filter(g=>d[g.prod] && g.unclassified>0);
+  let done = 0;
+  for(const g of todo){
+    const type = d[g.prod];
+    const r = await fetch(`${SUPA_URL}/rest/v1/${cfg.table}?prod=eq.${encodeURIComponent(g.prod)}&type=is.null`, {
+      method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
+      body: JSON.stringify({type})
+    });
+    if(!r.ok) throw new Error(await r.text());
+    cfg.arr().forEach(row=>{
+      if(row.prod===g.prod && !row.type){ row.type = type; cfg.map()[String(row.item_code).trim().toUpperCase()] = type; done++; }
+    });
+  }
+  return done;
+}
 async function applyProdlineDefaults(){
   if(plBusy || !plDept) return;
   if(currentProfile?.username !== 'zgta26'){ toast('Not allowed','Only the owner account can do this.','red'); return; }
-  const cfg = PL_CFG[plDept], d = plDefaults[plDept] || {};
-  const todo = plSummary(plDept).filter(g=>d[g.prod] && g.unclassified>0);
-  if(!todo.length) return;
+  const cfg = PL_CFG[plDept];
   plBusy = true;
-  let done = 0;
   try{
-    for(const g of todo){
-      const type = d[g.prod];
-      const r = await fetch(`${SUPA_URL}/rest/v1/${cfg.table}?prod=eq.${encodeURIComponent(g.prod)}&type=is.null`, {
-        method:'PATCH', headers:{...H(),'Prefer':'return=minimal'},
-        body: JSON.stringify({type})
-      });
-      if(!r.ok) throw new Error(await r.text());
-      cfg.arr().forEach(row=>{
-        if(row.prod===g.prod && !row.type){ row.type = type; cfg.map()[String(row.item_code).trim().toUpperCase()] = type; done++; }
-      });
-    }
-    toast('Defaults applied', `${done} codes categorized by prod line.`, 'green');
+    const done = await runProdlineDefaults(plDept);
+    if(done) toast('Defaults applied', `${done} codes categorized by prod line.`, 'green');
   }catch(e){ toast('Error', e.message, 'red'); }
   plBusy = false;
   renderProdlineDefaults();
   cfg.rerender();
   refreshNewCodes(false);
   render();
+}
+// After a code-list CSV upload: fill the newly added (unclassified) codes from the prod line defaults.
+async function autoApplyAfterCodeUpload(dept){
+  try{
+    const n = await runProdlineDefaults(dept);
+    if(n) toast('Defaults applied', `${n} new ${PL_CFG[dept].label} code${n>1?'s':''} categorized by prod line.`, 'green');
+  }catch(e){ toast('Could not apply prod line defaults', e.message, 'red'); }
 }
 async function setWoodCodeTypes(codes, type){
   const dbType = type==='misc' ? null : type;
@@ -5634,7 +5682,7 @@ async function handleGearCodesCSVUpload(file){
       });
       if(!r.ok) throw new Error(await r.text());
     }
-    await loadGearItemTypes(); refreshNewCodes(false);
+    await loadGearItemTypes(); await autoApplyAfterCodeUpload('gear'); refreshNewCodes(false);
     renderGearCodesProdOptions();
     renderGearCodesList();
     status.textContent = `Done — ${gearCodes.length} codes loaded.`;
@@ -5796,7 +5844,7 @@ async function handleMetalCodesCSVUpload(file){
       });
       if(!r.ok) throw new Error(await r.text());
     }
-    await loadMetalItemTypes(); refreshNewCodes(false);
+    await loadMetalItemTypes(); await autoApplyAfterCodeUpload('metal'); refreshNewCodes(false);
     renderMetalCodesProdOptions();
     renderMetalCodesList();
     status.textContent = `Done — ${metalCodes.length} codes loaded.`;
