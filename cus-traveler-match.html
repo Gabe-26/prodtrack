@@ -882,7 +882,7 @@ function runMatchLogic(orderResults, travelerResults){
     const idx = ticketPool.findIndex(t =>
       t.so === it.so &&
       t.itemCode.toUpperCase() === it.itemCode.toUpperCase() &&
-      normText(t.description) === normText(it.description)
+      normText(t.description).replace(/\s+/g,'') === normText(it.description).replace(/\s+/g,'')   // spaces ignored: 41"ARBOR == 41" ARBOR
     );
     if(idx === -1) unmatchedOrders.push(it);
     else { const t = ticketPool.splice(idx,1)[0]; matched.push({...it, travelerNo:t.travelerNo}); }
