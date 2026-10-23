@@ -4902,7 +4902,7 @@ function labelScaleForItemCount(n){
   // empty room); 2-7 were then raised another 15%. Gate keeps the original table.
   const table = (typeof labelFormat!=='undefined' && (labelFormat==='gear' || labelFormat==='wood'))
     ? {1:1, 2:1.15, 3:0.85, 4:0.75, 5:0.55, 6:0.48, 7:0.43}
-    : {1:1, 2:0.8, 3:0.66, 4:0.56, 5:0.48, 6:0.42, 7:0.37};
+    : {1:26/15, 2:0.8, 3:0.66, 4:0.56, 5:0.48, 6:0.42, 7:0.37};   // Gate, 1 item: default 26px (was 15). 2+ items unchanged.
   return table[n] || 0.37;
 }
 // Per-item text size override (px of the item code/qty; description scales with it).
