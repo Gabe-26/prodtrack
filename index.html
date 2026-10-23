@@ -1423,8 +1423,18 @@ async function loadProfile(){
     pref_lang: p.pref_lang || 'none',
     theme: p.theme || 'dark',
     departments: p.departments || [],
-    canViewArchive: !!p.can_view_archive
+    canViewArchive: !!p.can_view_archive,
+    canUploadCsv: !!p.can_upload_csv,
+    canShareReport: !!p.can_share_report,
+    canPrintReport: !!p.can_print_report,
+    canPrintLabel: !!p.can_print_label
   };
+}
+// Per-person tool switches, set by the owner in Manage Users. They apply ON TOP of the manager role:
+// the database only lets managers write orders and label prints, so a flag can take a feature away from a
+// manager but cannot give it to anyone else. The owner always has all four.
+function hasTool(flag){
+  return currentProfile?.role === 'manager' && (currentProfile?.username === 'zgta26' || !!currentProfile?.[flag]);
 }
 
 // ── Departments ────────────────────────────────────────────────────────────
@@ -1530,10 +1540,10 @@ function showApp(){
   document.getElementById('viewer-pill').style.display = isViewer ? 'inline-flex' : 'none';
   document.getElementById('prod-pill').style.display   = isProd ? 'inline-flex' : 'none';
   // Manager-only UI
-  document.getElementById('top-upload-btn').style.display  = isMgr ? 'inline-flex' : 'none';
-  document.getElementById('share-report-btn').style.display = isMgr ? 'inline-flex' : 'none';
-  document.getElementById('print-report-btn').style.display = isMgr ? 'inline-flex' : 'none';
-  document.getElementById('nav-upload').style.display  = isMgr ? 'flex' : 'none';
+  document.getElementById('top-upload-btn').style.display  = hasTool('canUploadCsv') ? 'inline-flex' : 'none';
+  document.getElementById('share-report-btn').style.display = hasTool('canShareReport') ? 'inline-flex' : 'none';
+  document.getElementById('print-report-btn').style.display = hasTool('canPrintReport') ? 'inline-flex' : 'none';
+  document.getElementById('nav-upload').style.display  = hasTool('canUploadCsv') ? 'flex' : 'none';
   document.getElementById('nav-customer-list').style.display = isMgr ? 'flex' : 'none';
   document.getElementById('nav-users').style.display   = isMgr ? 'flex' : 'none';
   document.getElementById('nav-archive').style.display = (uname === 'zgta26' || currentProfile?.canViewArchive) ? 'flex' : 'none'; // per-user view access granted by the owner in Manage Users; restore/archive stay owner-only
@@ -2032,6 +2042,7 @@ function renderUsers(){
             return `<span class="dept-pill ${on?m.cls:'td'}" style="cursor:pointer;opacity:${on?'1':'0.45'}" title="${on?'Click to remove '+m.label:'Click to grant '+m.label}" onclick="toggleUserDept('${u.id}','${d}')">${m.label[0]}${d==='gate'?'T':''}</span>`;
           }).join('')}
           <span class="tag ${u.can_view_archive?'tb':'td'}" style="cursor:pointer;opacity:${u.can_view_archive?'1':'0.45'}" title="${isOwner?(u.can_view_archive?'Click to remove view-only Archive access':'Click to grant view-only Archive access'):'Only the owner account can change Archive access'}" onclick="toggleUserArchive('${u.id}')">Archive</span>
+          ${TOOL_PERMS.map(t => `<span class="tag ${u[t.col]?'tb':'td'}" style="cursor:pointer;opacity:${u[t.col]?'1':'0.45'}" title="${isOwner ? (u[t.col]?'Click to remove ':'Click to grant ') + t.name + (isMgr ? '' : ' (only takes effect for managers)') : 'Only the owner account can change ' + t.name + ' access'}" onclick="toggleUserTool('${u.id}','${t.col}')">${t.label}</span>`).join('')}
         </div>
       </div>
       <div class="uc-actions">
@@ -2066,6 +2077,29 @@ async function toggleUserDept(userId, dept){
   }
 }
  
+const TOOL_PERMS = [
+  {col:'can_upload_csv',    label:'CSV',    name:'Upload CSV'},
+  {col:'can_share_report',  label:'Share',  name:'Share report'},
+  {col:'can_print_report',  label:'Report', name:'Print report'},
+  {col:'can_print_label',   label:'Label',  name:'Print label'}
+];
+async function toggleUserTool(userId, col){
+  const t = TOOL_PERMS.find(x => x.col === col);
+  if(!t) return;
+  if(currentProfile?.username !== 'zgta26'){ toast('Not allowed', `Only the owner account can change ${t.name} access.`, 'red'); return; }
+  const u = allUsers.find(x => x.id === userId);
+  if(!u) return;
+  const next = !u[col];
+  u[col] = next; // optimistic
+  renderUsers();
+  try{
+    await sbUpdate('profiles', userId, {[col]: next});
+  } catch(e){
+    toast('Error', e.message, 'red');
+    await loadUsers();
+  }
+}
+
 async function toggleUserArchive(userId){
   if(currentProfile?.username !== 'zgta26'){ toast('Not allowed', 'Only the owner account can change Archive access.', 'red'); return; }
   const u = allUsers.find(x=>x.id===userId);
@@ -2324,7 +2358,7 @@ dzEl.addEventListener('drop',e=>{e.preventDefault();dzEl.classList.remove('drag'
  
 async function handleCSV(file){
   if(!file) return;
-  if(currentProfile?.role!=='manager'){toast('Access denied','Only managers can upload CSV files.','red');return;}
+  if(!hasTool('canUploadCsv')){toast('Access denied','You have not been given access to upload CSV files.','red');return;}
   const st=document.getElementById('csv-status');
   const fr=new FileReader();
   fr.onload=async e=>{
@@ -3037,7 +3071,7 @@ function render(){
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${picTag}
         ${isMgr && !allApproved ? `<button class="approve-btn" onclick="event.stopPropagation();confirmColorThenApproveAll('${so}')" style="font-size:10px;padding:3px 8px">Approve all</button>` : ''}
-        ${isMgr && (hasWoodTravelers||hasGateTravelers||hasGearTravelers) ? `<button class="btn print-label-btn" onclick="event.stopPropagation();openPrintLabelModal('${so}')" style="font-size:10px;padding:3px 8px">Print label</button>` : ''}
+        ${hasTool('canPrintLabel') && (hasWoodTravelers||hasGateTravelers||hasGearTravelers) ? `<button class="btn print-label-btn" onclick="event.stopPropagation();openPrintLabelModal('${so}')" style="font-size:10px;padding:3px 8px">Print label</button>` : ''}
       </div></td>
     </tr>`;
 
@@ -3318,7 +3352,7 @@ function openSOModal(so){
   const hasWoodTravelers = activeDepts.has('wood') && orders.some(o=>o.so===so && !o.deletedAt && o.department==='wood');
   const hasGateTravelers = activeDepts.has('gate') && orders.some(o=>o.so===so && !o.deletedAt && o.department==='gate');
   const hasGearTravelers = activeDepts.has('gear') && orders.some(o=>o.so===so && !o.deletedAt && o.department==='gear');
-  const printLabelBtn = isMgr && (hasWoodTravelers||hasGateTravelers||hasGearTravelers)
+  const printLabelBtn = hasTool('canPrintLabel') && (hasWoodTravelers||hasGateTravelers||hasGearTravelers)
     ? `<button class="btn print-label-btn" onclick="openPrintLabelModal('${so}')" style="font-size:11px;padding:4px 9px">Print label</button>`
     : '';
   document.getElementById('so-modal-title').textContent = isMobileLayout() ? 'SO '+so : '';
@@ -4109,7 +4143,7 @@ function shareWarnRespond(confirmed){
   if(confirmed) generateReport(true);
 }
 function generateReport(skipWarn){
-  if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can share reports.','red'); return; }
+  if(!hasTool('canShareReport')){ toast('Access denied','You have not been given access to share reports.','red'); return; }
   const nextDays = getNextWorkingDays();
   const plan = shareReportPlan(nextDays);
   const groups = plan.groups;
@@ -4284,7 +4318,7 @@ ${soData.map(s => {
 // ── Print report (date range + department picker) ─────────────────────────────
 let printReportDepts = new Set();
 function openPrintReportModal(){
-  if(currentProfile?.role!=='manager') return;
+  if(!hasTool('canPrintReport')) return;
   const today = new Date().toISOString().slice(0,10);
   document.getElementById('pr-start').value = today;
   document.getElementById('pr-end').value = today;
@@ -4371,7 +4405,7 @@ function classifyMetalItem(itemCode, desc){
   return metalCodesMap[codeKey] || 'misc';
 }
 function generatePrintReport(startDate, endDate, deptSet){
-  if(currentProfile?.role!=='manager'){ toast('Access denied','Only managers can print reports.','red'); return; }
+  if(!hasTool('canPrintReport')){ toast('Access denied','You have not been given access to print reports.','red'); return; }
 
   // "Completed" for the report is judged on the departments chosen in the report modal.
   const printCompleted = {};
@@ -4673,7 +4707,7 @@ const LABEL_DEPT_CONFIG = {
 };
 
 function openPrintLabelModal(so){
-  if(currentProfile?.role!=='manager') return;
+  if(!hasTool('canPrintLabel')) return;
   const travelersByDept = {
     wood: activeDepts.has('wood') ? orders.filter(o=>o.so===so && !o.deletedAt && o.department==='wood') : [],
     gate: activeDepts.has('gate') ? orders.filter(o=>o.so===so && !o.deletedAt && o.department==='gate') : [],
